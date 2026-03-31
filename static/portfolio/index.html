@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Urban Data Tools</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f0f1a; color: #fff;
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+    header {
+      padding: 64px 48px 48px;
+      max-width: 860px; margin: 0 auto; width: 100%;
+    }
+    header h1 { font-size: 38px; font-weight: 800; letter-spacing: -0.5px; }
+    header p  { margin-top: 12px; font-size: 16px; color: #8888aa; max-width: 480px; line-height: 1.65; }
+
+    .projects {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 20px;
+      max-width: 860px; margin: 0 auto; padding: 0 48px 80px; width: 100%;
+    }
+
+    .card {
+      background: #181828; border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px; padding: 32px;
+      text-decoration: none; color: inherit;
+      display: flex; flex-direction: column; gap: 12px;
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(67, 97, 238, 0.5);
+      box-shadow: 0 12px 40px rgba(67, 97, 238, 0.12);
+    }
+
+    .card-icon  { font-size: 38px; }
+    .card h2    { font-size: 21px; font-weight: 700; }
+    .card p     { font-size: 14px; color: #8888aa; line-height: 1.65; flex: 1; }
+
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .tag  {
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.2px;
+      background: rgba(67,97,238,0.14); color: #a5b4fc;
+    }
+    .tag.green { background: rgba(42,157,143,0.14); color: #6ee7b7; }
+
+    .card-link {
+      margin-top: 8px; font-size: 13px; font-weight: 600; color: #4361ee;
+    }
+
+    footer {
+      margin-top: auto; text-align: center;
+      padding: 32px; color: #44445a; font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Urban Data Tools</h1>
+    <p>Interactive tools for visualising travel time and finding fair meeting points, built with FastAPI, MapLibre GL JS and WebGL2.</p>
+  </header>
+
+  <div class="projects">
+    <a href="/warp/" class="card">
+      <div class="card-icon">🗺️</div>
+      <h2>Isochrone Warp Map</h2>
+      <p>A map that bends to travel time. Isochrone boundaries become concentric circles — so equal travel time always appears at equal distance from you, regardless of direction.</p>
+      <div class="tags">
+        <span class="tag">WebGL2</span>
+        <span class="tag">FastAPI</span>
+        <span class="tag">Isochrones</span>
+        <span class="tag">GLSL shader</span>
+      </div>
+      <div class="card-link">Open demo →</div>
+    </a>
+
+    <a href="/meetup/" class="card">
+      <div class="card-icon">📍</div>
+      <h2>Meetup Optimizer</h2>
+      <p>Find the fairest meeting point for a group with different starting locations and transport modes. Minimises the worst-case (or weighted average) travel time using H3 hexagonal search.</p>
+      <div class="tags">
+        <span class="tag green">H3 hexagons</span>
+        <span class="tag green">Minimax</span>
+        <span class="tag green">FastAPI</span>
+        <span class="tag green">Directions Matrix</span>
+      </div>
+      <div class="card-link">Open demo →</div>
+    </a>
+  </div>
+
+  <footer>Built with FastAPI · MapLibre GL JS · WebGL2 · H3</footer>
+</body>
+</html>

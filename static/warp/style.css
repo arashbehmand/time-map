@@ -1,0 +1,69 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; overflow: hidden; font-family: system-ui, sans-serif; }
+
+/* MapLibre renders here — transparent but interactive for pan/zoom */
+#map-container {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  opacity: 0; z-index: 3;
+}
+
+/* WebGL warp output */
+#warp-canvas {
+  position: fixed; top: 0; left: 0;
+  width: 100vw; height: 100vh; z-index: 1;
+  pointer-events: none;
+}
+
+/* 2D overlay: isochrone rings + location dot */
+#overlay-canvas {
+  position: fixed; top: 0; left: 0;
+  width: 100vw; height: 100vh; z-index: 2;
+  pointer-events: none;
+}
+
+#controls {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.92); backdrop-filter: blur(6px);
+  font-size: 13px;
+}
+#controls select, #controls input[type=text] {
+  padding: 4px 8px; border: 1px solid #bbb; border-radius: 4px;
+}
+#controls input[type=text] { width: 140px; }
+#search-form { display: contents; }
+#search { width: 220px !important; }
+#controls button {
+  padding: 4px 12px; border: none; border-radius: 4px;
+  background: #4361ee; color: #fff; cursor: pointer;
+}
+#portfolio-link {
+  color: #4361ee; text-decoration: none; font-size: 12px; white-space: nowrap;
+}
+#portfolio-link:hover { text-decoration: underline; }
+#warp-toggle {
+  padding: 4px 12px; border: 1.5px solid #bbb; border-radius: 4px;
+  background: #fff; color: #555; cursor: pointer; font-size: 12px;
+}
+#warp-toggle.active {
+  background: #4361ee; color: #fff; border-color: #4361ee;
+}
+#status { margin-left: auto; color: #666; font-size: 12px; }
+
+#loading {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px;
+  background: rgba(26, 26, 46, 0.55); backdrop-filter: blur(3px);
+  color: #fff; font-size: 14px; font-weight: 500;
+}
+#loading[hidden] { display: none; }
+.spinner {
+  width: 40px; height: 40px;
+  border: 4px solid rgba(255,255,255,.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

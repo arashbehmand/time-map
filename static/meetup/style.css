@@ -1,0 +1,199 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  display: flex; height: 100vh; overflow: hidden;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 13px; background: #f5f5f5;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+#sidebar {
+  width: 320px; min-width: 280px; max-width: 360px;
+  display: flex; flex-direction: column;
+  background: #fff; overflow-y: auto;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.08); z-index: 1;
+}
+
+#map { flex: 1; }
+
+/* ── Header ─────────────────────────────────────────────────────── */
+#sidebar-header {
+  background: #1a1a2e; color: #fff;
+  padding: 16px 20px 18px; flex-shrink: 0;
+}
+#back-link {
+  display: inline-block; color: #aad3df; text-decoration: none;
+  font-size: 12px; margin-bottom: 10px;
+}
+#back-link:hover { color: #fff; }
+#sidebar-header h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+#sidebar-header p  { font-size: 12px; color: #8888aa; }
+
+/* ── Add form ────────────────────────────────────────────────────── */
+#add-form {
+  padding: 16px 20px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
+}
+#add-form h2 {
+  font-size: 11px; font-weight: 600; color: #888;
+  text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px;
+}
+#add-form input,
+#add-form select {
+  width: 100%; padding: 8px 10px;
+  border: 1px solid #e0e0e0; border-radius: 7px;
+  font-size: 13px; margin-bottom: 8px; outline: none;
+  transition: border-color 0.15s;
+}
+#add-form input:focus { border-color: #4361ee; }
+
+#loc-wrap { position: relative; display: flex; gap: 6px; margin-bottom: 8px; }
+#loc-wrap input { margin-bottom: 0; flex: 1; }
+#pick-btn {
+  padding: 0 10px; border: 1px solid #e0e0e0; border-radius: 7px;
+  background: #fff; cursor: pointer; font-size: 15px; flex-shrink: 0;
+  transition: background 0.15s;
+}
+#pick-btn:hover, #pick-btn.active { background: #eef2ff; border-color: #4361ee; }
+
+#add-btn {
+  width: 100%; padding: 9px; border: none; border-radius: 7px;
+  background: #4361ee; color: #fff;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s;
+}
+#add-btn:hover    { background: #3451d1; }
+#add-btn:disabled { background: #bbb; cursor: default; }
+
+/* ── Participants list ───────────────────────────────────────────── */
+#participants-section { padding: 8px 20px 4px; flex-shrink: 0; }
+#participants-list:empty::after {
+  content: 'No participants yet.';
+  display: block; color: #bbb; font-size: 12px; padding: 8px 0 4px;
+}
+
+.participant-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid #f5f5f5;
+}
+.participant-item:last-child { border-bottom: none; }
+
+.p-dot {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--color, #888); flex-shrink: 0;
+}
+.p-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.p-info strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-info small   { color: #999; font-size: 11px; }
+
+.p-name-edit {
+  border: 1px solid transparent; border-radius: 4px; padding: 2px 4px;
+  font-size: 13px; font-weight: 600; background: transparent;
+  width: 100%; outline: none; font-family: inherit;
+}
+.p-name-edit:hover  { border-color: #e8e8e8; background: #fafafa; }
+.p-name-edit:focus  { border-color: #4361ee; background: #fff; }
+
+.p-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.p-mode-edit {
+  padding: 2px 6px; border: 1px solid #e0e0e0; border-radius: 4px;
+  font-size: 11px; background: #fafafa; outline: none; cursor: pointer;
+}
+.p-mode-edit:focus { border-color: #4361ee; }
+.p-loc { color: #999; font-size: 10px; }
+
+.p-remove {
+  background: none; border: none; color: #ccc;
+  font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; flex-shrink: 0;
+}
+.p-remove:hover { color: #e63946; }
+
+/* ── Options ─────────────────────────────────────────────────────── */
+#options-section {
+  padding: 14px 20px; border-top: 1px solid #f0f0f0; flex-shrink: 0;
+}
+#options-section label {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 11px; font-weight: 600; color: #888;
+  text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px;
+}
+#options-section select {
+  padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 7px;
+  font-size: 13px; font-weight: normal; outline: none;
+}
+#toggle-isochrones-btn {
+  width: 100%; padding: 9px; border: none; border-radius: 7px;
+  background: #6b7fe3; color: #fff; margin-bottom: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s;
+}
+#toggle-isochrones-btn:hover { background: #5569d1; }
+#toggle-isochrones-btn.active { background: #4361ee; }
+#find-btn {
+  width: 100%; padding: 10px; border: none; border-radius: 7px;
+  background: #2a9d8f; color: #fff;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  transition: background 0.15s;
+}
+#find-btn:hover    { background: #21867a; }
+#find-btn:disabled { background: #bbb; cursor: default; }
+
+/* ── Status bar ──────────────────────────────────────────────────── */
+#status-bar {
+  padding: 8px 20px; background: #fafafa;
+  font-size: 12px; color: #666; flex-shrink: 0;
+}
+#status-bar[hidden] { display: none; }
+#status-bar.error { color: #e63946; background: #fff5f5; }
+
+/* ── Results ─────────────────────────────────────────────────────── */
+#results-section {
+  padding: 16px 20px; flex-shrink: 0; border-top: 1px solid #f0f0f0;
+}
+#results-section[hidden] { display: none; }
+#results-section h2 {
+  font-size: 11px; font-weight: 600; color: #888;
+  text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px;
+}
+
+.result-card {
+  padding: 12px; border-radius: 8px; background: #f8f8f8;
+  border: 1px solid #eee; margin-bottom: 8px; cursor: pointer;
+  transition: border-color 0.15s;
+}
+.result-card:hover   { border-color: #4361ee; }
+.result-card.best    { background: #eef2ff; border-color: #c7d2fe; }
+.result-rank  { font-size: 12px; font-weight: 700; color: #4361ee; margin-bottom: 4px; }
+.result-times { font-size: 12px; color: #555; }
+.result-times strong { color: #222; }
+.result-indiv {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+}
+.result-indiv span { font-size: 11px; font-weight: 600; }
+
+/* ── Map markers ─────────────────────────────────────────────────── */
+.p-marker {
+  width: 30px; height: 30px; border-radius: 50%;
+  color: #fff; font-weight: 700; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  border: 2.5px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  cursor: pointer;
+}
+.best-marker {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: #f5a623; color: #fff; font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  border: 2.5px solid #fff; box-shadow: 0 3px 10px rgba(245,166,35,0.5);
+}
+.cand-marker {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #6b7fe3; color: #fff; font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+.pending-marker {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: rgba(67,97,238,0.35); border: 2px dashed #4361ee;
+}
+
+/* Crosshair cursor when picking location */
+body.picking #map { cursor: crosshair !important; }

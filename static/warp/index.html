@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Isochrone Warp Map</title>
+  <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="map-container"></div>
+  <canvas id="warp-canvas"></canvas>
+  <canvas id="overlay-canvas"></canvas>
+  <div id="controls">
+    <a href="/" id="portfolio-link">← Portfolio</a>
+    <form id="search-form">
+      <input id="search" type="text" placeholder="🔍 Search place or lat,lon…" autocomplete="off" />
+    </form>
+    <select id="profile">
+      <option value="walking" selected>🚶 Walking</option>
+      <option value="cycling">🚴 Cycling</option>
+      <option value="driving">🚗 Driving</option>
+    </select>
+    <label>Minutes: <input id="times" type="text" value="5,10,15,20" /></label>
+    <label>Zoom:
+      <input id="zoom" type="range" min="10" max="16" value="14" />
+      <span id="zoom-val">14</span>
+    </label>
+    <button id="warp-toggle">⟳ Warp</button>
+    <button id="center-btn">📍 Centre</button>
+    <span id="status">Waiting for location…</span>
+  </div>
+  <div id="loading" hidden>
+    <div class="spinner"></div>
+    <span id="loading-msg">Computing warp…</span>
+  </div>
+  <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

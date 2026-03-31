@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Meetup Optimizer</title>
+  <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <a href="/" id="back-link">← Portfolio</a>
+      <h1>Meetup Optimizer</h1>
+      <p>Find the fairest meeting point for your group</p>
+    </div>
+
+    <div id="add-form">
+      <h2>Add Participant</h2>
+      <input id="name-input"  type="text"   placeholder="Name" autocomplete="off" />
+      <div id="loc-wrap">
+        <input id="loc-input" type="text" placeholder="Location — type or click map" autocomplete="off" />
+        <button id="pick-btn" title="Click map to pick location">📌</button>
+      </div>
+      <select id="mode-select">
+        <option value="walking">🚶 Walking</option>
+        <option value="cycling">🚴 Cycling</option>
+        <option value="driving">🚗 Driving</option>
+      </select>
+      <button id="add-btn">+ Add participant</button>
+    </div>
+
+    <div id="participants-section">
+      <div id="participants-list"></div>
+    </div>
+
+    <div id="options-section">
+      <label>Objective
+        <select id="objective">
+          <option value="hybrid">Balanced (hybrid)</option>
+          <option value="minimax">Fairest (minimax)</option>
+          <option value="sum">Fastest average (sum)</option>
+        </select>
+      </label>
+      <button id="toggle-isochrones-btn" hidden>🌐 Show Isochrones</button>
+      <button id="find-btn" disabled>Find Meeting Point</button>
+    </div>
+
+    <div id="status-bar" hidden></div>
+
+    <div id="results-section" hidden></div>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

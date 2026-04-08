@@ -60,7 +60,7 @@ async def lifespan(_app: FastAPI):
 
 
 # ── App ──────────────────────────────────────────────────────────────
-app = FastAPI(title="Urban Data Tools", lifespan=lifespan)
+app = FastAPI(title="Time-Map", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(
     CORSMiddleware,
@@ -137,6 +137,27 @@ _ROOT = Path(__file__).parent.parent
 @app.get("/")
 def portfolio():
     return FileResponse(_ROOT / "static" / "portfolio" / "index.html")
+
+
+# ── PWA assets ──────────────────────────────────────────────────────
+@app.get("/manifest.json")
+def pwa_manifest():
+    return FileResponse(
+        _ROOT / "static" / "manifest.json",
+        media_type="application/manifest+json",
+    )
+
+
+@app.get("/sw.js")
+def pwa_service_worker():
+    return FileResponse(
+        _ROOT / "static" / "sw.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+app.mount("/icons", StaticFiles(directory=str(_ROOT / "static" / "icons")), name="icons")
 
 
 # ── Static frontends ────────────────────────────────────────────────

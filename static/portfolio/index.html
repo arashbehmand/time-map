@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Urban Data Tools</title>
+  <meta name="theme-color" content="#0f0f1a" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <title>Time-Map</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -62,8 +65,8 @@
 </head>
 <body>
   <header>
-    <h1>Urban Data Tools</h1>
-    <p>Interactive tools for visualising travel time and finding fair meeting points, built with FastAPI, MapLibre GL JS and WebGL2.</p>
+    <h1>Time-Map</h1>
+    <p>Interactive tools for visualising travel time and finding fair meeting points, powered by Mapbox APIs, MapLibre GL JS and WebGL2.</p>
   </header>
 
   <div class="projects">
@@ -94,6 +97,7 @@
     </a>
   </div>
 
-  <footer>Built with FastAPI · MapLibre GL JS · WebGL2 · H3</footer>
+  <footer>Built with FastAPI · MapLibre GL JS · WebGL2 · H3 · Powered by <a href="https://www.mapbox.com/" style="color:#4361ee;text-decoration:none">Mapbox</a></footer>
+  <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
 </body>
 </html>

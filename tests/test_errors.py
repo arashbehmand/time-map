@@ -52,7 +52,7 @@ def test_upstream_failures_are_fixed_and_clean(mapbox, matrix_client, caplog, ap
         return
     if api == "glyphs":
         # A failed glyph range is served empty so MapLibre still draws the tile.
-        assert resp.status_code == 200 and resp.content == b""
+        assert resp.status_code == 200 and resp.content == b"\x0a\x00"
         assert resp.headers["cache-control"] == "no-store"
         assert_clean(caplog.text)
         return

@@ -199,16 +199,16 @@ def test_refused_glyphs_are_served_empty(make_client, settings, mapbox):
     c = make_client(settings.with_(monthly_budget={**settings.monthly_budget, "glyphs": 0}))
     resp = c.get(GLYPH)
     assert resp.status_code == 200
-    assert resp.content == b""
+    assert resp.content == b"\x0a\x00"
     assert resp.headers["cache-control"] == "no-store"
     assert mapbox.count() == 0
 
 
 def test_glyph_per_ip_limit_also_degrades(make_client, settings):
     c = make_client(settings.with_(per_ip_per_min={**settings.per_ip_per_min, "glyphs": 1}))
-    assert c.get(GLYPH).content != b""
+    assert c.get(GLYPH).content != b"\x0a\x00"
     second = c.get(GLYPH)
-    assert second.status_code == 200 and second.content == b""
+    assert second.status_code == 200 and second.content == b"\x0a\x00"
 
 
 def test_405_keeps_allow_header(client):

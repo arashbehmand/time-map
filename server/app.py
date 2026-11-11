@@ -53,6 +53,9 @@ FONTSTACKS = {
     "Open Sans Regular,Arial Unicode MS Regular",
     "Open Sans Bold,Arial Unicode MS Bold",
 }
+# A valid glyph PBF with one empty font stack: MapLibre parses it as "no glyphs here".
+# (Not zero bytes, so no client mistakes it for a missing body.)
+EMPTY_GLYPH_RANGE = b"\x0a\x00"
 _GLYPH_RANGE = re.compile(r"^(\d{1,5})-(\d{1,5})\.pbf$")
 
 
@@ -105,7 +108,7 @@ async def glyph_proxy(request: Request, fontstack: str, range_pbf: str):
             raise fail(resp, api="glyphs")
     except ApiError as exc:
         log.warning("glyphs: serving an empty range (%s)", exc.code)
-        return Response(content=b"", media_type="application/x-protobuf",
+        return Response(content=EMPTY_GLYPH_RANGE, media_type="application/x-protobuf",
                         headers={"Cache-Control": "no-store"})
     return Response(
         content=resp.content,

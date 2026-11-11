@@ -68,15 +68,21 @@ server/                          # FastAPI backend
 ├── errors.py                    # Fixed error responses {code, detail}
 ├── logging_setup.py             # Logging with token redaction
 ├── upstream.py                  # The one way to call Mapbox
+├── settings.py                  # Limits and budgets (env-configurable)
+├── middleware.py                # Request body size limit
+├── cache.py                     # Bounded LRU cache with TTL
+├── guard/                       # Budget, rate, in-flight and per-IP controls
 ├── warp/                        # Isochrone warp module
 │   ├── routes.py                # POST /api/warp-params
 │   ├── pipeline.py              # Orchestrates isochrone → warp LUT
 │   ├── warp.py                  # RadialIsochroneWarp engine
 │   ├── geometry.py              # Viewport, coordinate conversions
-│   └── mapbox_client.py         # Mapbox Isochrone fetching, TTL cache
+│   ├── models.py                # Request models (travel-time caps)
+│   └── mapbox_client.py         # Mapbox Isochrone fetching, bounded cache
 └── meetup/                      # Meetup optimizer module
     ├── routes.py                # POST /api/meetup/solve
     ├── models.py                # Pydantic request/response models
+    ├── limits.py                # Pre-flight: radius, candidate and cost caps
     ├── candidates.py            # H3 hex candidate generation
     ├── routing.py               # Mapbox Directions Matrix integration
     └── solver.py                # Minimax / hybrid / sum optimisation
@@ -130,6 +136,34 @@ include upstream URLs, tokens or upstream response bodies.
 The server-side warped-map renderer (`/api/warped-map`, which decoded vector tiles in Python)
 was removed because no page used it. It is in git history before the commit that removed it
 (see `git log -- server/warp/vector_transform.py`).
+
+## Limits
+
+Every request to a billable Mapbox API goes through one guard (`server/guard/`):
+
+1. **Budget.** Daily and monthly caps per API in its billing unit (Matrix: elements, meaning
+   origin–destination pairs; Isochrone, tiles, glyphs: requests). Units are reserved before
+   each request is sent, retries included. When a cap is spent the API answers
+   `503 daily_budget_exhausted` (or `monthly_budget_exhausted`) and does not queue.
+   Monthly defaults are 90% of Mapbox's free tier; glyph requests are refused until
+   `GLYPHS_MONTHLY_BUDGET` is set. Counters are stored in SQLite at `USAGE_DB_PATH`.
+2. **Rate.** Per-token windows: Matrix 60/min (driving-traffic 30/min), Isochrone 300/min.
+   A request waits up to 10 s for a slot, then gets `503 busy`.
+3. **In flight.** A small bound on concurrent requests per API.
+4. **Per IP.** Per-route limits per client address (`429 rate_limited` with `Retry-After`).
+   The client address is the `TRUSTED_PROXY_HOPS`-th entry from the right of
+   `X-Forwarded-For`; uvicorn runs with `--no-proxy-headers` so this is the only parser.
+
+Requests are capped before any work starts: 2–8 participants, `margin_km` ≤ 10, a search
+radius of at most 15 km (walking), 40 km (cycling) or 150 km (driving) for the group's slowest
+mode, at most 300 candidates per stage, at most 4,000 Matrix elements per solve, and 1–4
+travel times of at most 60 minutes. API bodies are limited to 16 KiB.
+
+All of this is per process. **Run one worker on one replica** (startup fails if
+`WEB_CONCURRENCY` > 1). Adding workers or replicas needs a shared store first.
+
+Deploy checklist: set `TRUSTED_PROXY_HOPS=1`, mount a volume and set `USAGE_DB_PATH` on it,
+keep one replica, and check the caps against the Mapbox account's real allowance.
 
 ## Acknowledgements
 

@@ -106,6 +106,8 @@ def install_error_handlers(app: FastAPI) -> None:
     async def _http_error(_request: Request, exc: StarletteHTTPException):
         if exc.status_code == 404:
             return error_response(404, "not_found", "Not found.")
+        if exc.status_code == 413:
+            return error_response(413, "payload_too_large", "Request is too large.")
         if exc.status_code == 405:
             return error_response(405, "method_not_allowed", "Method not allowed.")
         return error_response(exc.status_code, "http_error", "Request failed.")

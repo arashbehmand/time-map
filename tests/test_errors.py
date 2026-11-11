@@ -5,7 +5,7 @@ import httpx
 import pytest
 from conftest import BODY_MARKER, ROUTING_TOKEN, TILES_TOKEN, assert_clean
 
-import server.app as app_module
+from server.warp.mapbox_client import MapboxClient
 
 ISO = ("post", "/api/isochrones", {"longitude": -0.12, "latitude": 51.5, "travel_times": [10]})
 WARP = ("post", "/api/warp-params", {"longitude": -0.12, "latitude": 51.5, "travel_times": [5, 10]})
@@ -74,7 +74,7 @@ def test_unexpected_exception_is_generic_and_log_is_redacted(client, caplog, mon
     async def boom(*_a, **_kw):
         raise RuntimeError(f"failed https://api.mapbox.com/x?access_token={ROUTING_TOKEN} {BODY_MARKER}")
 
-    monkeypatch.setattr(app_module.MapboxClient, "fetch_isochrones", boom)
+    monkeypatch.setattr(MapboxClient, "fetch_isochrones", boom)
     resp = _call(client, *ISO)
     assert resp.status_code == 500
     assert resp.json() == {"code": "internal_error", "detail": "Something went wrong. Please try again."}

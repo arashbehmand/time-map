@@ -6,8 +6,6 @@ from __future__ import annotations
 import logging
 import time
 
-import httpx
-
 from server.config import DENSIFY_PX, NUM_ANGULAR_SAMPLES, SMOOTH_WINDOW
 from server.errors import NoIsochrone
 from server.warp.geometry import Viewport
@@ -22,7 +20,7 @@ def _elapsed(t0: float) -> str:
 
 
 async def compute_warp_params(
-    http_client: httpx.AsyncClient,
+    client: MapboxClient,
     longitude: float,
     latitude: float,
     zoom: int = 14,
@@ -39,7 +37,6 @@ async def compute_warp_params(
     # No coordinates in logs: a location is often someone's home.
     log.info("▶ warp-params  zoom=%d profile=%s times=%d", zoom, profile, len(travel_times))
 
-    client = MapboxClient(http_client)
     viewport = Viewport(longitude, latitude, zoom, width, height)
 
     t = time.monotonic()

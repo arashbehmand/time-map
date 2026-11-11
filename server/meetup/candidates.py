@@ -14,8 +14,12 @@ import h3
 
 EARTH_R_KM = 6371.0088
 
-# Approximate hex edge lengths in km per H3 resolution
-_EDGE_KM = {6: 3.72, 7: 1.41, 8: 0.53, 9: 0.20, 10: 0.076, 11: 0.029}
+# Average hex edge lengths in km per H3 resolution. Coarse resolutions (3-5) let wide
+# driving groups fit under the candidate cap.
+_EDGE_KM = {3: 68.98, 4: 26.07, 5: 9.85, 6: 3.72, 7: 1.41, 8: 0.53, 9: 0.20, 10: 0.076}
+
+# Hard bound on cells materialised by one grid_disk call, whatever the inputs.
+MAX_DISK_CELLS = 2000
 
 def haversine_km(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -33,29 +37,38 @@ def infer_radius_km(origins: list[tuple[float, float]], margin_km: float) -> flo
     max_d = max(haversine_km(c[0], c[1], lon, lat) for lon, lat in origins)
     return max(2.0, max_d * 1.3 + margin_km)
 
-def choose_resolution(radius_km: float, max_cells: int) -> int:
-    for res in [10, 9, 8, 7, 6]:
-        edge = _EDGE_KM[res]
-        k = max(1, math.ceil(radius_km / edge))
-        approx = 3 * k * (k + 1) + 1
-        if approx <= max_cells:
+def disk_k(radius_km: float, res: int) -> int:
+    return max(2, math.ceil(radius_km / _EDGE_KM[res]))
+
+
+def disk_size(k: int) -> int:
+    return 3 * k * (k + 1) + 1
+
+
+def choose_resolution(radius_km: float, max_cells: int) -> int | None:
+    """The finest resolution whose disk fits in max_cells, or None if none does."""
+    for res in sorted(_EDGE_KM, reverse=True):
+        if disk_size(disk_k(radius_km, res)) <= max_cells:
             return res
-    return 6
+    return None
+
 
 def generate_candidates(
     center_lon: float,
     center_lat: float,
     radius_km: float,
-    max_cells: int = 160,
-    resolution: int | None = None,
+    resolution: int,
     include_points: list[tuple[float, float]] | None = None,
 ) -> tuple[int, list[tuple[float, float]]]:
     """
     Returns (resolution_used, list_of_(lon, lat)_candidate_centers).
+    The caller picks the resolution (see server/meetup/limits.py); the disk size is
+    checked here again before any cells are generated.
     """
-    res = resolution if resolution is not None else choose_resolution(radius_km, max_cells)
-    edge = _EDGE_KM[res]
-    k = max(2, math.ceil(radius_km / edge))
+    res = resolution
+    k = disk_k(radius_km, res)
+    if disk_size(k) > MAX_DISK_CELLS:
+        raise ValueError("candidate disk too large")  # unreachable via the API: plan_solve checks first
 
     center_cell = h3.latlng_to_cell(center_lat, center_lon, res)
     cells = list(h3.grid_disk(center_cell, k))

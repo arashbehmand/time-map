@@ -1,25 +1,27 @@
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, Field
 
+from server.guard.guard import per_ip
+from server.warp.models import IsochroneRequest, WarpParamsRequest
 from server.warp.pipeline import compute_warp_params
 
 router = APIRouter(tags=["warp"])
 
 
-class WarpParamsRequest(BaseModel):
-    longitude: float
-    latitude: float
-    zoom: int = Field(default=14, ge=8, le=18)
-    width: int = Field(default=1280, ge=256, le=2048)
-    height: int = Field(default=720, ge=256, le=2048)
-    profile: str = Field(default="walking", pattern="^(walking|cycling|driving)$")
-    travel_times: list[int] = Field(default_factory=lambda: [5, 10, 15, 20])
+@router.post("/isochrones", dependencies=[per_ip("isochrones")])
+async def fetch_isochrones_endpoint(req: IsochroneRequest, request: Request):
+    """Fetch raw isochrone polygons for a single point."""
+    return await request.app.state.isochrones.fetch_isochrones(
+        lon=req.longitude,
+        lat=req.latitude,
+        profile=req.profile,
+        minutes=req.travel_times,
+    )
 
 
-@router.post("/warp-params")
+@router.post("/warp-params", dependencies=[per_ip("warp_params")])
 async def warp_params_endpoint(req: WarpParamsRequest, request: Request):
     return await compute_warp_params(
-        request.app.state.http_client,
+        request.app.state.isochrones,
         longitude=req.longitude,
         latitude=req.latitude,
         zoom=req.zoom,

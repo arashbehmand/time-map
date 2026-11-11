@@ -8,4 +8,7 @@ ignore = ["B905"]  # zip(strict=) is noise for same-length numpy arrays
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The `pytest` entry point (unlike `python -m pytest`) does not put the repo root on
+# sys.path, so `import server` in tests needs this.
+pythonpath = ["."]
 addopts = "-q"

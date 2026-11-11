@@ -31,7 +31,8 @@ from Mapbox, or a replacement isochrone source, as separate work. The options ar
 - isochrones from a source with compatible terms (for example a self-hosted OSM router);
 - not showing Mapbox-made isochrones.
 
-A follow-up issue should track this.
+The owner decided not to open a separate issue for this (2026-11-11). This note is the
+record.
 
 ## Mapbox Matrix API
 
@@ -59,11 +60,12 @@ Sources: <https://docs.mapbox.com/api/maps/vector-tiles/>, <https://docs.mapbox.
 Vector Tiles pricing: "Up to 200,000 Free" monthly tile requests, then $0.25 per 1,000 (for
 use outside Mapbox GL JS map loads).
 
-**Not confirmed:** whether Fonts API (glyph) requests are billed. We found no Fonts line on
-the pricing page or the Fonts API page, so the glyph budget defaults to 0 until
-`GLYPHS_MONTHLY_BUDGET` is set. Until then the glyph proxy serves empty glyph ranges and maps
-draw without labels. It can't refuse instead: MapLibre drops the whole vector tile when a
-glyph range fails to load.
+Fonts API (glyph) requests: we found no Fonts line on the pricing page or the Fonts API
+page. The owner reports that glyph requests have never been charged on this account, which
+has loaded glyphs this way since before this change. The glyph cap (`GLYPHS_MONTHLY_BUDGET`,
+default 180,000 a month) is therefore an abuse bound. A refused glyph range is served empty,
+so maps draw without labels. It can't be refused with an error instead, because MapLibre
+drops the whole vector tile when a glyph range fails to load.
 
 **Not read:** the product terms on caching or proxying tile and glyph responses.
 <https://www.mapbox.com/legal/product-terms> did not render its service-specific sections

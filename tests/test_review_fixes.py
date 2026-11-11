@@ -238,3 +238,8 @@ def test_warns_once_when_proxy_header_is_ignored(make_client, settings, caplog):
     for _ in range(3):
         c.post("/api/isochrones", json=ISO, headers={"x-forwarded-for": "1.2.3.4"})
     assert caplog.text.count("TRUSTED_PROXY_HOPS=0") == 1
+
+
+def test_glyphs_have_a_default_budget():
+    s = Settings()
+    assert s.monthly("glyphs") > 0 and s.daily("glyphs") > 0

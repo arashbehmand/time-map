@@ -160,9 +160,10 @@ request, in this order:
 - **Client share.** One client (an IPv4 address, or an IPv6 /64) may use at most
   `CLIENT_DAILY_SHARE` (default 25%) of any API's daily budget. These counts live in memory
   and reset on restart.
-- **Glyphs.** Fonts billing is not confirmed, so glyphs get no budget until
-  `GLYPHS_MONTHLY_BUDGET` is set. A refused or failed glyph range is served *empty*: maps
-  draw without labels. MapLibre drops the whole tile when a glyph range fails, so refusing
+- **Glyphs.** Glyph requests have not been charged on this Mapbox account, so their cap
+  (`GLYPHS_MONTHLY_BUDGET`, default 180,000 a month) is an abuse bound, set like the tiles
+  cap. A refused or failed glyph range is served *empty*: maps draw without labels.
+  MapLibre drops the whole tile when a glyph range fails, so refusing
   would blank the map.
 - **Per IP.** Per-route limits per client (`429 rate_limited` with `Retry-After`). The client
   is the `TRUSTED_PROXY_HOPS`-th entry from the right of `X-Forwarded-For`, read across all
@@ -199,8 +200,6 @@ Deploy checklist (the app logs a warning at startup for each item it can detect)
 - A persistent volume with `USAGE_DB_PATH` on it. Otherwise this month's counters reset on
   every redeploy.
 - One replica.
-- `GLYPHS_MONTHLY_BUDGET`, once you know whether Mapbox bills Fonts. Until then, maps have
-  no labels.
 - The caps checked against the Mapbox account's real remaining allowance. Other apps on the
   same account share it.
 - No CORS origin to configure: the API is same-origin only, so there is no allow-list.

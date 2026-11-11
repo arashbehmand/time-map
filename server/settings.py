@@ -25,13 +25,14 @@ DEFAULT_USAGE_DB_PATH = "usage.sqlite3"
 # Monthly free tiers, as Mapbox publishes them, with 10% headroom.
 #   Matrix: 100,000 elements; Vector Tiles API: 200,000 requests (mapbox.com/pricing).
 #   Isochrone: 100,000 requests (mapbox.com/pricing).
-#   Fonts: billing not confirmed, so glyphs get no budget until GLYPHS_MONTHLY_BUDGET is set;
-#   the glyph proxy then serves empty glyph ranges (maps render without labels).
+#   Fonts: the owner reports glyph requests have never been charged on this account. The cap
+#   is set like the tiles cap, as an abuse bound, not a billing one. A refused glyph range is
+#   served empty (maps render without labels), never as an error.
 DEFAULT_MONTHLY = {
     "matrix": 90_000,
     "isochrone": 90_000,
     "tiles": 180_000,
-    "glyphs": 0,
+    "glyphs": 180_000,
     "geocode": 40_000,
 }
 

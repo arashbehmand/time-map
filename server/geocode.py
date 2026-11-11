@@ -67,7 +67,10 @@ class Geocoder:
             fut.set_result(result)
             return result
         except BaseException as exc:
-            fut.set_exception(exc)
+            # If the first caller was cancelled (client went away), the callers sharing its
+            # request get "busy", not a cancellation of their own.
+            shared = Busy() if isinstance(exc, asyncio.CancelledError) else exc
+            fut.set_exception(shared)
             fut.exception()  # mark retrieved when nobody else is waiting
             raise
         finally:

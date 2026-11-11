@@ -116,3 +116,23 @@ def test_proxy_paths_are_dropped_from_access_log(path):
     rec2 = logging.LogRecord("uvicorn.access", logging.INFO, "", 0,
                              '%s - "%s %s HTTP/%s" %d', ("1.2.3.4:5", "GET", "/meetup/", "1.1", 200), None)
     assert _DropProxyAccess().filter(rec2) is True
+
+
+def test_cancelled_first_caller_gives_waiters_busy(tmp_path, mapbox):
+    clock = FakeClock()
+    g = _geocoder(tmp_path, mapbox, clock)
+
+    async def run():
+        await g._lock.acquire()  # hold the queue so the first lookup waits
+        first = asyncio.create_task(g.lookup("Same Place"))
+        await asyncio.sleep(0)
+        second = asyncio.create_task(g.lookup("same place"))
+        await asyncio.sleep(0)
+        first.cancel()
+        g._lock.release()
+        results = await asyncio.gather(first, second, return_exceptions=True)
+        return results
+
+    first, second = asyncio.run(run())
+    assert isinstance(first, asyncio.CancelledError)
+    assert isinstance(second, Busy)

@@ -60,3 +60,9 @@ def test_pages_search_through_our_server_on_submit_only(page):
     assert "nominatim.openstreetmap.org" not in js
     assert '"/api/geocode"' in js
     assert "geoDebounce" not in js
+
+
+def test_meetup_shows_isochrone_failures():
+    js = (ROOT / "meetup/app.js").read_text()
+    assert "failures.push(await apiErrorMessage(resp))" in js
+    assert "Travel-time areas unavailable" in js

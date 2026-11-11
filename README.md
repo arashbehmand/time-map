@@ -204,15 +204,20 @@ Deploy checklist (the app logs a warning at startup for each item it can detect)
 - One replica.
 - The caps checked against the Mapbox account's real remaining allowance. Other apps on the
   same account share it.
+- `GEOCODER_USER_AGENT` with a contact address, as Nominatim's policy asks.
 - No CORS origin to configure: the API is same-origin only, so there is no allow-list.
 
 ## Privacy rules
 
 Participant locations are often people's homes.
 
-- Never log locations, place-search queries, request bodies or client IPs. Upstream errors
-  are logged by API and status only. Tile and glyph paths are dropped from the access log,
-  because they show where a visitor is looking.
+- The application never logs locations, place-search queries or request bodies. Upstream
+  errors are logged by API and status only. Unexpected errors are logged by type and code
+  location, without their message. Tile and glyph paths are dropped from uvicorn's access
+  log, because they show where a visitor is looking.
+- Outside our control: uvicorn's access log still records the socket peer's address (the
+  proxy on Railway, the visitor when run directly), and Railway's own edge logs keep full
+  request paths, including `/tiles/z/x/y`.
 - Place searches are POSTed to our server, so they stay out of URLs and access logs, and are
   then sent to Nominatim. The pages say so next to the search box.
 - When scenarios become shareable links (#3), keep the scenario in the URL fragment, which

@@ -60,8 +60,10 @@ Vector Tiles pricing: "Up to 200,000 Free" monthly tile requests, then $0.25 per
 use outside Mapbox GL JS map loads).
 
 **Not confirmed:** whether Fonts API (glyph) requests are billed. We found no Fonts line on
-the pricing page, so the glyph budget defaults to 0 (refused) until `GLYPHS_MONTHLY_BUDGET` is
-set.
+the pricing page or the Fonts API page, so the glyph budget defaults to 0 until
+`GLYPHS_MONTHLY_BUDGET` is set. Until then the glyph proxy serves empty glyph ranges and maps
+draw without labels. It can't refuse instead: MapLibre drops the whole vector tile when a
+glyph range fails to load.
 
 **Not read:** the product terms on caching or proxying tile and glyph responses.
 <https://www.mapbox.com/legal/product-terms> did not render its service-specific sections

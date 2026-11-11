@@ -478,10 +478,13 @@
     // Fetch one isochrone per participant at their solved travel time.
     // Mapbox draws isochrones up to 60 minutes only.
     let skipped = 0;
+    let requested = 0;
+    const failures = [];
     const promises = participants.map(async (p) => {
       const minutes = Math.ceil(solvedTimes[String(p.id)]);
       if (!minutes || minutes <= 0) return null;
       if (minutes > MAX_ISOCHRONE_MINUTES) { skipped++; return null; }
+      requested++;
       try {
         const resp = await fetch("/api/isochrones", {
           method: "POST",
@@ -493,10 +496,11 @@
             travel_times: [minutes],
           }),
         });
-        if (!resp.ok) return null;
+        if (!resp.ok) { failures.push(await apiErrorMessage(resp)); return null; }
         const data = await resp.json();
         return { participant: p, isochrones: data, minutes };
       } catch {
+        failures.push("Could not reach the server.");
         return null;
       }
     });
@@ -538,9 +542,24 @@
       }
     });
 
-    setStatus(skipped
-      ? `Travel-time areas are shown up to ${MAX_ISOCHRONE_MINUTES} minutes; ${skipped} ${skipped === 1 ? "person is" : "people are"} further than that.`
-      : "");
+    const notes = [];
+    if (failures.length) {
+      // Show the server's own (safe) message, e.g. a rate limit or a spent daily allowance.
+      notes.push(failures.length === requested
+        ? `Travel-time areas unavailable: ${failures[0]}`
+        : `Some travel-time areas are missing: ${failures[0]}`);
+    }
+    if (skipped) {
+      notes.push(`Travel-time areas are shown up to ${MAX_ISOCHRONE_MINUTES} minutes; ${skipped} ${skipped === 1 ? "person is" : "people are"} further than that.`);
+    }
+    setStatus(notes.join(" "), failures.length > 0);
+
+    // Nothing could be drawn: put the toggle back so it doesn't claim to show areas.
+    if (requested > 0 && failures.length === requested && isochronesVisible) {
+      isochronesVisible = false;
+      const btn = document.getElementById("toggle-isochrones-btn");
+      if (btn) { btn.textContent = "🌐 Show Isochrones"; btn.classList.remove("active"); }
+    }
   }
 
   function clearIsochrones() {

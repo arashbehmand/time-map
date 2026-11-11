@@ -11,6 +11,7 @@ Three coordinate spaces:
 from __future__ import annotations
 
 import math
+
 import numpy as np
 
 TILE_SIZE: float = 256.0

@@ -292,6 +292,16 @@
     );
   }
 
+  // ── API errors ───────────────────────────────────────────────────
+  // The server answers errors with {code, detail}; detail is a fixed, safe sentence.
+  async function apiErrorMessage(resp) {
+    try {
+      const body = await resp.json();
+      if (body && typeof body.detail === "string") return body.detail;
+    } catch { /* not JSON */ }
+    return "Request failed (" + resp.status + "). Please try again.";
+  }
+
   // ── Find meeting point ───────────────────────────────────────────
   findBtn.addEventListener("click", async () => {
     if (participants.length < 2) return;
@@ -315,10 +325,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-        throw new Error(err.detail || resp.statusText);
-      }
+      if (!resp.ok) throw new Error(await apiErrorMessage(resp));
       showResults(await resp.json());
       setStatus("");
     } catch (e) {

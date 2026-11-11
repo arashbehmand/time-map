@@ -712,7 +712,7 @@
           travel_times: currentTimes,
         }),
       });
-      if (!resp.ok) throw new Error(await resp.text());
+      if (!resp.ok) throw new Error(await apiErrorMessage(resp));
       warpParams = await resp.json();
       warpParamsZoom = currentZoom;
       warpCenterLon  = userLon;
@@ -755,10 +755,20 @@
       statusEl.textContent =
         `${userLat.toFixed(5)}, ${userLon.toFixed(5)}  (${elapsed}s)`;
     } catch (e) {
-      statusEl.textContent = "Error: " + e.message.slice(0, 80);
+      statusEl.textContent = "Error: " + e.message.slice(0, 160);
     }
     loadingEl.hidden = true;
     fetching = false;
+  }
+
+  // ── API errors ───────────────────────────────────────────────────
+  // The server answers errors with {code, detail}; detail is a fixed, safe sentence.
+  async function apiErrorMessage(resp) {
+    try {
+      const body = await resp.json();
+      if (body && typeof body.detail === "string") return body.detail;
+    } catch { /* not JSON */ }
+    return "Request failed (" + resp.status + "). Please try again.";
   }
 
   // ── Geolocation ──────────────────────────────────────────────────────

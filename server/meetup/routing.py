@@ -11,10 +11,18 @@ in a single batched call per transport mode, completely eliminating
 the isochrone → polygon → interpolation pipeline.
 """
 from __future__ import annotations
+
 import asyncio
-import numpy as np
+import logging
+
 import httpx
+import numpy as np
+
+from server.errors import ApiError, Busy, UpstreamError
 from server.meetup.candidates import haversine_km
+from server.upstream import fail, json_or_fail, mapbox_send
+
+log = logging.getLogger("time_map.matrix")
 
 Coord = tuple[float, float]  # (lon, lat)
 
@@ -54,13 +62,10 @@ class MapboxMatrixRouter(Router):
 
     URL = "https://api.mapbox.com/directions-matrix/v1/mapbox"
 
-    def __init__(self, token: str, timeout: float = 25.0, max_coords: int = 25):
+    def __init__(self, token: str, client: httpx.AsyncClient, max_coords: int = 25):
         self.token = token
         self.max_coords = max_coords
-        self.client = httpx.AsyncClient(timeout=timeout)
-
-    async def aclose(self):
-        await self.client.aclose()
+        self.client = client
 
     async def duration_matrix(
         self, mode: str, origins: list[Coord], destinations: list[Coord]
@@ -70,8 +75,9 @@ class MapboxMatrixRouter(Router):
 
         max_dest = self.max_coords - len(origins)
         if max_dest < 1:
-            raise ValueError(
-                f"Too many origins ({len(origins)}) for Mapbox limit ({self.max_coords})."
+            raise ApiError(
+                "Too many people use the same travel mode for one search.",
+                status=422, code="invalid_request",
             )
 
         chunks: list[np.ndarray] = []
@@ -104,35 +110,40 @@ class MapboxMatrixRouter(Router):
             f"&access_token={self.token}"
         )
 
-        data = await self._get_json(url)
-        raw = data.get("durations")
-        if raw is None:
-            raise RuntimeError(f"Mapbox matrix error: {data}")
+        data = await self._get_json(url, mode)
+        raw = data.get("durations") if isinstance(data, dict) else None
+        if not isinstance(raw, list) or len(raw) < n_orig:
+            log.warning("upstream bad payload api=matrix profile=%s", mode)
+            raise UpstreamError()
 
         out = np.full((n_orig, n_dest), np.inf)
-        for i, row in enumerate(raw):
-            for j, val in enumerate(row[:n_dest]):  # discard any padding columns
-                if val is not None:
-                    out[i, j] = float(val) / 60.0  # seconds → minutes
+        try:
+            for i, row in enumerate(raw[:n_orig]):
+                for j, val in enumerate(row[:n_dest]):  # discard any padding columns
+                    if val is not None:
+                        out[i, j] = float(val) / 60.0  # seconds → minutes
+        except (TypeError, ValueError):
+            log.warning("upstream bad payload api=matrix profile=%s", mode)
+            raise UpstreamError() from None
         return out
 
-    async def _get_json(self, url: str) -> dict:
-        for attempt in range(4):
-            resp = await self.client.get(url)
+    async def _get_json(self, url: str, mode: str) -> dict:
+        for attempt in range(3):
+            resp = await mapbox_send(self.client, url, api="matrix", profile=mode)
             if resp.status_code == 429:
+                fail(resp, api="matrix", profile=mode)
                 await asyncio.sleep(0.6 * 2**attempt)
                 continue
-            if resp.is_error:
-                raise RuntimeError(
-                    f"Mapbox {resp.status_code} error: {resp.text}"
-                )
-            return resp.json()
-        raise RuntimeError("Mapbox rate limit retries exhausted.")
+            return json_or_fail(resp, api="matrix", profile=mode)
+        raise Busy("The routing service is busy. Please try again in a minute.")
 
-def build_router(provider: str, token: str = "", **kw) -> Router:
+def build_router(provider: str, token: str = "", client: httpx.AsyncClient | None = None,
+                 **kw) -> Router:
     provider = provider.strip().lower()
     if provider == "mapbox":
-        return MapboxMatrixRouter(token, **kw)
+        if client is None:
+            raise ValueError("MapboxMatrixRouter needs a shared httpx client.")
+        return MapboxMatrixRouter(token, client, **kw)
     if provider == "euclidean":
         return EuclideanRouter()
     raise ValueError(f"Unknown ROUTER_PROVIDER: {provider!r}")

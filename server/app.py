@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from server.cache import BoundedTTLCache
 from server.config import MAPBOX_ROUTING_TOKEN, MAPBOX_TILES_TOKEN, SECRETS
-from server.errors import ApiError, NotFound, install_error_handlers
+from server.errors import ApiError, CatchAll, NotFound, install_error_handlers
 from server.guard.budget import UsageStore
 from server.guard.clock import Clock
 from server.guard.guard import UpstreamGuard, per_ip
@@ -22,7 +22,7 @@ from server.logging_setup import configure_logging, set_secrets
 from server.meetup.routes import router as meetup_router
 from server.meetup.routing import build_router as build_meetup_router
 from server.middleware import BodyLimit
-from server.settings import Settings
+from server.settings import DEFAULT_USAGE_DB_PATH, Settings
 from server.upstream import fail, mapbox_send
 from server.warp.mapbox_client import MapboxClient
 from server.warp.routes import router as warp_router
@@ -82,7 +82,7 @@ async def tile_proxy(
     )
 
 
-@proxy_router.get("/glyphs/{fontstack}/{range_pbf}", dependencies=[per_ip("glyphs")])
+@proxy_router.get("/glyphs/{fontstack}/{range_pbf}")
 async def glyph_proxy(request: Request, fontstack: str, range_pbf: str):
     m = _GLYPH_RANGE.match(range_pbf)
     if fontstack not in FONTSTACKS or not m:
@@ -92,12 +92,21 @@ async def glyph_proxy(request: Request, fontstack: str, range_pbf: str):
         raise NotFound()
     state = request.app.state
     url = f"https://api.mapbox.com/fonts/v1/mapbox/{quote(fontstack, safe=',')}/{range_pbf}"
-    async with state.guard.upstream("glyphs", 1):
-        resp = await mapbox_send(
-            state.http_client, url, api="glyphs", params={"access_token": MAPBOX_TILES_TOKEN}
-        )
-    if resp.is_error:
-        raise fail(resp, api="glyphs")
+    # MapLibre fails the whole vector tile (geometry too) when a glyph range fails to load,
+    # and remembers the failure until the page reloads. So a refused or failed glyph range
+    # is answered with an empty range: labels go missing, the map still draws.
+    try:
+        state.guard.enforce_per_ip(request, "glyphs")
+        async with state.guard.upstream("glyphs", 1):
+            resp = await mapbox_send(
+                state.http_client, url, api="glyphs", params={"access_token": MAPBOX_TILES_TOKEN}
+            )
+        if resp.is_error:
+            raise fail(resp, api="glyphs")
+    except ApiError as exc:
+        log.warning("glyphs: serving an empty range (%s)", exc.code)
+        return Response(content=b"", media_type="application/x-protobuf",
+                        headers={"Cache-Control": "no-store"})
     return Response(
         content=resp.content,
         media_type="application/x-protobuf",
@@ -132,13 +141,26 @@ def pwa_service_worker():
 
 
 # ── App factory ──────────────────────────────────────────────────────
-def _check_single_worker() -> None:
+def _startup_warnings(settings: Settings) -> None:
     workers = os.environ.get("WEB_CONCURRENCY", "").strip()
-    if workers and workers.isdigit() and int(workers) > 1:
-        # Startup fails and uvicorn exits: per-process limits would multiply with workers.
-        raise RuntimeError(
-            f"WEB_CONCURRENCY={workers}: limits and budgets are per process; run one worker"
+    if workers.isdigit() and int(workers) > 1:
+        # The start commands pass --workers 1, which wins over this variable; warn only.
+        log.warning(
+            "WEB_CONCURRENCY=%s is set, but limits and budgets are per process: keep "
+            "--workers 1 on the start command", workers,
         )
+    for api, monthly in sorted(settings.monthly_budget.items()):
+        if monthly <= 0 or settings.daily(api) <= 0:
+            effect = ("glyph ranges will be served empty, so maps have no labels" if api == "glyphs"
+                      else "its requests will be refused")
+            log.warning("%s has no budget: %s (set %s_MONTHLY_BUDGET)", api, effect, api.upper())
+    if settings.usage_db_path == DEFAULT_USAGE_DB_PATH:
+        log.warning(
+            "USAGE_DB_PATH is the default (%s in the working directory). Without a persistent "
+            "volume, this month's spend counters reset on every redeploy.", DEFAULT_USAGE_DB_PATH,
+        )
+    if settings.trusted_proxy_hops == 0 and os.environ.get("RAILWAY_ENVIRONMENT"):
+        log.warning("TRUSTED_PROXY_HOPS=0 on Railway: every visitor shares one per-IP bucket")
 
 
 def create_app(
@@ -153,7 +175,7 @@ def create_app(
     async def lifespan(app: FastAPI):
         import asyncio
 
-        _check_single_worker()
+        _startup_warnings(settings)
         state = app.state
         state.settings = settings
         state.http_client = make_http_client(transport)
@@ -167,7 +189,8 @@ def create_app(
         state.solve_slots = asyncio.Semaphore(settings.max_concurrent_solves)
         state.isochrones = MapboxClient(
             state.http_client, state.guard, MAPBOX_ROUTING_TOKEN,
-            BoundedTTLCache(maxsize=256, ttl=300, clock=clock.monotonic),
+            # Small on purpose: entries are full polygon sets, and repeats come within seconds.
+            BoundedTTLCache(maxsize=64, ttl=300, clock=clock.monotonic),
         )
         state.meetup_router = build_meetup_router(
             settings.router_provider, token=MAPBOX_ROUTING_TOKEN,
@@ -187,6 +210,7 @@ def create_app(
     app.add_middleware(GZipMiddleware, minimum_size=500)
     # Same-origin pages only: no CORS middleware, so other sites cannot read our API.
     app.add_middleware(BodyLimit, max_bytes=settings.max_body_bytes)
+    app.add_middleware(CatchAll)  # added last, so it wraps the others
 
     app.include_router(warp_router, prefix="/api")
     app.include_router(meetup_router, prefix="/api/meetup")

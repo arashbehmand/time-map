@@ -49,10 +49,14 @@ def test_without_trusted_hops_the_header_is_ignored(make_client, settings):
     assert c.post("/api/isochrones", json=ISO, headers={"x-forwarded-for": "2.2.2.2"}).status_code == 429
 
 
-class _Req:
-    def __init__(self, headers, peer="10.0.0.1"):
-        self.headers = headers
-        self.client = type("C", (), {"host": peer})()
+def _req(headers: list[tuple[str, str]], peer="10.0.0.1"):
+    from starlette.requests import Request
+
+    return Request({
+        "type": "http", "method": "GET", "path": "/", "query_string": b"",
+        "headers": [(k.lower().encode(), v.encode()) for k, v in headers],
+        "client": (peer, 1234),
+    })
 
 
 @pytest.mark.parametrize("hops,header,expected", [
@@ -64,7 +68,25 @@ class _Req:
     (1, "", "10.0.0.1"),
 ])
 def test_client_ip(hops, header, expected):
-    assert client_ip(_Req({"x-forwarded-for": header}), "x-forwarded-for", hops) == expected
+    assert client_ip(_req([("x-forwarded-for", header)]), "x-forwarded-for", hops) == expected
+
+
+def test_client_ip_reads_every_header_line():
+    # A forged first line must not win over the proxy's own line.
+    req = _req([("x-forwarded-for", "9.9.9.9"), ("x-forwarded-for", "203.0.113.5")])
+    assert client_ip(req, "x-forwarded-for", 1) == "203.0.113.5"
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("2001:db8:1:2:aaaa::1", "2001:db8:1:2::/64"),
+    ("2001:db8:1:2:bbbb::9", "2001:db8:1:2::/64"),
+    ("::ffff:203.0.113.7", "203.0.113.7"),
+    ("203.0.113.7:4321", "203.0.113.7"),
+    ("[2001:db8::1]:443", "2001:db8::/64"),
+    ("not-an-ip", "10.0.0.1"),
+])
+def test_client_ip_normalises(value, expected):
+    assert client_ip(_req([("x-forwarded-for", value)]), "x-forwarded-for", 1) == expected
 
 
 def test_per_ip_key_store_is_bounded():
@@ -80,9 +102,9 @@ def test_daily_budget_refuses_once_spent_and_resets_at_midnight(make_client, set
     first = c.post("/api/meetup/solve", json=SOLVE)
     assert first.status_code == 200, first.text
     store = c.app.state.usage
-    estimate = first.json()["diagnostics"]["estimated_matrix_elements"]
-    assert store.snapshot()["matrix"]["units"] <= estimate
-    store.daily["matrix"] = estimate + 10  # one solve a day
+    used = store.snapshot()["matrix"]["units"]
+    assert used <= first.json()["diagnostics"]["estimated_matrix_elements"]
+    store.daily["matrix"] = used + 10  # not enough for even the smallest plan
     calls = mapbox.count("matrix")
     second = c.post("/api/meetup/solve", json=SOLVE)
     assert second.status_code == 503
@@ -282,10 +304,12 @@ def test_bounded_ttl_cache():
     assert len(c) == 1  # expired entry was deleted on read
 
 
-def test_more_than_one_worker_exits(make_client, settings, monkeypatch):
+def test_web_concurrency_only_warns(make_client, settings, monkeypatch, caplog):
+    # The start commands pass --workers 1, which wins over WEB_CONCURRENCY.
     monkeypatch.setenv("WEB_CONCURRENCY", "2")
-    with pytest.raises(RuntimeError, match="WEB_CONCURRENCY"):
-        make_client(settings)
+    c = make_client(settings)
+    assert c.get("/api/meetup/health").status_code == 200
+    assert "WEB_CONCURRENCY=2" in caplog.text
 
 
 def test_month_rollover(tmp_path):

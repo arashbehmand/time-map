@@ -32,19 +32,17 @@ SOLVE_CASES = {
     "London and Paris walkers": solve_body([person(0), person(1, lon=2.35, lat=48.86)]),
     "London and Paris drivers": solve_body([person(0, mode="driving"), person(1, lon=2.35, lat=48.86,
                                                                                mode="driving")]),
-    "plan over the element cap": solve_body(
-        [person(i, mode=m) for i, m in enumerate(["walking", "cycling", "driving"] * 2 + ["walking"] * 2)],
-        max_candidates=300,
-    ),
-    "driving-traffic crowd": solve_body([person(i, mode="driving-traffic") for i in range(8)]),
 }
+
+MIXED_EIGHT = solve_body(
+    [person(i, mode=m) for i, m in enumerate(["walking", "cycling", "driving"] * 2 + ["walking"] * 2)],
+    max_candidates=300,
+)
 
 EXPECTED_CODE = {
     "walkers 40 km apart": "group_too_spread",
     "London and Paris walkers": "group_too_spread",
     "London and Paris drivers": "group_too_spread",
-    "plan over the element cap": "search_too_expensive",
-    "driving-traffic crowd": "search_too_expensive",
 }
 
 
@@ -154,13 +152,44 @@ def test_wide_driving_group_uses_a_coarse_resolution(mapbox, matrix_client):
     assert resp.json()["diagnostics"]["coarse_candidates"] <= 160 + 2
 
 
-def test_cell_check_runs_before_grid_disk(mapbox, matrix_client, monkeypatch):
+def _matrix_elements(mapbox) -> int:
+    return sum(
+        len(r.url.params["sources"].split(";")) * len(r.url.params["destinations"].split(";"))
+        for r in mapbox.calls if mapbox.api_of(r) == "matrix"
+    )
+
+
+def test_oversized_plan_shrinks_to_fit_instead_of_refusing(mapbox, matrix_client):
+    resp = matrix_client.post("/api/meetup/solve", json=MIXED_EIGHT)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["diagnostics"]["estimated_matrix_elements"] <= 4000
+    assert _matrix_elements(mapbox) <= 4000
+    per_bucket = {}
+    for r in mapbox.calls:
+        per_bucket[r.url.path.split("/")[4]] = per_bucket.get(r.url.path.split("/")[4], 0) + 1
+    assert sum(per_bucket.values()) <= 60
+
+
+def test_driving_traffic_fits_its_30_per_minute_window(mapbox, matrix_client):
+    body = solve_body([person(i, mode="driving-traffic") for i in range(8)])
+    resp = matrix_client.post("/api/meetup/solve", json=body)
+    assert resp.status_code == 200, resp.text
+    assert mapbox.count("matrix") <= 30
+    for r in mapbox.calls:
+        coords = r.url.path.rsplit("/", 1)[-1].split(";")
+        assert len(coords) <= 10
+
+
+def test_unfittable_plan_is_refused_before_grid_disk(make_client, settings, mapbox, monkeypatch):
     def boom(*_a, **_kw):
         raise AssertionError("grid_disk called")
 
+    c = make_client(settings.with_(router_provider="mapbox", max_solve_elements=30))
     monkeypatch.setattr(h3, "grid_disk", boom)
-    resp = matrix_client.post("/api/meetup/solve", json=SOLVE_CASES["plan over the element cap"])
+    resp = c.post("/api/meetup/solve", json=solve_body())
     assert resp.status_code == 422
+    assert resp.json()["code"] == "search_too_expensive"
+    assert mapbox.count() == 0
 
 
 def test_tile_decoder_is_gone():

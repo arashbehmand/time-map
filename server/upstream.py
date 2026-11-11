@@ -51,15 +51,3 @@ def json_or_fail(resp: httpx.Response, *, api: str, profile: str = "-") -> Any:
     except ValueError:
         log.warning("upstream bad json api=%s profile=%s status=%d", api, profile, resp.status_code)
         raise UpstreamError() from None
-
-
-async def mapbox_get_json(
-    client: httpx.AsyncClient,
-    url: str,
-    *,
-    api: str,
-    profile: str = "-",
-    params: dict[str, Any] | None = None,
-) -> Any:
-    resp = await mapbox_send(client, url, api=api, profile=profile, params=params)
-    return json_or_fail(resp, api=api, profile=profile)

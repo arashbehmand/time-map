@@ -15,10 +15,18 @@ def _int(name: str, default: int) -> int:
     return int(raw) if raw else default
 
 
+def _float(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    return float(raw) if raw else default
+
+
+DEFAULT_USAGE_DB_PATH = "usage.sqlite3"
+
 # Monthly free tiers, as Mapbox publishes them, with 10% headroom.
 #   Matrix: 100,000 elements; Vector Tiles API: 200,000 requests (mapbox.com/pricing).
-#   Isochrone: 100,000 requests (not re-checked against the live pricing page).
-#   Fonts: not confirmed to be free, so glyphs are refused until GLYPHS_MONTHLY_BUDGET is set.
+#   Isochrone: 100,000 requests (mapbox.com/pricing).
+#   Fonts: billing not confirmed, so glyphs get no budget until GLYPHS_MONTHLY_BUDGET is set;
+#   the glyph proxy then serves empty glyph ranges (maps render without labels).
 DEFAULT_MONTHLY = {
     "matrix": 90_000,
     "isochrone": 90_000,
@@ -45,14 +53,14 @@ DEFAULT_PER_IP = {
     "warp_params": 30,
     "geocode": 10,
     "tiles": 400,
-    "glyphs": 120,
+    "glyphs": 300,
 }
 
 
 @dataclass(frozen=True)
 class Settings:
     router_provider: str = "mapbox"
-    usage_db_path: str = "usage.sqlite3"
+    usage_db_path: str = DEFAULT_USAGE_DB_PATH
     monthly_budget: dict[str, int] = field(default_factory=lambda: dict(DEFAULT_MONTHLY))
     daily_budget: dict[str, int] = field(default_factory=dict)  # empty → monthly // 28
     rates_per_min: dict[str, int] = field(default_factory=lambda: dict(DEFAULT_RATES))
@@ -64,8 +72,12 @@ class Settings:
     trusted_proxy_hops: int = 0
     per_ip_max_keys: int = 10_000
     max_solve_elements: int = 4_000
-    max_concurrent_solves: int = 2
-    solve_wait_s: float = 2.0
+    # One solve at a time, so the check that its Matrix requests fit in the free rate slots
+    # cannot race another solve.
+    max_concurrent_solves: int = 1
+    solve_wait_s: float = 10.0
+    # Most of one API's daily budget a single client (IP, or IPv6 /64) may use.
+    client_daily_share: float = 0.25
     max_body_bytes: int = 16 * 1024
     usage_log_interval_s: float = 900.0
     geocoder_user_agent: str = "time-map/1.0 (+https://github.com/arashbehmand/time-map)"
@@ -97,13 +109,14 @@ class Settings:
         }
         return cls(
             router_provider=os.environ.get("ROUTER_PROVIDER", "mapbox"),
-            usage_db_path=os.environ.get("USAGE_DB_PATH", "usage.sqlite3"),
+            usage_db_path=os.environ.get("USAGE_DB_PATH", DEFAULT_USAGE_DB_PATH),
             monthly_budget=monthly,
             daily_budget=daily,
             per_ip_per_min=per_ip,
             client_ip_header=os.environ.get("CLIENT_IP_HEADER", "x-forwarded-for").lower(),
             trusted_proxy_hops=_int("TRUSTED_PROXY_HOPS", 0),
             max_solve_elements=_int("MAX_SOLVE_ELEMENTS", 4_000),
+            client_daily_share=_float("CLIENT_DAILY_SHARE", 0.25),
             geocoder_user_agent=os.environ.get("GEOCODER_USER_AGENT", "").strip()
             or cls.geocoder_user_agent,
         )

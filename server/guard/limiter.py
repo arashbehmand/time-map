@@ -30,16 +30,29 @@ class SlidingWindow:
             return self.window_s
         return max(0.0, self._hits[0] + self.window_s - now)
 
-    async def acquire(self, max_wait_s: float) -> None:
+    def available(self) -> int:
+        """Slots free right now."""
+        self._prune(self.clock.monotonic())
+        return max(0, self.limit - len(self._hits))
+
+    async def acquire(self, max_wait_s: float) -> float:
+        """Take a slot, waiting up to max_wait_s. Returns the slot's timestamp (for give_back)."""
         waited = 0.0
         while True:
             wait = self.try_acquire()
             if wait is None:
-                return
+                return self._hits[-1]
             if self.limit <= 0 or waited + wait > max_wait_s:
-                raise Busy()
+                raise Busy(headers={"Retry-After": str(max(1, int(wait) + 1))})
             await self.clock.sleep(wait)
             waited += wait
+
+    def give_back(self, stamp: float) -> None:
+        """Return a slot that was taken but not used for a request."""
+        try:
+            self._hits.remove(stamp)
+        except ValueError:
+            pass  # already expired
 
 
 class KeyedLimiter:

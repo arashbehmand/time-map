@@ -12,7 +12,10 @@ the isochrone → polygon → interpolation pipeline.
 """
 from __future__ import annotations
 
+import contextvars
 import logging
+from collections import Counter
+from dataclasses import dataclass, field
 
 import httpx
 import numpy as np
@@ -20,10 +23,32 @@ import numpy as np
 from server.errors import ApiError, Busy, UpstreamError
 from server.guard.guard import UpstreamGuard
 from server.meetup.candidates import haversine_km
-from server.meetup.limits import matrix_max_coords
+from server.meetup.limits import matrix_max_coords, rate_bucket
 from server.upstream import fail, json_or_fail, mapbox_send
 
 log = logging.getLogger("time_map.matrix")
+
+
+@dataclass
+class SolveAllowance:
+    """What one solve may send, retries included: the plan's elements and requests per bucket."""
+    elements: int
+    requests: dict[str, int]
+    spent_elements: int = 0
+    spent_requests: Counter = field(default_factory=Counter)
+
+    def take(self, units: int, bucket: str) -> None:
+        if (self.spent_elements + units > self.elements
+                or self.spent_requests[bucket] + 1 > self.requests.get(bucket, 0)):
+            raise Busy("The routing service is busy. Please try again in a minute.",
+                       headers={"Retry-After": "60"})
+        self.spent_elements += units
+        self.spent_requests[bucket] += 1
+
+
+# Set by the solve route; None for callers without a per-solve plan.
+solve_allowance: contextvars.ContextVar[SolveAllowance | None] = contextvars.ContextVar(
+    "solve_allowance", default=None)
 
 Coord = tuple[float, float]  # (lon, lat)
 
@@ -131,8 +156,12 @@ class MapboxMatrixRouter(Router):
         return out
 
     async def _get_json(self, url: str, mode: str, units: int) -> dict:
-        # Each attempt, retries included, takes a rate slot and is charged to the budget.
+        # Each attempt, retries included, takes a rate slot, is charged to the budget and
+        # counts against this solve's allowance.
+        allowance = solve_allowance.get()
         for attempt in range(3):
+            if allowance is not None:
+                allowance.take(units, rate_bucket(mode))
             async with self.guard.upstream("matrix", units, profile=mode):
                 resp = await mapbox_send(self.client, url, api="matrix", profile=mode)
             if resp.status_code == 429:

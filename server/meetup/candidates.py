@@ -12,6 +12,8 @@ from typing import Sequence
 
 import h3
 
+from server.errors import ApiError
+
 EARTH_R_KM = 6371.0088
 
 # Average hex edge lengths in km per H3 resolution. Coarse resolutions (3-5) let wide
@@ -68,7 +70,9 @@ def generate_candidates(
     res = resolution
     k = disk_k(radius_km, res)
     if disk_size(k) > MAX_DISK_CELLS:
-        raise ValueError("candidate disk too large")  # unreachable via the API: plan_solve checks first
+        # Unreachable through the API (plan_solve sizes the disk first); a guard all the same.
+        raise ApiError("This search is too large. Try fewer people or a smaller search area.",
+                       status=422, code="search_too_expensive")
 
     center_cell = h3.latlng_to_cell(center_lat, center_lon, res)
     cells = list(h3.grid_disk(center_cell, k))

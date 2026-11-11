@@ -24,14 +24,14 @@ Algorithm
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import defaultdict
 from typing import Any
 
 import h3
 import numpy as np
 
-from server.errors import NoFeasiblePoint
-from server.guard.budget import BudgetExhausted
+from server.errors import ApiError, NoFeasiblePoint
 from server.meetup.candidates import (
     cells_to_geojson,
     generate_candidates,
@@ -45,6 +45,8 @@ from server.meetup.models import (
     SolveResponse,
 )
 from server.meetup.routing import Router
+
+log = logging.getLogger("time_map.solver")
 
 
 def _group_by_mode(
@@ -197,8 +199,10 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
             fine_ev = await _evaluate(
                 router, participants, fine_coords, req.objective, req.alpha
             )
-        except BudgetExhausted:
-            # The coarse answer is already paid for; return it rather than nothing.
+        except ApiError as exc:
+            # Budget, rate, in-flight or upstream trouble in the optional fine stage: the
+            # coarse answer is already paid for, so return it rather than nothing.
+            log.warning("fine stage skipped: %s", exc.code)
             fine_ev = None
         if fine_ev is not None and np.isfinite(fine_ev["score"]).any():
             best_ev = fine_ev

@@ -50,6 +50,12 @@ def test_upstream_failures_are_fixed_and_clean(mapbox, matrix_client, caplog, ap
     if api in ("tiles", "glyphs") and behaviour is _bad_json:
         assert resp.status_code == 200  # binary passthrough; nothing to parse
         return
+    if api == "glyphs":
+        # A failed glyph range is served empty so MapLibre still draws the tile.
+        assert resp.status_code == 200 and resp.content == b""
+        assert resp.headers["cache-control"] == "no-store"
+        assert_clean(caplog.text)
+        return
     assert resp.status_code in (502, 504), resp.text
     body = resp.json()
     assert body["code"] in ("upstream_error", "upstream_timeout")
@@ -79,9 +85,10 @@ def test_unexpected_exception_is_generic_and_log_is_redacted(client, caplog, mon
     assert resp.status_code == 500
     assert resp.json() == {"code": "internal_error", "detail": "Something went wrong. Please try again."}
     assert_clean(resp.text)
-    assert "RuntimeError" in caplog.text  # the traceback is logged...
-    assert ROUTING_TOKEN not in caplog.text  # ...without the token
-    assert "access_token=[REDACTED]" in caplog.text
+    assert "unhandled RuntimeError at" in caplog.text  # type and code locations...
+    assert "test_errors.py" in caplog.text
+    assert_clean(caplog.text)  # ...but not the message
+    assert caplog.text.count("unhandled RuntimeError") == 1
 
 
 def test_log_redaction_covers_args_and_unknown_pk_tokens(caplog):

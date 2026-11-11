@@ -15,6 +15,8 @@ from fastapi.staticfiles import StaticFiles
 from server.cache import BoundedTTLCache
 from server.config import MAPBOX_ROUTING_TOKEN, MAPBOX_TILES_TOKEN, SECRETS
 from server.errors import ApiError, CatchAll, NotFound, install_error_handlers
+from server.geocode import Geocoder
+from server.geocode import router as geocode_router
 from server.guard.budget import UsageStore
 from server.guard.clock import Clock
 from server.guard.guard import UpstreamGuard, per_ip
@@ -199,6 +201,7 @@ def create_app(
             settings.router_provider, token=MAPBOX_ROUTING_TOKEN,
             client=state.http_client, guard=state.guard,
         )
+        state.geocoder = Geocoder(state.http_client, state.guard, settings, clock)
         usage_task = asyncio.create_task(state.guard.usage_loop())
 
         yield
@@ -217,6 +220,7 @@ def create_app(
 
     app.include_router(warp_router, prefix="/api")
     app.include_router(meetup_router, prefix="/api/meetup")
+    app.include_router(geocode_router, prefix="/api")
     app.include_router(proxy_router)
     app.include_router(page_router)
 

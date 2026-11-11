@@ -129,6 +129,7 @@ Isochrone polygons are fetched from the **Mapbox Isochrone API** and vector tile
 | `GET`  | `/tiles/{z}/{x}/{y}` | Mapbox vector tile proxy |
 | `GET`  | `/glyphs/{fontstack}/{range}` | Mapbox font glyph proxy |
 | `POST` | `/api/meetup/solve` | Find optimal meeting point (via Mapbox Matrix API) |
+| `POST` | `/api/geocode` | Place search (via OpenStreetMap Nominatim, queued at 1 request/s, cached) |
 
 Errors are returned as `{"code": "<stable code>", "detail": "<fixed sentence>"}`. They never
 include upstream URLs, tokens or upstream response bodies.
@@ -205,11 +206,26 @@ Deploy checklist (the app logs a warning at startup for each item it can detect)
   same account share it.
 - No CORS origin to configure: the API is same-origin only, so there is no allow-list.
 
+## Privacy rules
+
+Participant locations are often people's homes.
+
+- Never log locations, place-search queries, request bodies or client IPs. Upstream errors
+  are logged by API and status only. Tile and glyph paths are dropped from the access log,
+  because they show where a visitor is looking.
+- Place searches are POSTed to our server, so they stay out of URLs and access logs, and are
+  then sent to Nominatim. The pages say so next to the search box.
+- When scenarios become shareable links (#3), keep the scenario in the URL fragment, which
+  is never sent to the server. Round locations unless their owner opts in.
+
+Provider terms and where we stand on each: [docs/provider-terms.md](docs/provider-terms.md).
+
 ## Acknowledgements
 
 This project is built on top of several excellent open-source projects and APIs:
 
 - **[Mapbox](https://www.mapbox.com/)** — Isochrone API, Directions Matrix API, Vector Tiles, and Font Glyphs power the core mapping and routing functionality
+- **[OpenStreetMap](https://www.openstreetmap.org/copyright)** contributors — map data, and place search via [Nominatim](https://nominatim.org/)
 - **[MapLibre GL JS](https://maplibre.org/)** — open-source map rendering library
 - **[H3](https://h3geo.org/)** — Uber's hexagonal hierarchical spatial index
 - **[FastAPI](https://fastapi.tiangolo.com/)** — Python web framework

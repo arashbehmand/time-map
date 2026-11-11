@@ -1,4 +1,4 @@
-const CACHE_NAME = "time-map-v1";
+const CACHE_NAME = "time-map-v2";
 
 const APP_SHELL = [
   "/",
@@ -8,13 +8,22 @@ const APP_SHELL = [
   "/warp/",
   "/warp/style.css",
   "/warp/app.js",
-  "https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css",
-  "https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js",
+  "/icons/mapbox-logo.svg",
+];
+
+// Pinned to the exact files the pages load with an integrity hash. They are fetched in
+// CORS mode: an integrity-checked page request cannot use an opaque cached response.
+const CDN_ASSETS = [
+  "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css",
+  "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js",
 ];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll([
+      ...APP_SHELL,
+      ...CDN_ASSETS.map((url) => new Request(url, { mode: "cors", credentials: "omit" })),
+    ]))
   );
   self.skipWaiting();
 });

@@ -3,6 +3,12 @@
 
   const COLORS = ["#e63946","#2a9d8f","#e9c46a","#4361ee","#f4a261","#457b9d","#a8dadc","#c77dff"];
   const MODES  = { walking: "🚶", cycling: "🚴", driving: "🚗" };
+  const MAX_PARTICIPANTS = 8;        // server cap (server/meetup/models.py)
+  const MAX_ISOCHRONE_MINUTES = 60;  // Mapbox Isochrone limit
+  const ATTRIBUTION =
+    '<a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener">© Mapbox</a> ' +
+    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> ' +
+    '<strong><a href="https://apps.mapbox.com/feedback/" target="_blank" rel="noopener">Improve this map</a></strong>';
 
   // ── State ───────────────────────────────────────────────────────
   let participants = [];
@@ -28,15 +34,23 @@
   const statusBar  = document.getElementById("status-bar");
   const resultsDiv = document.getElementById("results-section");
 
-  // ── Geocoding (Nominatim + raw lat,lon) ─────────────────────────
+  // ── Geocoding (our server → Nominatim, or raw lat,lon) ────────
+  // Searches go through /api/geocode on submit only; Nominatim forbids search-as-you-type.
   async function geocode(q) {
     const m = q.match(/^\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*$/);
-    if (m) return { lat: +m[1], lon: +m[2] };
-    const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q="
-                + encodeURIComponent(q);
-    const data = await (await fetch(url)).json();
-    if (!data.length) return null;
-    return { lat: +data[0].lat, lon: +data[0].lon };
+    if (m) {
+      const lat = +m[1], lon = +m[2];
+      if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+      return { lat, lon };
+    }
+    const resp = await fetch("/api/geocode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ q: q.slice(0, 200) }),
+    });
+    if (resp.status === 404) return null;
+    if (!resp.ok) throw new Error(await apiErrorMessage(resp));
+    return await resp.json();
   }
 
   // ── Map ─────────────────────────────────────────────────────────
@@ -50,6 +64,7 @@
           type: "vector",
           tiles: [`${o}/tiles/{z}/{x}/{y}`],
           minzoom: 0, maxzoom: 16,
+          attribution: ATTRIBUTION,
         },
       },
       layers: [
@@ -82,13 +97,31 @@
     };
   }
 
+  // The Mapbox wordmark, which Mapbox requires on maps that use its data.
+  class MapboxLogoControl {
+    onAdd() {
+      const a = document.createElement("a");
+      a.className = "maplibregl-ctrl mapbox-logo";
+      a.href = "https://www.mapbox.com/";
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.setAttribute("aria-label", "Mapbox");
+      a.innerHTML = '<img src="/icons/mapbox-logo.svg" alt="Mapbox" width="80" height="20" />';
+      this._el = a;
+      return a;
+    }
+    onRemove() { this._el.remove(); }
+  }
+
   function initMap() {
     map = new maplibregl.Map({
       container: "map",
       style: buildMapStyle(),
       center: [-0.118, 51.509],
       zoom: 10,
+      attributionControl: { compact: false },
     });
+    map.addControl(new MapboxLogoControl(), "bottom-left");
 
     map.on("click", (e) => {
       if (!pickingActive) return;
@@ -115,18 +148,6 @@
     el.className = "pending-marker";
     pendingMarker = new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(map);
   }
-
-  // Live geocode preview while typing
-  let geoDebounce = null;
-  locInput.addEventListener("input", () => {
-    clearTimeout(geoDebounce);
-    const q = locInput.value.trim();
-    if (q.length < 3) return;
-    geoDebounce = setTimeout(async () => {
-      const geo = await geocode(q).catch(() => null);
-      if (geo) showPendingMarker(geo.lon, geo.lat);
-    }, 600);
-  });
 
   // ── Render participant list ──────────────────────────────────────
   function renderList() {
@@ -181,6 +202,9 @@
     });
 
     findBtn.disabled = participants.length < 2;
+    const full = participants.length >= MAX_PARTICIPANTS;
+    addBtn.disabled = full;
+    addBtn.textContent = full ? `Up to ${MAX_PARTICIPANTS} people` : "+ Add participant";
   }
 
   // ── Add participant ──────────────────────────────────────────────
@@ -189,13 +213,16 @@
     const locQ = locInput.value.trim();
     if (!name) { setStatus("Please enter a name.", true); nameInput.focus(); return; }
     if (!locQ) { setStatus("Please enter a location.", true); locInput.focus(); return; }
+    if (participants.length >= MAX_PARTICIPANTS) {
+      setStatus(`A search can include up to ${MAX_PARTICIPANTS} people.`, true); return;
+    }
 
     addBtn.disabled = true;
     setStatus("Geocoding…");
 
     let geo;
     try   { geo = await geocode(locQ); }
-    catch { geo = null; }
+    catch (e) { addBtn.disabled = false; setStatus(e.message, true); return; }
     addBtn.disabled = false;
 
     if (!geo) { setStatus("Location not found — try a different search.", true); return; }
@@ -448,10 +475,13 @@
 
     setStatus("Fetching isochrones…");
 
-    // Fetch one isochrone per participant at their solved travel time
+    // Fetch one isochrone per participant at their solved travel time.
+    // Mapbox draws isochrones up to 60 minutes only.
+    let skipped = 0;
     const promises = participants.map(async (p) => {
       const minutes = Math.ceil(solvedTimes[String(p.id)]);
       if (!minutes || minutes <= 0) return null;
+      if (minutes > MAX_ISOCHRONE_MINUTES) { skipped++; return null; }
       try {
         const resp = await fetch("/api/isochrones", {
           method: "POST",
@@ -508,7 +538,9 @@
       }
     });
 
-    setStatus("");
+    setStatus(skipped
+      ? `Travel-time areas are shown up to ${MAX_ISOCHRONE_MINUTES} minutes; ${skipped} ${skipped === 1 ? "person is" : "people are"} further than that.`
+      : "");
   }
 
   function clearIsochrones() {

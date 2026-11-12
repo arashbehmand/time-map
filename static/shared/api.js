@@ -9,23 +9,30 @@ const REWRITES = {
 };
 
 export class ApiError extends Error {
-  constructor(status, code, detail) {
+  // `extra`: fields a few errors add. A "no meeting point" error says why (`reason`) and who
+  // (`who`: [{index, reason}], positions in the request), so the page can name them.
+  constructor(status, code, detail, extra = {}) {
     super(detail || code || `HTTP ${status}`);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.detail = detail;
+    this.reason = typeof extra.reason === "string" ? extra.reason : "";
+    this.who = Array.isArray(extra.who)
+      ? extra.who.filter((w) => w && Number.isInteger(w.index) && w.index >= 0 && typeof w.reason === "string")
+      : [];
   }
 }
 
 export async function readError(resp) {
-  let code = "", detail = "";
+  let code = "", detail = "", extra = {};
   try {
     const body = await resp.json();
     if (body && typeof body.code === "string") code = body.code;
     if (body && typeof body.detail === "string") detail = body.detail;
+    if (body && typeof body === "object") extra = { reason: body.reason, who: body.who };
   } catch { /* not JSON */ }
-  return new ApiError(resp.status, code, detail);
+  return new ApiError(resp.status, code, detail, extra);
 }
 
 // One sentence for a person to read. Empty for an abort, which is never shown.

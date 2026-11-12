@@ -243,3 +243,18 @@ def test_warns_once_when_proxy_header_is_ignored(make_client, settings, caplog):
 def test_glyphs_have_a_default_budget():
     s = Settings()
     assert s.monthly("glyphs") > 0 and s.daily("glyphs") > 0
+
+
+@pytest.mark.parametrize("env,expected", [
+    ({}, 0),
+    ({"RAILWAY_ENVIRONMENT_NAME": "production"}, 1),
+    ({"RAILWAY_ENVIRONMENT_NAME": "production", "TRUSTED_PROXY_HOPS": "0"}, 0),
+    ({"TRUSTED_PROXY_HOPS": "2"}, 2),
+])
+def test_proxy_hops_default_follows_railway(monkeypatch, env, expected):
+    for k in ("RAILWAY_ENVIRONMENT", "RAILWAY_ENVIRONMENT_NAME", "RAILWAY_PROJECT_ID",
+              "TRUSTED_PROXY_HOPS"):
+        monkeypatch.delenv(k, raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    assert Settings.from_env().trusted_proxy_hops == expected

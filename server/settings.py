@@ -15,6 +15,11 @@ def _int(name: str, default: int) -> int:
     return int(raw) if raw else default
 
 
+def on_railway() -> bool:
+    return any(os.environ.get(k) for k in
+               ("RAILWAY_ENVIRONMENT", "RAILWAY_ENVIRONMENT_NAME", "RAILWAY_PROJECT_ID"))
+
+
 def _float(name: str, default: float) -> float:
     raw = os.environ.get(name, "").strip()
     return float(raw) if raw else default
@@ -115,7 +120,9 @@ class Settings:
             daily_budget=daily,
             per_ip_per_min=per_ip,
             client_ip_header=os.environ.get("CLIENT_IP_HEADER", "x-forwarded-for").lower(),
-            trusted_proxy_hops=_int("TRUSTED_PROXY_HOPS", 0),
+            # Railway's edge proxy sets X-Forwarded-For, so on Railway the right-most entry is
+            # the client. Elsewhere, trust no proxy unless told to.
+            trusted_proxy_hops=_int("TRUSTED_PROXY_HOPS", 1 if on_railway() else 0),
             max_solve_elements=_int("MAX_SOLVE_ELEMENTS", 4_000),
             client_daily_share=_float("CLIENT_DAILY_SHARE", 0.25),
             geocoder_user_agent=os.environ.get("GEOCODER_USER_AGENT", "").strip()

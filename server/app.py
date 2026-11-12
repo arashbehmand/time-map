@@ -22,7 +22,7 @@ from server.logging_setup import configure_logging, set_secrets
 from server.meetup.routes import router as meetup_router
 from server.meetup.routing import build_router as build_meetup_router
 from server.middleware import BodyLimit
-from server.settings import DEFAULT_USAGE_DB_PATH, Settings
+from server.settings import DEFAULT_USAGE_DB_PATH, Settings, on_railway
 from server.upstream import fail, mapbox_send
 from server.warp.mapbox_client import MapboxClient
 from server.warp.routes import router as warp_router
@@ -162,7 +162,7 @@ def _startup_warnings(settings: Settings) -> None:
             "USAGE_DB_PATH is the default (%s in the working directory). Without a persistent "
             "volume, this month's spend counters reset on every redeploy.", DEFAULT_USAGE_DB_PATH,
         )
-    if settings.trusted_proxy_hops == 0 and os.environ.get("RAILWAY_ENVIRONMENT"):
+    if settings.trusted_proxy_hops == 0 and on_railway():
         log.warning("TRUSTED_PROXY_HOPS=0 on Railway: every visitor shares one per-IP bucket")
 
 

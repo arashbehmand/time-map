@@ -194,7 +194,8 @@ All of this is per process. **Run one worker on one replica.** The start command
 shared store first.
 
 Deploy checklist (the app logs a warning at startup for each item it can detect):
-- `TRUSTED_PROXY_HOPS=1` on Railway. Then check from two networks (one on a phone's mobile
+- `TRUSTED_PROXY_HOPS`: it defaults to 1 on Railway (detected from Railway's environment
+  variables) and 0 elsewhere. Check from two networks (one on a phone's mobile
   data) that each gets its own per-IP limit, and that a forged `X-Forwarded-For` doesn't
   reset it.
 - A persistent volume with `USAGE_DB_PATH` on it. Otherwise this month's counters reset on

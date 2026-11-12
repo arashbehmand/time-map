@@ -112,15 +112,21 @@ class SolveAllowance:
     _gate: asyncio.Semaphore | None = field(default=None, repr=False)
 
     @classmethod
-    def for_plan(cls, plan: SolvePlan, settings: Settings) -> SolveAllowance:
-        """The plan's cost plus its recovery slack, never above a bucket's rate."""
+    def for_plan(cls, plan: SolvePlan, settings: Settings,
+                 live_elements: int | None = None) -> SolveAllowance:
+        """
+        The plan's cost plus its recovery slack, never above a bucket's rate, the per-solve
+        cap, or `live_elements` (what is left of today's budget and this client's share,
+        which admission sized the plan to fit), so recovery can't spend what the plan needs.
+        """
         requests = {
             b: max(n, min(n + plan.recovery_requests.get(b, RECOVERY_REQUESTS),
                           settings.rates_per_min.get(b, n)))
             for b, n in plan.requests.items()
         }
-        elements = max(plan.elements,
-                       min(plan.elements + plan.recovery_elements, settings.max_solve_elements))
+        cap = settings.max_solve_elements if live_elements is None else \
+            min(settings.max_solve_elements, live_elements)
+        elements = max(plan.elements, min(plan.elements + plan.recovery_elements, cap))
         return cls(elements, requests, concurrency=max(1, settings.in_flight.get("matrix", 1)),
                    plan_elements=plan.elements, plan_requests=dict(plan.requests))
 

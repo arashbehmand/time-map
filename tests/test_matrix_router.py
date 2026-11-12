@@ -438,6 +438,20 @@ def test_recovery_the_guard_refuses_is_skipped_not_an_error(tmp_path):
     assert len(calls) == 1
 
 
+def test_recovery_slack_never_exceeds_what_is_left_of_the_live_budget():
+    from server.meetup.limits import SolvePlan
+
+    plan = SolvePlan(center=(0.0, 51.5), radius_km=5.0, resolution=7, coarse_max=40, fine_max=160,
+                     elements=400, requests={"matrix": 9}, max_tile_elements=46,
+                     recovery_requests={"matrix": 10}, recovery_elements=92)
+    settings = Settings()
+    assert SolveAllowance.for_plan(plan, settings).elements == 492
+    # Today's budget or the client's share has only 420 left: the slack shrinks to 20.
+    assert SolveAllowance.for_plan(plan, settings, live_elements=420).elements == 420
+    # Never below the plan itself (admission already checked that it fits).
+    assert SolveAllowance.for_plan(plan, settings, live_elements=300).elements == 400
+
+
 def test_recovery_leaves_room_for_planned_requests_not_yet_sent():
     allowance = SolveAllowance(elements=1000, requests={"matrix": 20},
                                plan_elements=500, plan_requests={"matrix": 10})

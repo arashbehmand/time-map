@@ -301,6 +301,18 @@ def test_one_mode_left_unchecked_blames_nobody():
         run(people, FixedRouter(straight_line, unresolved_fn=lambda m, d: m == "walking"))
 
 
+def test_a_few_answered_nulls_and_much_unchecked_blames_nobody():
+    # The walker's answered pairs are all no-route, but half their places were never
+    # checked: that says too little about their start to tell them to move it.
+    people = [person("w", -1, 0, "walking"), person("c", 1, 0, "cycling")]
+
+    def fn(mode, o, d):
+        return math.inf if mode == "walking" else straight_line(mode, o, d)
+
+    with pytest.raises(UnroutableArea):
+        run(people, FixedRouter(fn, unresolved_fn=lambda m, d: m == "walking" and hash(d) % 2 == 0))
+
+
 def test_only_the_person_whose_start_has_no_route_is_named():
     people = [person("w", -1, 0, "walking"), person("c", 1, 0, "cycling"), person("d", 0, 1, "driving")]
 

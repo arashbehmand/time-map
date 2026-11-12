@@ -273,16 +273,17 @@ def _check_coarse(ev: Evaluation, participants: list[Participant], index_of: lis
     """
     Fail with a reason when the coarse stage has nothing to offer. Raises or returns.
     People are named only from replies that answered for them: a pair that was never
-    checked says nothing about anyone's starting point.
+    checked says nothing about anyone's starting point. Too much unchecked is refused first,
+    so whoever is named had at least three quarters of their places answered.
     """
+    if _unresolved_share(ev) > MAX_UNRESOLVED_SHARE:
+        raise UnroutableArea()
     answered = ~ev.unresolved
     reach = np.isfinite(ev.times) & answered
     stuck = [k for k in range(len(participants)) if answered[k].any() and not reach[k].any()]
     if stuck:
         raise NoFeasiblePoint("no_route", [{"index": index_of[k], "reason": "no_route"}
                                            for k in sorted(stuck, key=lambda k: index_of[k])])
-    if _unresolved_share(ev) > MAX_UNRESOLVED_SHARE:
-        raise UnroutableArea()
     if np.isfinite(ev.raw).any():
         return
     common = reach.all(axis=0)

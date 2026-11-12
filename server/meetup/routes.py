@@ -47,7 +47,9 @@ async def solve_endpoint(req: SolveRequest, request: Request):
                 now=guard.clock.utcnow(),
             )
         plan = plan_solve(req, state.settings, limits)
-        token = solve_allowance.set(SolveAllowance.for_plan(plan, state.settings))
+        live = [v for v in (limits.elements_left_today, limits.elements_left_client) if v is not None]
+        token = solve_allowance.set(SolveAllowance.for_plan(
+            plan, state.settings, live_elements=min(live) if live else None))
         try:
             return await solve(req, meetup_router, plan)
         finally:

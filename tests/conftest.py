@@ -12,12 +12,14 @@ os.environ.pop("MAPBOX_ACCESS_TOKEN", None)
 os.environ.setdefault("ROUTER_PROVIDER", "euclidean")
 
 import httpx  # noqa: E402
+import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from server.app import create_app  # noqa: E402
 from server.guard.clock import Clock  # noqa: E402
 from server.meetup.candidates import haversine_km  # noqa: E402
+from server.meetup.routing import MatrixResult, Router, Snap  # noqa: E402
 from server.settings import Settings  # noqa: E402
 
 BODY_MARKER = "UPSTREAM-BODY-MARKER"
@@ -42,7 +44,8 @@ def circle_isochrones(lon: float, lat: float, minutes: list[int]) -> dict:
 
 
 def matrix_reply(request: httpx.Request) -> dict:
-    """Answer a Matrix request from straight-line distance at 5 km/h."""
+    """Answer a Matrix request from straight-line distance at 5 km/h. Each destination
+    "snaps" to itself, on a street called Test Street."""
     path = request.url.path
     coord_str = path.rsplit("/", 1)[-1]
     coords = [tuple(map(float, c.split(","))) for c in coord_str.split(";")]
@@ -53,7 +56,49 @@ def matrix_reply(request: httpx.Request) -> dict:
         "durations": [
             [haversine_km(*coords[s], *coords[d]) / 5.0 * 3600 for d in dst] for s in src
         ],
+        "sources": [{"name": "Test Street", "location": list(coords[s]), "distance": 0} for s in src],
+        "destinations": [{"name": "Test Street", "location": list(coords[d]), "distance": 0} for d in dst],
     }
+
+
+class FixedRouter(Router):
+    """
+    A router answered by plain functions, for solver tests:
+      fn(mode, origin, destination) -> minutes (inf for no route);
+      snap_fn(mode, destination) -> Snap (default: the destination itself);
+      unresolved_fn(mode, destination) -> True to drop it as unchecked.
+    `calls` counts duration_matrix calls (one per mode per stage).
+    """
+
+    def __init__(self, fn, snap_fn=None, unresolved_fn=None):
+        self.fn = fn
+        self.snap_fn = snap_fn
+        self.unresolved_fn = unresolved_fn
+        self.calls = 0
+
+    async def duration_matrix(self, mode, origins, destinations):
+        self.calls += 1
+        minutes = np.array([[self.fn(mode, o, d) for d in destinations] for o in origins],
+                           dtype=float).reshape(len(origins), len(destinations))
+        snaps = [self.snap_fn(mode, d) if self.snap_fn else Snap(*d) for d in destinations]
+        unresolved = np.array([bool(self.unresolved_fn and self.unresolved_fn(mode, d))
+                               for d in destinations], dtype=bool)
+        return MatrixResult(minutes, snaps, unresolved)
+
+
+SPEEDS = {"walking": 4.8, "cycling": 15.0, "driving": 30.0, "driving-traffic": 22.0}
+
+
+def straight_line(mode, o, d):
+    """Minutes at the mode's average speed, as EuclideanRouter."""
+    return haversine_km(*o, *d) / SPEEDS[mode] * 60.0
+
+
+def bumpy(mode, o, d):
+    """Straight-line minutes with a detour of up to 35% that depends on the destination."""
+    lon, lat = d
+    return straight_line(mode, o, d) * (1 + 0.35 * (0.5 + 0.5 * math.sin(lon * 400 + 1.3)
+                                                    * math.cos(lat * 350 + 0.7)))
 
 
 class MockMapbox:

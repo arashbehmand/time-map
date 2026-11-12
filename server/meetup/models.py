@@ -49,8 +49,13 @@ class SolveRequest(BaseModel):
         return self
 
 class CandidateResult(BaseModel):
+    # Where to meet: the point on the street network the times were measured to.
     lon: float
     lat: float
+    # The street there, when the map service names one.
+    name: Optional[str] = None
+    # How far that point is from the grid point that was searched (metres).
+    snap_m: Optional[float] = None
     score: float
     max_time_min: float
     mean_time_min: float
@@ -62,3 +67,5 @@ class SolveResponse(BaseModel):
     top: list[CandidateResult]
     meeting_area_geojson: Optional[dict]
     diagnostics: dict
+    # Plain sentences for the person reading the answer: why it may be less good than usual.
+    notes: list[str] = Field(default_factory=list)

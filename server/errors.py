@@ -3,6 +3,8 @@ Error responses.
 
 Every error the API returns has the shape {"code": <stable code>, "detail": <fixed sentence>}.
 Nothing from an exception's text, an upstream response or the request body is echoed back.
+One error (no_feasible_meeting_point) adds `reason` and `who`: who is stuck, as positions in
+the request's participant list, so the page can name them.
 """
 from __future__ import annotations
 
@@ -30,7 +32,10 @@ class ApiError(Exception):
         status: int | None = None,
         code: str | None = None,
         headers: dict[str, str] | None = None,
+        extra: dict | None = None,
     ):
+        # Extra JSON fields for the body. Fixed values only: never request or upstream text.
+        self.extra = dict(extra or {})
         if message is not None:
             self.message = message
         if status is not None:
@@ -63,7 +68,29 @@ class Busy(ApiError):
 class NoFeasiblePoint(ApiError):
     status = 422
     code = "no_feasible_meeting_point"
-    message = "No meeting point works for everyone. Try raising the time limits or moving people closer."
+    message = ("No place we checked can be reached by everyone. "
+               "Try moving people closer or picking other ways to travel.")
+    MESSAGES = {
+        "no_route": ("From where one or more people start, we couldn't find a route to any "
+                     "place we checked. Move their pins onto a street or path, or pick another "
+                     "way to travel."),
+        "over_time_limit": ("No place we checked is within everyone's time limit. "
+                            "Raise the time limits or move people closer."),
+        "no_common_place": message,
+    }
+
+    def __init__(self, reason: str = "no_common_place", who: list[dict] | None = None):
+        """reason: no_route | over_time_limit | no_common_place.
+        who: [{"index": <position in the request>, "reason": "no_route" | "over_time_limit"}]."""
+        super().__init__(self.MESSAGES.get(reason, self.message),
+                         extra={"reason": reason, "who": list(who or [])})
+
+
+class UnroutableArea(ApiError):
+    status = 422
+    code = "unroutable_area"
+    message = ("The map service couldn't find routes for much of this area. "
+               "Check that everyone starts on or near a street or path.")
 
 
 class NoIsochrone(ApiError):
@@ -78,9 +105,12 @@ class NotFound(ApiError):
     message = "Not found."
 
 
-def error_response(status: int, code: str, message: str, headers: dict[str, str] | None = None):
+def error_response(status: int, code: str, message: str, headers: dict[str, str] | None = None,
+                   extra: dict | None = None):
+    body = {"code": code, "detail": message}
+    body.update({k: v for k, v in (extra or {}).items() if k not in body})
     return JSONResponse(
-        {"code": code, "detail": message},
+        body,
         status_code=status,
         headers={"Cache-Control": "no-store", **(headers or {})},
     )
@@ -99,7 +129,7 @@ def _validation_detail(exc: RequestValidationError) -> str:
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(_request: Request, exc: ApiError):
-        return error_response(exc.status, exc.code, exc.message, exc.headers)
+        return error_response(exc.status, exc.code, exc.message, exc.headers, exc.extra)
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_request: Request, exc: RequestValidationError):

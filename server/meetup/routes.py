@@ -47,7 +47,7 @@ async def solve_endpoint(req: SolveRequest, request: Request):
                 now=guard.clock.utcnow(),
             )
         plan = plan_solve(req, state.settings, limits)
-        token = solve_allowance.set(SolveAllowance(plan.elements, dict(plan.requests)))
+        token = solve_allowance.set(SolveAllowance.for_plan(plan, state.settings))
         try:
             return await solve(req, meetup_router, plan)
         finally:

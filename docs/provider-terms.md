@@ -50,8 +50,9 @@ Source: <https://docs.mapbox.com/api/navigation/matrix/>
 
 Pricing: "Up to 100,000 Free" monthly matrix elements, then $2.00 per 1,000.
 
-We did not find a display requirement for Matrix results on that page. We show only the
-resulting times and a meeting point.
+We did not find a display requirement for Matrix results on that page. We show the resulting
+times and a meeting point. The meeting point is where the reply's `destinations` waypoint put
+it on the street network, labelled with that waypoint's street name when it has one.
 
 ## Saved examples (stored Mapbox output)
 

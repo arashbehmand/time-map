@@ -7,7 +7,6 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from math import ceil
 
 from server.errors import ApiError, Busy
 from server.guard.budget import _next_midnight, daily_exhausted, seconds_until
@@ -28,9 +27,45 @@ MATRIX_DEFAULT_COORDS = 25
 # The smallest candidate count a plan shrinks to before refusing.
 MIN_CANDIDATES = 20
 
+# Extra requests per mode a solve may spend on recovery (a retried bad reply, or splitting a
+# NoRoute reply to find the point that fails). Not part of admission: a plan is admitted on
+# its own cost, and recovery spends only what is left after every planned request still to
+# be sent, in requests, elements and free rate slots. One bad destination in a
+# 23-destination request takes at most 2 * ceil(log2 23) = 10 requests to find.
+RECOVERY_REQUESTS = 10
+
 
 def matrix_max_coords(mode: str) -> int:
     return MATRIX_MAX_COORDS.get(mode, MATRIX_DEFAULT_COORDS)
+
+
+def tile_elements(n_origins: int, n_destinations: int) -> int:
+    """Elements one Matrix request is billed for: Mapbox needs at least 2 per request."""
+    return max(2, n_origins * n_destinations)
+
+
+def matrix_tiles(n_origins: int, n_destinations: int, max_coords: int) -> list[tuple[range, range]]:
+    """
+    Split an origins x destinations matrix into requests of at most max_coords coordinates.
+    Origins are batched as well as destinations: the origin batch is the size with the fewest
+    requests, then the fewest billed elements, then the larger batch. The cost plan and the
+    router both use this, so what is planned is what is sent.
+    """
+    if n_origins < 1 or n_destinations < 1:
+        return []
+    best: tuple[tuple[int, int, int], list[tuple[range, range]]] | None = None
+    for per_origin in range(1, min(n_origins, max_coords - 1) + 1):
+        per_dest = max_coords - per_origin
+        tiles = [
+            (range(o, min(o + per_origin, n_origins)), range(d, min(d + per_dest, n_destinations)))
+            for o in range(0, n_origins, per_origin)
+            for d in range(0, n_destinations, per_dest)
+        ]
+        key = (len(tiles), sum(tile_elements(len(o), len(d)) for o, d in tiles), -per_origin)
+        if best is None or key < best[0]:
+            best = (key, tiles)
+    assert best is not None
+    return best[1]
 
 
 def rate_bucket(mode: str) -> str:
@@ -46,6 +81,13 @@ class SolvePlan:
     fine_max: int
     elements: int
     requests: dict[str, int] = field(default_factory=dict)
+    # The most elements any one planned request is billed for.
+    max_tile_elements: int = 2
+    # Recovery slack on top of the plan (not part of admission): requests per rate bucket,
+    # RECOVERY_REQUESTS for each mode in it, and elements for two of the largest requests
+    # per mode.
+    recovery_requests: dict[str, int] = field(default_factory=dict)
+    recovery_elements: int = 0
 
 
 class GroupTooSpread(ApiError):
@@ -77,23 +119,24 @@ def _candidate_caps(max_candidates: int) -> list[int]:
 
 
 def _cost(radius: float, n_origins: int, modes: Counter, cap: int):
-    """(resolution, coarse_max, fine_max, elements, requests) for a candidate cap, or None."""
+    """(resolution, coarse_max, fine_max, elements, requests, max_tile) for a cap, or None."""
     res = choose_resolution(radius, cap)
     if res is None:
         return None
     coarse_max = disk_size(disk_k(radius, res)) + n_origins
     fine_max = cap
     elements = 0
+    max_tile = 2
     requests: Counter[str] = Counter()
     for mode, n in modes.items():
-        per_request = matrix_max_coords(mode) - n
-        if per_request < 1:
-            return None
         for stage in (coarse_max, fine_max):
-            k = ceil(stage / per_request)
-            requests[rate_bucket(mode)] += k
-            elements += n * max(stage, 2 * k)  # Mapbox needs >= 2 elements per request
-    return res, coarse_max, fine_max, elements, dict(requests)
+            tiles = matrix_tiles(n, stage, matrix_max_coords(mode))
+            requests[rate_bucket(mode)] += len(tiles)
+            for o, d in tiles:
+                units = tile_elements(len(o), len(d))
+                elements += units
+                max_tile = max(max_tile, units)
+    return res, coarse_max, fine_max, elements, dict(requests), max_tile
 
 
 def plan_solve(req: SolveRequest, settings: Settings, limits: SolveLimits | None = None) -> SolvePlan:
@@ -102,7 +145,8 @@ def plan_solve(req: SolveRequest, settings: Settings, limits: SolveLimits | None
     (down to MIN_CANDIDATES) before refusing. Nothing here generates cells or calls Mapbox.
     """
     limits = limits or SolveLimits()
-    origins = [(p.lon, p.lat) for p in req.participants]
+    # In id order, so the same group in any order gets the same search.
+    origins = [(p.lon, p.lat) for p in sorted(req.participants, key=lambda p: p.id)]
     center = centroid(origins)
     radius = infer_radius_km(origins, req.search.margin_km)
 
@@ -115,9 +159,6 @@ def plan_solve(req: SolveRequest, settings: Settings, limits: SolveLimits | None
             f"would cover {radius:.0f} km around the group, and the limit for "
             f"{_MODE_WORDS[slowest]} is {limit:.0f} km. Pick a faster mode or move people closer."
         )
-    if any(matrix_max_coords(m) - n < 1 for m, n in modes.items()):
-        raise SearchTooExpensive("Too many people use the same travel mode for one search.")
-
     static_elements = settings.max_solve_elements
     if limits.elements_left_today is not None:
         # A plan bigger than a whole day's budget is "too large", not "used up".
@@ -144,8 +185,12 @@ def plan_solve(req: SolveRequest, settings: Settings, limits: SolveLimits | None
             continue
         smallest = cost
         if not over_static(cost) and over_live(cost) is None:
-            res, coarse_max, fine_max, elements, requests = cost
-            return SolvePlan(center, radius, res, coarse_max, fine_max, elements, requests)
+            res, coarse_max, fine_max, elements, requests, max_tile = cost
+            recovery = Counter()
+            for mode in modes:
+                recovery[rate_bucket(mode)] += RECOVERY_REQUESTS
+            return SolvePlan(center, radius, res, coarse_max, fine_max, elements, requests, max_tile,
+                             dict(recovery), 2 * max_tile * len(modes))
 
     if smallest is None or over_static(smallest):
         raise SearchTooExpensive()

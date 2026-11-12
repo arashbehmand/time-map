@@ -113,20 +113,26 @@ class UpstreamGuard:
         return self.windows[api]
 
     @asynccontextmanager
-    async def upstream(self, api: str, units: int = 1, *, profile: str | None = None):
+    async def upstream(self, api: str, units: int = 1, *, profile: str | None = None,
+                       wait: bool = True):
+        """`wait=False`: refuse (Busy) at once instead of waiting for an in-flight or rate
+        slot. For optional requests, which must never hold up the ones that were planned."""
         client = current_client.get()
         # Cheap refusals first, before any waiting.
         self.store.check(api, units)
         self.shares.check(client, api, units)
 
         sem = self.in_flight[api]
+        if not wait and sem.locked():
+            raise Busy()
         try:
             await asyncio.wait_for(sem.acquire(), self.settings.in_flight_wait_s)
         except TimeoutError:
             raise Busy() from None
         try:
             window = self.window_for(api, profile)
-            stamp = await window.acquire(self.settings.rate_wait_s)
+            stamp = (await window.acquire(self.settings.rate_wait_s) if wait
+                     else window.acquire_now())
             try:
                 self.shares.check(client, api, units)
                 self.store.reserve(api, units)

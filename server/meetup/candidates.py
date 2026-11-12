@@ -31,8 +31,14 @@ def haversine_km(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     return 2 * EARTH_R_KM * math.asin(math.sqrt(a))
 
 def centroid(points: Sequence[tuple[float, float]]) -> tuple[float, float]:
+    # fsum is exactly rounded, so the order of the points cannot change the result.
     n = len(points)
-    return sum(p[0] for p in points) / n, sum(p[1] for p in points) / n
+    return math.fsum(p[0] for p in points) / n, math.fsum(p[1] for p in points) / n
+
+
+def edge_km(res: int) -> float:
+    """Average hex edge length at an H3 resolution (km)."""
+    return _EDGE_KM.get(res) or h3.average_hexagon_edge_length(res, unit="km")
 
 def infer_radius_km(origins: list[tuple[float, float]], margin_km: float) -> float:
     c = centroid(origins)

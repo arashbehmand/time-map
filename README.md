@@ -95,18 +95,19 @@ server/                          # FastAPI backend
     ├── models.py                # Pydantic request/response models
     ├── limits.py                # Pre-flight: radius, candidate and cost caps
     ├── candidates.py            # H3 hex candidate generation
-    ├── routing.py               # Mapbox Directions Matrix integration
-    └── solver.py                # Minimax / hybrid / sum optimisation
+    ├── routing.py               # Mapbox Directions Matrix: batching, strict replies, NoRoute
+    └── solver.py                # Scoring, refinement, snapped and named answers
 static/                          # Frontend assets (vanilla JS modules, no build step)
 ├── shared/                      # ui.css, api.js (errors, search), latest.js (latest answer only)
 ├── warp/                        # Warp map — app.js (WebGL2), warpmath.js, example.json
-├── meetup/                      # Meetup — app.js, example.json
+├── meetup/                      # Meetup — app.js, words.js (its sentences), example.json
 ├── portfolio/                   # Landing page
 ├── manifest.json                # PWA manifest
 ├── sw.js                        # Service worker (versioned per deploy, network first)
 └── icons/                       # PWA icons
 scripts/make_examples.py         # Regenerates the two saved examples
-tests/js/                        # node --test: warp maths, latest-answer helper
+scripts/try_solves.py            # Runs fixed meetup groups against a server (timings, diagnostics)
+tests/js/                        # node --test: warp maths, latest-answer helper, meetup sentences
 ```
 
 ## Tests
@@ -115,6 +116,18 @@ tests/js/                        # node --test: warp maths, latest-answer helper
 ruff check . && pytest
 node --test tests/js/*.test.js   # Node 20+, no packages to install
 ```
+
+`tests/test_meetup_solver.py` checks the solver against brute force (within a minute of the
+best cell at the final resolution, on 100 seeded cases) and checks that the order of people
+doesn't change the answer. `tests/test_matrix_router.py` covers batching, strict replies and
+NoRoute; `tests/test_meetup_robustness.py` sends 100 random requests at a misbehaving Matrix
+API.
+
+To time real solves, run a server and `python scripts/try_solves.py http://localhost:8000
+--repeat 4 --pause 15`. Against live Mapbox, cap the spend on that server first
+(`MATRIX_DAILY_BUDGET=8000`, `CLIENT_DAILY_SHARE=1` so the one client running the script may
+use all of it, and a scratch `USAGE_DB_PATH`). The p95 it prints counts only solves that
+answered 200, and it says so when some didn't.
 
 ## Opening examples
 
@@ -127,6 +140,9 @@ changing the warp maths or the response shapes:
 uvicorn server.app:app --port 8000            # with a real MAPBOX_ROUTING_TOKEN
 python scripts/make_examples.py http://localhost:8000
 ```
+
+The saved meetup example was made before answers carried street names, so it opens with
+"Meet here" until it is regenerated.
 
 ## Service worker
 
@@ -165,12 +181,50 @@ Isochrone polygons are fetched from the **Mapbox Isochrone API** and vector tile
 ## How the Meetup Works
 
 1. Generate candidate meeting points on an [H3 hexagonal grid](https://h3geo.org/) covering the participants' bounding box
-2. Query the **Mapbox Directions Matrix API** for actual network travel times from each participant to each candidate (batched by transport mode)
+2. Query the **Mapbox Directions Matrix API** for actual network travel times from each participant to each candidate. Requests are batched by origins and destinations to fit each profile's coordinate limit, and a stage's requests run at once, three at a time.
 3. Score candidates using the chosen objective:
    - **minimax** — minimise the longest individual travel time (fairest)
    - **sum** — minimise weighted average travel time (most efficient)
-   - **hybrid** — blend of both
-4. Return the best meeting point, top-k runners-up, and a meeting area polygon
+   - **hybrid** — blend of both (API only)
+4. Refine: score the children of the best coarse cells at the next finer resolution, and keep
+   whichever stage has the better answer, so refining never makes it worse.
+5. Return the best meeting point, top-k runners-up and a meeting area polygon.
+
+Each answer is shown where the Matrix API snapped it onto the street network, with the
+street's name when Mapbox gives one. Each travel mode's times are to that mode's own snapped
+point; the point shown is the walking one (then cycling, then driving), and `snap_m` is its
+distance from the grid point searched. A candidate is offered only if every mode's snapped
+point is within 150 m of the grid point (10% of the cell edge on coarse grids, where hex
+centres are rarely that close to a road) and within 150 m of the point shown, so everyone's
+trip ends close to the star; if some trip ends more than 50 m away, the answer says so.
+Candidates that fail this are probably in water, a rail yard or a park; they can still guide
+the finer stage. If nothing in the search passes, candidates up to three times the limit
+are offered with a note, and beyond that the search fails (`no_feasible_meeting_point`,
+reason `off_street`). Alternatives that snap within 150 m of a better one are left out.
+People are scored in id order and ties are broken by a fixed rule, so the same group in
+any order gets the same answer.
+
+Matrix replies are read strictly. A `null` duration means that one pair has no route. A
+reply with `code: "NoRoute"` (or `NoSegment`, also in a 4xx body) is split to find what
+fails: by destinations first, down to the one that fails for everyone, which is dropped;
+when both halves fail, by origins, down to a starting point that reaches none of the places
+the others reach, which is then a confirmed "no route" for that person. Splitting stops
+where the solve's recovery allowance runs out; what is left is unchecked. Anything else
+that is missing or malformed (wrong row or column count, a value that isn't a number of
+seconds, a missing waypoint) is a provider error: it is asked for once more, then the solve
+answers `502 upstream_error`. It is never read as "unreachable".
+
+People are named only from replies that answered for them. An unchecked pair says nothing
+about anyone's start: more than a quarter of a stage's places unchecked fails the search
+(`422 unroutable_area`), or, in the finer stage, keeps the coarse answer.
+
+An answer that is less good than usual says so in `notes` (shown on the page): places were
+left unchecked, the finer stage didn't finish, few places were near a street, some trips
+end a short way from the star, or the map service sent a bad reply that was asked for
+again. `diagnostics` counts what was dropped (`dropped_no_route`, `unchecked_for_budget`,
+`dropped_off_street`, over the stages the answer was chosen from), retried (`retries`,
+`bad_replies`) and sent (`matrix_requests`, `matrix_elements`). `fine_resolution` is the
+finer resolution searched and `answer_resolution` the one the answer came from.
 
 ## API Endpoints
 
@@ -184,7 +238,12 @@ Isochrone polygons are fetched from the **Mapbox Isochrone API** and vector tile
 | `POST` | `/api/geocode` | Place search (via OpenStreetMap Nominatim, queued at 1 request/s, cached) |
 
 Errors are returned as `{"code": "<stable code>", "detail": "<fixed sentence>"}`. They never
-include upstream URLs, tokens or upstream response bodies.
+include upstream URLs, tokens or upstream response bodies. One error adds two fields:
+`422 no_feasible_meeting_point` has `reason` (`no_route`, `over_time_limit`,
+`no_common_place` or `off_street`) and `who`, a list of `{index, reason}` where `index` is
+the person's position in the request; for someone cut off (`reaches_few`, under
+`no_common_place`) it also has `reach` and `of`, the places they reach of those checked. The page turns that into a sentence with names; the server never
+sees names and never echoes request data.
 
 The server-side warped-map renderer (`/api/warped-map`, which decoded vector tiles in Python)
 was removed because no page used it. It is in git history before the commit that removed it
@@ -238,9 +297,17 @@ A meetup search is then *sized to fit*. The candidate count starts at `max_candi
 - the rate slots free right now.
 
 If even 20 candidates don't fit, the search is refused before any Mapbox call. The finer
-second stage is capped at the same count and replaces the coarse result. If it can't run
-(budget, rate or upstream trouble), the coarse result is returned (`diagnostics.stage` says
-which). One search runs at a time.
+second stage is capped at the same count, and the better of the two stages is kept. If the
+finer stage can't run (budget, rate or upstream trouble), the coarse result is returned with
+a note (`diagnostics.stage` says which). One search runs at a time.
+
+A search may also spend a little beyond its plan on recovery: up to 10 more requests per
+travel mode (never above the bucket's rate) for asking again after a bad reply or splitting
+a NoRoute reply. Admission checks only the plan. A recovery request is sent only if, after
+it, every planned request still to be sent has its requests, elements and free rate slots;
+it never waits for a slot, and if the guard refuses it for any reason the places it would
+have checked are left unchecked and counted. A 429 retry belongs to a planned request and
+waits as before.
 
 All of this is per process. **Run one worker on one replica.** The start commands pass
 `--workers 1`; the app warns if `WEB_CONCURRENCY` > 1. Adding workers or replicas needs a

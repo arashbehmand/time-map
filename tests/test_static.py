@@ -131,7 +131,8 @@ def test_no_jargon_in_page_text(page):
         assert not JARGON.search(chunk), JARGON.search(chunk).group(0)
 
 
-@pytest.mark.parametrize("page", ["meetup/app.js", "warp/app.js", "warp/warpmath.js", "shared/api.js"])
+@pytest.mark.parametrize("page", ["meetup/app.js", "meetup/words.js", "warp/app.js", "warp/warpmath.js",
+                                  "shared/api.js"])
 def test_no_jargon_in_ui_strings(page):
     js = (ROOT / page).read_text()
     js = re.sub(r"/\*.*?\*/|^\s*//.*$", "", js, flags=re.S | re.M)      # comments

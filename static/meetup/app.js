@@ -6,11 +6,15 @@
 // still on its way, and if one was on its way, the newest group is solved instead.
 import { createLatest } from "/shared/latest.js";
 import { esc, friendly, geocode, postJSON, savePref } from "/shared/api.js";
+import { altText, answerNotes, headline, meaning, mins, noPlaceSentence } from "/meetup/words.js";
 
 const COLORS = ["#c62828", "#00796b", "#6a1b9a", "#1565c0", "#ef6c00", "#2e7d32", "#ad1457", "#4e342e"];
 const MODE_ING = { walking: "walking", cycling: "cycling", driving: "driving" };
 const MAX_PARTICIPANTS = 8;        // server cap (server/meetup/models.py)
 const MAX_REACH_MINUTES = 60;      // routing limit for "how far each person can get"
+// Reach is drawn by Mapbox's travel-time areas, not from the journeys the answer used.
+const REACH_LABEL = "Show how far each person gets in their trip time";
+const REACH_HINT = "These areas come from a different Mapbox service than the answer, so their edges are approximate.";
 const LOCATION_PREF = "timemap-location";
 const RESOLVE_DELAY_MS = 800;      // edits during a solve: wait for the edits to settle
 const TAP_DELAY_MS = 300;          // a second click inside this is a double-click zoom
@@ -61,8 +65,6 @@ const setAddStatus = (text, kind = "") => setStatus(text, kind, addStatusEl);
 function objective() {
   return document.querySelector('input[name="objective"]:checked').value;
 }
-
-const mins = (t) => Math.round(t);
 
 // ── Map ─────────────────────────────────────────────────────────
 function buildMapStyle() {
@@ -453,7 +455,8 @@ async function solve() {
     }, signal));
   } catch (err) {
     updateFind();
-    setStatus(friendly(err), "error");
+    // "No place works" names who is stuck; other errors use the server's own sentence.
+    setStatus(noPlaceSentence(err, snap.people.map(nameOf)) || friendly(err), "error");
     return;
   }
   if (res.stale) return;          // the group changed; groupChanged() has taken over
@@ -469,24 +472,7 @@ findBtn.addEventListener("click", () => {
 });
 
 // ── Answer ──────────────────────────────────────────────────────
-function headline(best, objectiveValue) {
-  return objectiveValue === "sum"
-    ? `Meet here (★ on the map). The average trip is ${mins(best.mean_time_min)} min; the longest is ${mins(best.max_time_min)} min.`
-    : `Meet here (★ on the map). Everyone gets there within ${mins(best.max_time_min)} min.`;
-}
-
-function meaning(objectiveValue) {
-  return objectiveValue === "sum"
-    ? "Quickest on average: the total travel time is as low as it can be."
-    : "Fairest: the longest trip is as short as it can be.";
-}
-
-function altText(c, objectiveValue) {
-  return objectiveValue === "sum"
-    ? `average trip ${mins(c.mean_time_min)} min`
-    : `longest trip ${mins(c.max_time_min)} min`;
-}
-
+// The sentences live in words.js.
 // The answer is for the people in its snapshot; names are read live because a rename
 // doesn't change the answer (any other edit clears it).
 function nameOf(sp) {
@@ -534,6 +520,7 @@ function renderAnswer() {
     <div class="answer-card">
       <p class="headline">${esc(headline(best, snap.objective))}</p>
       <p class="hint">${esc(meaning(snap.objective))}</p>
+      ${answerNotes(data).map((n) => `<p class="hint answer-note">${esc(n)}</p>`).join("")}
       <ul class="bars" aria-label="Each person's trip">
         ${times.map(({ p, t }) => `
           <li class="bar-row" style="--color:${p.color}">
@@ -541,7 +528,8 @@ function renderAnswer() {
             <span class="track" aria-hidden="true"><span class="fill" style="width:${width(t)}%"></span></span>
           </li>`).join("")}
       </ul>
-      <button type="button" class="btn" id="reach-btn" aria-pressed="${reachShown}">${reachShown ? "Hide reach" : "Show how far each person can get"}</button>
+      <button type="button" class="btn" id="reach-btn" aria-pressed="${reachShown}">${reachShown ? "Hide reach" : REACH_LABEL}</button>
+      <p class="hint">${esc(REACH_HINT)}</p>
     </div>
     ${alts.length ? `
       <h2>Close alternatives</h2>
@@ -584,7 +572,7 @@ function clearReach() {
 function setReachButton(on) {
   const btn = $("reach-btn");
   if (!btn) return;
-  btn.textContent = on ? "Hide reach" : "Show how far each person can get";
+  btn.textContent = on ? "Hide reach" : REACH_LABEL;
   btn.setAttribute("aria-pressed", String(on));
 }
 

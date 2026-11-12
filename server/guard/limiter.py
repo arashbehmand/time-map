@@ -47,6 +47,13 @@ class SlidingWindow:
             await self.clock.sleep(wait)
             waited += wait
 
+    def acquire_now(self) -> float:
+        """Take a slot without waiting, or raise Busy. Returns the slot's timestamp."""
+        wait = self.try_acquire()
+        if wait is not None:
+            raise Busy(headers={"Retry-After": str(max(1, int(wait) + 1))})
+        return self._hits[-1]
+
     def give_back(self, stamp: float) -> None:
         """Return a slot that was taken but not used for a request."""
         try:

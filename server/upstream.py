@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from server.errors import UpstreamError, UpstreamTimeout
+from server.errors import ApiError, Busy, UpstreamError, UpstreamTimeout
 
 log = logging.getLogger("time_map.upstream")
 
@@ -35,9 +35,11 @@ async def mapbox_send(
         raise UpstreamError() from None
 
 
-def fail(resp: httpx.Response, *, api: str, profile: str = "-") -> UpstreamError:
+def fail(resp: httpx.Response, *, api: str, profile: str = "-") -> ApiError:
     """Log a failed upstream status (no URL, no body) and build the error to raise."""
     log.warning("upstream status api=%s profile=%s status=%d", api, profile, resp.status_code)
+    if resp.status_code == 429:
+        return Busy("The map service is busy. Please try again in a minute.")
     return UpstreamError()
 
 
@@ -49,15 +51,3 @@ def json_or_fail(resp: httpx.Response, *, api: str, profile: str = "-") -> Any:
     except ValueError:
         log.warning("upstream bad json api=%s profile=%s status=%d", api, profile, resp.status_code)
         raise UpstreamError() from None
-
-
-async def mapbox_get_json(
-    client: httpx.AsyncClient,
-    url: str,
-    *,
-    api: str,
-    profile: str = "-",
-    params: dict[str, Any] | None = None,
-) -> Any:
-    resp = await mapbox_send(client, url, api=api, profile=profile, params=params)
-    return json_or_fail(resp, api=api, profile=profile)

@@ -12,17 +12,43 @@ the isochrone → polygon → interpolation pipeline.
 """
 from __future__ import annotations
 
-import asyncio
+import contextvars
 import logging
+from collections import Counter
+from dataclasses import dataclass, field
 
 import httpx
 import numpy as np
 
 from server.errors import ApiError, Busy, UpstreamError
+from server.guard.guard import UpstreamGuard
 from server.meetup.candidates import haversine_km
+from server.meetup.limits import matrix_max_coords, rate_bucket
 from server.upstream import fail, json_or_fail, mapbox_send
 
 log = logging.getLogger("time_map.matrix")
+
+
+@dataclass
+class SolveAllowance:
+    """What one solve may send, retries included: the plan's elements and requests per bucket."""
+    elements: int
+    requests: dict[str, int]
+    spent_elements: int = 0
+    spent_requests: Counter = field(default_factory=Counter)
+
+    def take(self, units: int, bucket: str) -> None:
+        if (self.spent_elements + units > self.elements
+                or self.spent_requests[bucket] + 1 > self.requests.get(bucket, 0)):
+            raise Busy("The routing service is busy. Please try again in a minute.",
+                       headers={"Retry-After": "60"})
+        self.spent_elements += units
+        self.spent_requests[bucket] += 1
+
+
+# Set by the solve route; None for callers without a per-solve plan.
+solve_allowance: contextvars.ContextVar[SolveAllowance | None] = contextvars.ContextVar(
+    "solve_allowance", default=None)
 
 Coord = tuple[float, float]  # (lon, lat)
 
@@ -56,16 +82,18 @@ class EuclideanRouter(Router):
 class MapboxMatrixRouter(Router):
     """
     Mapbox Directions Matrix API.
-    Limit: 25 total coordinates per request.
+    Limit: 25 total coordinates per request (10 for driving-traffic).
+    Every request goes through the upstream guard (budget in elements, rate, in-flight).
     Returns travel times in minutes.
     """
 
     URL = "https://api.mapbox.com/directions-matrix/v1/mapbox"
+    MAX_RETRY_AFTER_S = 5.0
 
-    def __init__(self, token: str, client: httpx.AsyncClient, max_coords: int = 25):
+    def __init__(self, token: str, client: httpx.AsyncClient, guard: UpstreamGuard):
         self.token = token
-        self.max_coords = max_coords
         self.client = client
+        self.guard = guard
 
     async def duration_matrix(
         self, mode: str, origins: list[Coord], destinations: list[Coord]
@@ -73,7 +101,7 @@ class MapboxMatrixRouter(Router):
         if not destinations:
             return np.empty((len(origins), 0))
 
-        max_dest = self.max_coords - len(origins)
+        max_dest = matrix_max_coords(mode) - len(origins)
         if max_dest < 1:
             raise ApiError(
                 "Too many people use the same travel mode for one search.",
@@ -110,7 +138,7 @@ class MapboxMatrixRouter(Router):
             f"&access_token={self.token}"
         )
 
-        data = await self._get_json(url, mode)
+        data = await self._get_json(url, mode, units=n_orig * len(padded))
         raw = data.get("durations") if isinstance(data, dict) else None
         if not isinstance(raw, list) or len(raw) < n_orig:
             log.warning("upstream bad payload api=matrix profile=%s", mode)
@@ -127,23 +155,38 @@ class MapboxMatrixRouter(Router):
             raise UpstreamError() from None
         return out
 
-    async def _get_json(self, url: str, mode: str) -> dict:
+    async def _get_json(self, url: str, mode: str, units: int) -> dict:
+        # Each attempt, retries included, takes a rate slot, is charged to the budget and
+        # counts against this solve's allowance.
+        allowance = solve_allowance.get()
         for attempt in range(3):
-            resp = await mapbox_send(self.client, url, api="matrix", profile=mode)
+            if allowance is not None:
+                allowance.take(units, rate_bucket(mode))
+            async with self.guard.upstream("matrix", units, profile=mode):
+                resp = await mapbox_send(self.client, url, api="matrix", profile=mode)
             if resp.status_code == 429:
                 fail(resp, api="matrix", profile=mode)
-                await asyncio.sleep(0.6 * 2**attempt)
+                await self.guard.clock.sleep(_retry_after(resp, 0.6 * 2**attempt,
+                                                          self.MAX_RETRY_AFTER_S))
                 continue
             return json_or_fail(resp, api="matrix", profile=mode)
         raise Busy("The routing service is busy. Please try again in a minute.")
 
+
+def _retry_after(resp: httpx.Response, default: float, cap: float) -> float:
+    try:
+        return min(cap, max(0.0, float(resp.headers.get("retry-after", default))))
+    except ValueError:
+        return min(cap, default)
+
+
 def build_router(provider: str, token: str = "", client: httpx.AsyncClient | None = None,
-                 **kw) -> Router:
+                 guard: UpstreamGuard | None = None) -> Router:
     provider = provider.strip().lower()
     if provider == "mapbox":
-        if client is None:
-            raise ValueError("MapboxMatrixRouter needs a shared httpx client.")
-        return MapboxMatrixRouter(token, client, **kw)
+        if client is None or guard is None:
+            raise ValueError("MapboxMatrixRouter needs the shared httpx client and guard.")
+        return MapboxMatrixRouter(token, client, guard)
     if provider == "euclidean":
         return EuclideanRouter()
     raise ValueError(f"Unknown ROUTER_PROVIDER: {provider!r}")

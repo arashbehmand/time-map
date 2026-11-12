@@ -23,20 +23,21 @@ Algorithm
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections import defaultdict
 from typing import Any
 
 import h3
 import numpy as np
 
-from server.errors import NoFeasiblePoint
+from server.errors import ApiError, NoFeasiblePoint
 from server.meetup.candidates import (
     cells_to_geojson,
-    centroid,
     generate_candidates,
     haversine_km,
-    infer_radius_km,
 )
+from server.meetup.limits import SolvePlan
 from server.meetup.models import (
     CandidateResult,
     Participant,
@@ -44,6 +45,8 @@ from server.meetup.models import (
     SolveResponse,
 )
 from server.meetup.routing import Router
+
+log = logging.getLogger("time_map.solver")
 
 
 def _group_by_mode(
@@ -129,18 +132,43 @@ def _make_result(
         },
     )
 
-async def solve(req: SolveRequest, router: Router) -> SolveResponse:
+def _fine_candidates(
+    ranked_coords: list[tuple[float, float]],
+    coarse_res: int,
+    fine_res: int,
+    ring: int,
+    center: tuple[float, float],
+    radius: float,
+    cap: int,
+) -> list[tuple[float, float]]:
+    """Children of the best coarse cells and their neighbours, best seeds first, at most `cap`."""
+    c_lon, c_lat = center
+    out: list[tuple[float, float]] = []
+    seen: set[str] = set()
+    for lon, lat in ranked_coords:
+        seed = h3.latlng_to_cell(lat, lon, coarse_res)
+        for cell in sorted(h3.grid_disk(seed, ring)):
+            for child in sorted(h3.cell_to_children(cell, fine_res)):
+                if child in seen:
+                    continue
+                seen.add(child)
+                clat, clon = h3.cell_to_latlng(child)
+                if haversine_km(c_lon, c_lat, clon, clat) <= radius * 1.1:
+                    out.append((clon, clat))
+                    if len(out) >= cap:
+                        return out
+    return out
+
+
+async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResponse:
     participants = req.participants
     origins = [(p.lon, p.lat) for p in participants]
-    c_lon, c_lat = centroid(origins)
-    radius = infer_radius_km(origins, req.search.margin_km)
+    c_lon, c_lat = plan.center
+    radius = plan.radius_km
 
     # ── Phase 1: coarse search ────────────────────────────────────────
-    coarse_res, coarse_coords = generate_candidates(
-        c_lon, c_lat, radius,
-        max_cells=req.search.max_candidates,
-        resolution=req.search.h3_resolution,
-        include_points=origins,
+    coarse_res, coarse_coords = await asyncio.to_thread(
+        generate_candidates, c_lon, c_lat, radius, plan.resolution, origins,
     )
 
     coarse_ev = await _evaluate(
@@ -154,30 +182,12 @@ async def solve(req: SolveRequest, router: Router) -> SolveResponse:
     ranked = feasible[np.argsort(coarse_ev["score"][feasible])]
 
     # ── Phase 2: refine best region at finer H3 resolution ────────────
-    fine_res = min(coarse_res + 1, 12)
+    fine_res = min(coarse_res + 1, 15)
     seed_coords = [coarse_coords[int(i)] for i in ranked[: req.search.refine_top]]
-    seed_cells = sorted(
-        {h3.latlng_to_cell(lat, lon, coarse_res) for lon, lat in seed_coords}
+    fine_coords = await asyncio.to_thread(
+        _fine_candidates, seed_coords, coarse_res, fine_res,
+        req.search.neighbor_ring, plan.center, radius, plan.fine_max,
     )
-
-    # Expand seeds by neighbor ring
-    expanded: set[str] = set()
-    for cell in seed_cells:
-        expanded.update(h3.grid_disk(cell, req.search.neighbor_ring))
-
-    # Subdivide to finer resolution
-    fine_cells: set[str] = set()
-    for cell in expanded:
-        fine_cells.update(h3.cell_to_children(cell, fine_res))
-
-    fine_coords = []
-    seen: set[str] = set()
-    for cell in sorted(fine_cells):
-        if cell not in seen:
-            lat, lon = h3.cell_to_latlng(cell)
-            if haversine_km(c_lon, c_lat, lon, lat) <= radius * 1.1:
-                fine_coords.append((lon, lat))
-                seen.add(cell)
 
     # Use fine results if available, else fall back to coarse
     stage = "coarse"
@@ -185,10 +195,16 @@ async def solve(req: SolveRequest, router: Router) -> SolveResponse:
     used_res = coarse_res
 
     if fine_coords:
-        fine_ev = await _evaluate(
-            router, participants, fine_coords, req.objective, req.alpha
-        )
-        if np.isfinite(fine_ev["score"]).any():
+        try:
+            fine_ev = await _evaluate(
+                router, participants, fine_coords, req.objective, req.alpha
+            )
+        except ApiError as exc:
+            # Budget, rate, in-flight or upstream trouble in the optional fine stage: the
+            # coarse answer is already paid for, so return it rather than nothing.
+            log.warning("fine stage skipped: %s", exc.code)
+            fine_ev = None
+        if fine_ev is not None and np.isfinite(fine_ev["score"]).any():
             best_ev = fine_ev
             stage = "fine"
             used_res = fine_res
@@ -213,7 +229,7 @@ async def solve(req: SolveRequest, router: Router) -> SolveResponse:
             lon, lat = best_ev["candidates"][int(i)]
             area_cells.append(h3.latlng_to_cell(lat, lon, used_res))
 
-    meeting_area = cells_to_geojson(area_cells) if area_cells else None
+    meeting_area = await asyncio.to_thread(cells_to_geojson, area_cells) if area_cells else None
 
     return SolveResponse(
         objective=req.objective,
@@ -228,5 +244,6 @@ async def solve(req: SolveRequest, router: Router) -> SolveResponse:
             "fine_candidates": len(fine_coords) if fine_coords else 0,
             "feasible_count": int(len(valid)),
             "search_radius_km": round(radius, 2),
+            "estimated_matrix_elements": plan.elements,
         },
     )

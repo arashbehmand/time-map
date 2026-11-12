@@ -12,3 +12,4 @@ build/
 *.log
 CLAUDE.md
 .claude/
+usage.sqlite3*

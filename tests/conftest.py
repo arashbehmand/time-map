@@ -1,6 +1,6 @@
-import json
 import math
 import os
+from datetime import UTC, datetime, timedelta
 
 # Fake, token-shaped secrets. Set before server.* is imported.
 TILES_TOKEN = "pk.TILESTOKENtilestoken1234567890abcdef.SECRETA"
@@ -14,8 +14,10 @@ import httpx  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-import server.app as app_module  # noqa: E402
+from server.app import create_app  # noqa: E402
+from server.guard.clock import Clock  # noqa: E402
 from server.meetup.candidates import haversine_km  # noqa: E402
+from server.settings import Settings  # noqa: E402
 
 BODY_MARKER = "UPSTREAM-BODY-MARKER"
 FORBIDDEN = (TILES_TOKEN, ROUTING_TOKEN, "access_token", "api.mapbox.com", BODY_MARKER)
@@ -103,36 +105,79 @@ class MockMapbox:
         return sum(1 for r in self.calls if api is None or self.api_of(r) == api)
 
 
-@pytest.fixture
-def mapbox(monkeypatch):
-    mock = MockMapbox()
-    from server.warp import mapbox_client
+class FakeClock(Clock):
+    """Monotonic and wall time that only move when told to (or when something sleeps)."""
 
-    mapbox_client._iso_cache._store.clear()
-    monkeypatch.setattr(
-        app_module, "make_http_client",
-        lambda: httpx.AsyncClient(transport=httpx.MockTransport(mock)),
+    def __init__(self, start: datetime | None = None):
+        self.t = 1000.0
+        self.start = start or datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
+        self.slept: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.t
+
+    def utcnow(self) -> datetime:
+        return self.start + timedelta(seconds=self.t - 1000.0)
+
+    async def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.t += seconds
+
+    def advance(self, seconds: float) -> None:
+        self.t += seconds
+
+
+GENEROUS = {api: 10_000_000 for api in ("matrix", "isochrone", "tiles", "glyphs", "geocode")}
+
+
+@pytest.fixture
+def mapbox():
+    return MockMapbox()
+
+
+@pytest.fixture
+def clock():
+    return FakeClock()
+
+
+@pytest.fixture
+def settings(tmp_path):
+    return Settings(
+        router_provider="euclidean",
+        usage_db_path=str(tmp_path / "usage.sqlite3"),
+        monthly_budget=dict(GENEROUS),
+        daily_budget=dict(GENEROUS),
+        per_ip_per_min={g: 10_000 for g in Settings().per_ip_per_min},
     )
-    return mock
 
 
 @pytest.fixture
-def client(mapbox):
-    with TestClient(app_module.app, raise_server_exceptions=False) as c:
-        yield c
+def make_client(mapbox, clock):
+    """Build a TestClient for given settings; closes them all at the end."""
+    opened = []
+
+    def _make(settings: Settings, raise_errors: bool = False) -> TestClient:
+        app = create_app(settings, transport=httpx.MockTransport(mapbox), clock=clock)
+        c = TestClient(app, raise_server_exceptions=raise_errors)
+        c.__enter__()
+        opened.append(c)
+        return c
+
+    yield _make
+    for c in opened:
+        c.__exit__(None, None, None)
 
 
 @pytest.fixture
-def matrix_client(mapbox, monkeypatch):
-    monkeypatch.setenv("ROUTER_PROVIDER", "mapbox")
-    with TestClient(app_module.app, raise_server_exceptions=False) as c:
-        yield c
+def client(make_client, settings):
+    return make_client(settings)
+
+
+@pytest.fixture
+def matrix_client(make_client, settings):
+    return make_client(settings.with_(router_provider="mapbox"))
 
 
 def assert_clean(text: str) -> None:
     for bad in FORBIDDEN:
         assert bad not in text, f"{bad!r} leaked"
-
-
-def body_text(resp) -> str:
-    return resp.text if isinstance(resp.text, str) else json.dumps(resp.json())

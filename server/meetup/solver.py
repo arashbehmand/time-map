@@ -22,20 +22,29 @@ Algorithm
    (all cells within score ≤ best × (1 + slack)).
 """
 from __future__ import annotations
+
 from collections import defaultdict
 from typing import Any
 
 import h3
 import numpy as np
 
-from server.meetup.models import (
-    SolveRequest, SolveResponse, CandidateResult, Participant,
-)
+from server.errors import NoFeasiblePoint
 from server.meetup.candidates import (
-    centroid, infer_radius_km, generate_candidates,
-    haversine_km, cells_to_geojson,
+    cells_to_geojson,
+    centroid,
+    generate_candidates,
+    haversine_km,
+    infer_radius_km,
+)
+from server.meetup.models import (
+    CandidateResult,
+    Participant,
+    SolveRequest,
+    SolveResponse,
 )
 from server.meetup.routing import Router
+
 
 def _group_by_mode(
     participants: list[Participant],
@@ -140,9 +149,7 @@ async def solve(req: SolveRequest, router: Router) -> SolveResponse:
 
     feasible = np.where(np.isfinite(coarse_ev["score"]))[0]
     if len(feasible) == 0:
-        raise ValueError(
-            "No feasible meeting point. Increase max_minutes or margin_km."
-        )
+        raise NoFeasiblePoint()
 
     ranked = feasible[np.argsort(coarse_ev["score"][feasible])]
 
@@ -190,7 +197,7 @@ async def solve(req: SolveRequest, router: Router) -> SolveResponse:
     scores = best_ev["score"]
     valid = np.where(np.isfinite(scores))[0]
     if len(valid) == 0:
-        raise ValueError("No feasible point after refinement.")
+        raise NoFeasiblePoint()
 
     order = valid[np.argsort(scores[valid])]
     best_idx = int(order[0])

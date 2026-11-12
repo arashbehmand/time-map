@@ -6,8 +6,10 @@ roughly-uniform set of candidate meeting locations. This bounds
 complexity and scales well regardless of geographic extent.
 """
 from __future__ import annotations
+
 import math
 from typing import Sequence
+
 import h3
 
 EARTH_R_KM = 6371.0088

@@ -1,66 +1,58 @@
-import logging
-import logging.config
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
 
 import httpx
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from server.config import MAPBOX_TOKEN
-from server.warp.routes import router as warp_router
+from server.config import MAPBOX_ROUTING_TOKEN, MAPBOX_TILES_TOKEN, SECRETS
+from server.errors import install_error_handlers
+from server.logging_setup import configure_logging, set_secrets
 from server.meetup.routes import router as meetup_router
 from server.meetup.routing import build_router as build_meetup_router
+from server.upstream import fail, mapbox_send
+from server.warp.mapbox_client import MapboxClient
+from server.warp.routes import router as warp_router
 
 # ── Logging ──────────────────────────────────────────────────────────
-logging.config.dictConfig({
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "plain": {
-            "format": "%(asctime)s  %(levelname)-5s  %(name)s  %(message)s",
-            "datefmt": "%H:%M:%S",
-        },
-    },
-    "handlers": {
-        "console": {"class": "logging.StreamHandler", "formatter": "plain"},
-    },
-    "loggers": {
-        "isochrone_warp": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
-    },
-})
+set_secrets(SECRETS)
+configure_logging()
+
+
+def make_http_client() -> httpx.AsyncClient:
+    """The one outbound client. Tests replace this to mock Mapbox."""
+    return httpx.AsyncClient(
+        timeout=httpx.Timeout(20.0, connect=10.0),
+        limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
+    )
 
 
 # ── Lifespan ─────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    import os
-
-    # Shared HTTP client for Mapbox tile/glyph proxies
-    _app.state.http_client = httpx.AsyncClient(
-        timeout=30.0,
-        limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
-    )
+    # Shared HTTP client for every Mapbox call
+    _app.state.http_client = make_http_client()
 
     # Meetup router (Mapbox Matrix API or Euclidean)
     provider = os.getenv("ROUTER_PROVIDER", "mapbox")
-    router = build_meetup_router(provider, token=MAPBOX_TOKEN)
-    _app.state.meetup_router = router
+    _app.state.meetup_router = build_meetup_router(
+        provider, token=MAPBOX_ROUTING_TOKEN, client=_app.state.http_client
+    )
 
     yield
 
     await _app.state.http_client.aclose()
-    if hasattr(router, "aclose"):
-        await router.aclose()
 
 
 # ── App ──────────────────────────────────────────────────────────────
 app = FastAPI(title="Time-Map", lifespan=lifespan)
+install_error_handlers(app)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(
     CORSMiddleware,
@@ -83,20 +75,15 @@ class IsochroneRequest(BaseModel):
 
 
 @app.post("/api/isochrones")
-async def fetch_isochrones_endpoint(req: IsochroneRequest):
+async def fetch_isochrones_endpoint(req: IsochroneRequest, request: Request):
     """Fetch raw isochrone polygons for a single point."""
-    try:
-        from server.warp.mapbox_client import MapboxClient
-
-        client = MapboxClient()
-        return await client.fetch_isochrones(
-            lon=req.longitude,
-            lat=req.latitude,
-            profile=req.profile,
-            minutes=req.travel_times,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    client = MapboxClient(request.app.state.http_client)
+    return await client.fetch_isochrones(
+        lon=req.longitude,
+        lat=req.latitude,
+        profile=req.profile,
+        minutes=req.travel_times,
+    )
 
 
 # ── Shared: tile & glyph proxies ────────────────────────────────────
@@ -106,10 +93,13 @@ async def tile_proxy(z: int, x: int, y: int):
         f"https://api.mapbox.com/v4/mapbox.mapbox-streets-v8"
         f"/{z}/{x}/{y}.vector.pbf"
     )
-    resp = await app.state.http_client.get(url, params={"access_token": MAPBOX_TOKEN})
+    resp = await mapbox_send(
+        app.state.http_client, url, api="tiles", params={"access_token": MAPBOX_TILES_TOKEN}
+    )
     if resp.status_code == 404:
         return Response(status_code=204)
-    resp.raise_for_status()
+    if resp.is_error:
+        raise fail(resp, api="tiles")
     return Response(
         content=resp.content,
         media_type="application/x-protobuf",
@@ -121,8 +111,11 @@ async def tile_proxy(z: int, x: int, y: int):
 async def glyph_proxy(fontstack: str, range_pbf: str):
     encoded = quote(fontstack, safe=",")
     url = f"https://api.mapbox.com/fonts/v1/mapbox/{encoded}/{range_pbf}"
-    resp = await app.state.http_client.get(url, params={"access_token": MAPBOX_TOKEN})
-    resp.raise_for_status()
+    resp = await mapbox_send(
+        app.state.http_client, url, api="glyphs", params={"access_token": MAPBOX_TILES_TOKEN}
+    )
+    if resp.is_error:
+        raise fail(resp, api="glyphs")
     return Response(
         content=resp.content,
         media_type="application/x-protobuf",

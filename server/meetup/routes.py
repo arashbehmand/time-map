@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 
 from server.meetup.models import SolveRequest, SolveResponse
 from server.meetup.solver import solve
@@ -13,9 +13,4 @@ def health():
 
 @router.post("/solve", response_model=SolveResponse)
 async def solve_endpoint(req: SolveRequest, request: Request):
-    try:
-        return await solve(req, request.app.state.meetup_router)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    return await solve(req, request.app.state.meetup_router)

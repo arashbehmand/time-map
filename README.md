@@ -36,8 +36,14 @@ pip install -r requirements.txt
 Create a `.env` file in the project root:
 
 ```
-MAPBOX_ACCESS_TOKEN=pk.your_token_here
+# Tiles and glyphs (proxied map data)
+MAPBOX_TILES_TOKEN=pk.your_tiles_token
+# Matrix and Isochrone (server-side routing)
+MAPBOX_ROUTING_TOKEN=pk.your_routing_token
 ```
+
+`MAPBOX_ACCESS_TOKEN` still works as a fallback for both, but separate tokens can be rotated
+and tracked on their own.
 
 ## Running
 
@@ -58,14 +64,16 @@ Open [http://localhost:8000](http://localhost:8000) in your browser for the land
 ```
 server/                          # FastAPI backend
 ├── app.py                       # Main app, lifespan, shared proxies
-├── config.py                    # Shared config (MAPBOX_TOKEN, warp constants)
+├── config.py                    # Shared config (Mapbox tokens, warp constants)
+├── errors.py                    # Fixed error responses {code, detail}
+├── logging_setup.py             # Logging with token redaction
+├── upstream.py                  # The one way to call Mapbox
 ├── warp/                        # Isochrone warp module
-│   ├── routes.py                # POST /api/warped-map, /api/warp-params
-│   ├── pipeline.py              # Orchestrates isochrone → warp → tiles → transform
+│   ├── routes.py                # POST /api/warp-params
+│   ├── pipeline.py              # Orchestrates isochrone → warp LUT
 │   ├── warp.py                  # RadialIsochroneWarp engine
 │   ├── geometry.py              # Viewport, coordinate conversions
-│   ├── vector_transform.py      # Geometry warping + label extraction
-│   └── mapbox_client.py         # Mapbox Isochrone + vector tile fetching, TTL cache
+│   └── mapbox_client.py         # Mapbox Isochrone fetching, TTL cache
 └── meetup/                      # Meetup optimizer module
     ├── routes.py                # POST /api/meetup/solve
     ├── models.py                # Pydantic request/response models
@@ -110,12 +118,18 @@ Isochrone polygons are fetched from the **Mapbox Isochrone API** and vector tile
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/warped-map` | Full warped map frame (GeoJSON + labels) |
 | `POST` | `/api/warp-params` | Warp LUT + ring metadata for client-side shader |
 | `POST` | `/api/isochrones` | Raw isochrone polygons (via Mapbox Isochrone API) |
 | `GET`  | `/tiles/{z}/{x}/{y}` | Mapbox vector tile proxy |
 | `GET`  | `/glyphs/{fontstack}/{range}` | Mapbox font glyph proxy |
 | `POST` | `/api/meetup/solve` | Find optimal meeting point (via Mapbox Matrix API) |
+
+Errors are returned as `{"code": "<stable code>", "detail": "<fixed sentence>"}`. They never
+include upstream URLs, tokens or upstream response bodies.
+
+The server-side warped-map renderer (`/api/warped-map`, which decoded vector tiles in Python)
+was removed because no page used it. It is in git history before the commit that removed it
+(see `git log -- server/warp/vector_transform.py`).
 
 ## Acknowledgements
 

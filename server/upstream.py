@@ -1,5 +1,5 @@
 """
-The one way to call Mapbox.
+The one way to call Mapbox (and Nominatim).
 
 Errors never carry the request URL (which holds the access token and, for Matrix,
 participant coordinates) or the upstream body. Callers get a fixed-message ApiError.
@@ -23,10 +23,11 @@ async def mapbox_send(
     api: str,
     profile: str = "-",
     params: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> httpx.Response:
     """Send a GET and return the response, whatever its status. Transport errors become ApiErrors."""
     try:
-        return await client.get(url, params=params)
+        return await client.get(url, params=params, headers=headers)
     except httpx.TimeoutException as exc:
         log.warning("upstream timeout api=%s profile=%s error=%s", api, profile, type(exc).__name__)
         raise UpstreamTimeout() from None

@@ -16,6 +16,11 @@ body {
 
 #map { flex: 1; }
 
+/* Mapbox wordmark, required by Mapbox's attribution terms (added as a map control). */
+.mapbox-logo { display: block; width: 80px; height: 20px; line-height: 0; margin: 0 0 8px 10px; }
+.mapbox-logo img { width: 80px; height: 20px; }
+.search-note { font-size: 11px; color: #888; margin: -2px 0 8px; line-height: 1.35; }
+
 /* ── Header ─────────────────────────────────────────────────────── */
 #sidebar-header {
   background: #1a1a2e; color: #fff;

@@ -442,6 +442,9 @@
       style: buildStyle(),
       center: [lon, lat],
       zoom: currentZoom,
+      // This map is hidden under the warp canvas, so its own credit would be invisible;
+      // the page shows #attribution and the Mapbox logo instead (index.html).
+      attributionControl: false,
       preserveDrawingBuffer: true,
       interactive: true,
       dragPan: true,
@@ -796,15 +799,23 @@
   }
 
   // ── Geocoding ────────────────────────────────────────────────────────
+  // Searches go through /api/geocode on submit only; Nominatim forbids search-as-you-type.
   async function geocode(query) {
     // Accept raw "lat,lon" without a network round-trip
     const m = query.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
-    if (m) return { lat: +m[1], lon: +m[2] };
-    const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q="
-                + encodeURIComponent(query);
-    const data = await (await fetch(url)).json();
-    if (!data.length) return null;
-    return { lat: +data[0].lat, lon: +data[0].lon };
+    if (m) {
+      const lat = +m[1], lon = +m[2];
+      if (Math.abs(lat) > 85 || Math.abs(lon) > 180) return null;
+      return { lat, lon };
+    }
+    const resp = await fetch("/api/geocode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ q: query.slice(0, 200) }),
+    });
+    if (resp.status === 404) return null;
+    if (!resp.ok) throw new Error(await apiErrorMessage(resp));
+    return await resp.json();
   }
 
   // ── Controls ─────────────────────────────────────────────────────────
@@ -832,7 +843,7 @@
         schedule();
         searchInput.blur();
       } catch (err) {
-        statusEl.textContent = "Search error: " + err.message.slice(0, 60);
+        statusEl.textContent = "Search error: " + err.message.slice(0, 120);
       }
     });
 
@@ -840,7 +851,20 @@
       currentProfile = profileSel.value; schedule();
     });
     timesInput.addEventListener("change", () => {
-      currentTimes = timesInput.value.split(",").map(Number).filter(n => n > 0);
+      // Mapbox draws at most 4 travel times, each at most 60 minutes.
+      const raw = timesInput.value.split(",").map(v => Math.round(Number(v)))
+        .filter(n => Number.isFinite(n) && n > 0);
+      const times = [...new Set(raw.filter(n => n <= 60))].sort((a, b) => a - b).slice(0, 4);
+      if (!times.length) {
+        statusEl.textContent = "Enter up to 4 travel times between 1 and 60 minutes.";
+        timesInput.value = currentTimes.join(",");
+        return;
+      }
+      if (times.length !== raw.length) {
+        statusEl.textContent = "Using up to 4 travel times between 1 and 60 minutes.";
+      }
+      currentTimes = times;
+      timesInput.value = times.join(",");
       schedule();
     });
     zoomSlider.addEventListener("input", () => {

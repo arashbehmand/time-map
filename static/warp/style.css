@@ -67,3 +67,20 @@ body { background: #1a1a2e; overflow: hidden; font-family: system-ui, sans-serif
   animation: spin .8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Map credits. The MapLibre map is hidden (opacity 0), so its own attribution control
+   would be invisible; these sit above every canvas. Required by OpenStreetMap and Mapbox. */
+#attribution {
+  position: fixed; right: 0; bottom: 0; z-index: 5;
+  padding: 2px 6px; font-size: 11px; line-height: 1.4;
+  background: rgba(255, 255, 255, 0.8); color: #333; border-top-left-radius: 4px;
+  max-width: calc(100vw - 100px);
+}
+#attribution a { color: #333; text-decoration: none; margin-right: 4px; }
+#attribution a:hover { text-decoration: underline; }
+#mapbox-logo {
+  position: fixed; left: 10px; bottom: 6px; z-index: 5;
+  display: block; width: 80px; height: 20px; line-height: 0;
+}
+#mapbox-logo img { width: 80px; height: 20px; }
+@media (max-width: 480px) { .attr-note { display: none; } }

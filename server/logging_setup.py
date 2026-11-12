@@ -83,6 +83,16 @@ def install_redaction() -> None:
     _installed = True
 
 
+class _DropProxyAccess(logging.Filter):
+    """Tile and glyph paths show where a visitor is looking; keep them out of the access log."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args if isinstance(record.args, tuple) else ()
+        path = str(args[2]) if len(args) > 2 else record.getMessage()
+        return not (path.startswith("/tiles/") or path.startswith("/glyphs/")
+                    or " /tiles/" in path or " /glyphs/" in path)
+
+
 def configure_logging() -> None:
     install_redaction()
     logging.config.dictConfig({
@@ -104,3 +114,4 @@ def configure_logging() -> None:
             "httpcore": {"level": "WARNING"},
         },
     })
+    logging.getLogger("uvicorn.access").addFilter(_DropProxyAccess())

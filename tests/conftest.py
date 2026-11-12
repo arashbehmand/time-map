@@ -1,3 +1,4 @@
+import asyncio
 import math
 import os
 from datetime import UTC, datetime, timedelta
@@ -122,6 +123,7 @@ class FakeClock(Clock):
     async def sleep(self, seconds: float) -> None:
         self.slept.append(seconds)
         self.t += seconds
+        await asyncio.sleep(0)
 
     def advance(self, seconds: float) -> None:
         self.t += seconds

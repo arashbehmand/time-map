@@ -49,12 +49,13 @@ class SolveRequest(BaseModel):
         return self
 
 class CandidateResult(BaseModel):
-    # Where to meet: the point on the street network the times were measured to.
+    # Where to meet: the point on the street network the times were measured to (for a
+    # mixed group, the walking point; every mode's own point is within 150 m of it).
     lon: float
     lat: float
     # The street there, when the map service names one.
     name: Optional[str] = None
-    # How far that point is from the grid point that was searched (metres).
+    # How far this point is from the grid point that was searched (metres).
     snap_m: Optional[float] = None
     score: float
     max_time_min: float

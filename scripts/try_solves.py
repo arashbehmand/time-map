@@ -7,9 +7,11 @@ For reproducing problems and for before/after numbers. Start a server first, e.g
     python scripts/try_solves.py http://localhost:8000
 
 Against live Mapbox, cap the spend on the server you run it against
-(MATRIX_DAILY_BUDGET=8000 and a scratch USAGE_DB_PATH): every solve spends Matrix elements.
---repeat N runs each group N times and prints the median and p95 wall time; --pause S waits
-between solves so the Matrix rate window (60 requests a minute) is not what is measured.
+(MATRIX_DAILY_BUDGET=8000, CLIENT_DAILY_SHARE=1 so one client may use all of it, and a scratch
+USAGE_DB_PATH): every solve spends Matrix elements. --repeat N runs each group N times and
+prints the median and p95 wall time of the solves that answered 200, with the count of each
+status; --pause S waits between solves so the Matrix rate window (60 requests a minute) is
+not what is measured.
 
 The groups are public landmarks, never anybody's home.
 """
@@ -19,6 +21,7 @@ import argparse
 import json
 import statistics
 import time
+from collections import Counter
 
 import httpx
 
@@ -42,9 +45,10 @@ GROUPS = {
     ],
 }
 
-DIAG_KEYS = ("stage", "coarse_resolution", "fine_resolution", "coarse_candidates", "fine_candidates",
-             "feasible_count", "dropped_no_route", "dropped_off_street", "retries",
-             "matrix_requests", "matrix_elements", "estimated_matrix_elements", "elapsed_ms")
+DIAG_KEYS = ("stage", "coarse_resolution", "fine_resolution", "answer_resolution", "coarse_candidates",
+             "fine_candidates", "feasible_count", "dropped_no_route", "unchecked_for_budget",
+             "dropped_off_street", "retries", "bad_replies", "matrix_requests", "matrix_elements",
+             "estimated_matrix_elements", "elapsed_ms")
 
 
 def solve_once(client: httpx.Client, name: str, objective: str) -> dict:
@@ -80,7 +84,8 @@ def main() -> None:
     args = parser.parse_args()
 
     names = args.group or sorted(GROUPS)
-    walls: dict[str, list[float]] = {n: [] for n in names}
+    walls: dict[str, list[float]] = {n: [] for n in names}   # solves that answered 200
+    statuses: Counter[int] = Counter()
     first = True
     with httpx.Client(base_url=args.base_url, timeout=120) as client:
         for _ in range(args.repeat):
@@ -89,16 +94,26 @@ def main() -> None:
                     time.sleep(args.pause)
                 first = False
                 row = solve_once(client, name, args.objective)
-                walls[name].append(row["wall_s"])
+                statuses[row["status"]] += 1
+                if row["status"] == 200:
+                    walls[name].append(row["wall_s"])
                 print(json.dumps(row))
 
     if args.repeat > 1:
-        everything = sorted(w for ws in walls.values() for w in ws)
+        print("statuses: " + ", ".join(f"{code}: {n}" for code, n in sorted(statuses.items())))
         for name, ws in walls.items():
-            print(f"{name}: median {statistics.median(ws):.2f} s, slowest {max(ws):.2f} s, n={len(ws)}")
-        # Nearest-rank p95: with fewer than 20 samples this is the slowest one.
-        p95 = everything[max(0, -(-95 * len(everything) // 100) - 1)]
-        print(f"all: median {statistics.median(everything):.2f} s, p95 {p95:.2f} s, n={len(everything)}")
+            if ws:
+                print(f"{name}: median {statistics.median(ws):.2f} s, slowest {max(ws):.2f} s, n={len(ws)}")
+        everything = sorted(w for ws in walls.values() for w in ws)
+        total = sum(statuses.values())
+        if len(everything) < total:
+            print(f"only {len(everything)} of {total} solves answered 200: the timings below are "
+                  "not a p95 of this run")
+        if everything:
+            # Nearest-rank p95: with fewer than 20 samples this is the slowest one.
+            p95 = everything[max(0, -(-95 * len(everything) // 100) - 1)]
+            print(f"answered: median {statistics.median(everything):.2f} s, p95 {p95:.2f} s, "
+                  f"n={len(everything)}")
 
 
 if __name__ == "__main__":

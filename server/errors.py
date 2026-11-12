@@ -77,11 +77,14 @@ class NoFeasiblePoint(ApiError):
         "over_time_limit": ("No place we checked is within everyone's time limit. "
                             "Raise the time limits or move people closer."),
         "no_common_place": message,
+        "off_street": ("No place we checked is close enough to a street or path that everyone "
+                       "can use. Try moving people closer together or nearer to streets."),
     }
 
     def __init__(self, reason: str = "no_common_place", who: list[dict] | None = None):
-        """reason: no_route | over_time_limit | no_common_place.
-        who: [{"index": <position in the request>, "reason": "no_route" | "over_time_limit"}]."""
+        """reason: no_route | over_time_limit | no_common_place | off_street.
+        who: [{"index": <position in the request>, "reason": "no_route" | "over_time_limit" |
+        "reaches_few", and for reaches_few "reach" and "of": places reached of those checked}]."""
         super().__init__(self.MESSAGES.get(reason, self.message),
                          extra={"reason": reason, "who": list(who or [])})
 

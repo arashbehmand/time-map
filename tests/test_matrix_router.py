@@ -1,5 +1,6 @@
 """The Mapbox Matrix router: order and units, tiling, strict replies, NoRoute, caps."""
 import asyncio
+import json
 import logging
 import math
 
@@ -81,7 +82,7 @@ def test_matrix_order_and_seconds_to_minutes(tmp_path, mode, n_orig, n_dest):
     np.testing.assert_allclose(result.minutes, expected)
     assert result.minutes.shape == (n_orig, n_dest)
     np.testing.assert_allclose([(s.lon, s.lat) for s in result.snaps], dests, atol=1e-6)
-    assert not result.unresolved.any()
+    assert not result.unresolved.any() and not result.skipped.any()
     assert len(calls) == len(matrix_tiles(n_orig, n_dest, matrix_max_coords(mode)))
     for r in calls:
         coords, _, _ = _coords(r)
@@ -188,6 +189,80 @@ def test_nan_in_the_reply_is_malformed(tmp_path):
     assert len(calls) == 2
 
 
+@pytest.mark.parametrize("where", ["duration", "coordinate"])
+def test_a_huge_integer_is_malformed_not_a_crash(tmp_path, where):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        body = matrix_reply(request)
+        if where == "duration":
+            body["durations"][0][0] = 10**400
+        else:
+            body["destinations"][0]["location"][0] = 10**400
+        return httpx.Response(200, text=json.dumps(body), headers={"content-type": "application/json"})
+
+    router = _router(handler, tmp_path)
+    with pytest.raises(UpstreamError):
+        _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], [(0.01, 51.5), (0.02, 51.5)]),
+             _roomy())
+    assert len(calls) == 2
+
+
+def test_a_5xx_is_asked_for_again_once(tmp_path):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(503, text="later") if len(calls) == 1 else httpx.Response(200, json=matrix_reply(request))
+
+    router = _router(handler, tmp_path)
+    allowance = _roomy()
+    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], [(0.01, 51.5), (0.02, 51.5)]),
+                  allowance)
+    assert np.isfinite(result.minutes).all()
+    assert allowance.retries == 1 and allowance.bad_replies == 0 and len(calls) == 2
+
+
+def test_two_429s_then_a_bad_reply_is_a_502_without_another_wait(tmp_path):
+    replies = iter([429, 429])
+    clock = FakeClock()
+
+    def handler(request):
+        code = next(replies, None)
+        if code:
+            return httpx.Response(code, headers={"retry-after": "1"})
+        return _corrupt("short row")(request)
+
+    router = _router(handler, tmp_path, clock=clock)
+    with pytest.raises(UpstreamError):
+        _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], [(0.01, 51.5), (0.02, 51.5)]),
+             _roomy())
+    assert clock.slept == [1.0, 1.0]
+
+
+def test_backing_off_does_not_hold_the_gate(tmp_path):
+    held = []
+    clock = FakeClock()
+    allowance = SolveAllowance(elements=10**6, requests={"matrix": 100}, concurrency=1)
+    real_sleep = clock.sleep
+
+    async def sleep(seconds):
+        held.append(allowance.gate.locked())
+        await real_sleep(seconds)
+
+    clock.sleep = sleep
+    replies = iter([429])
+
+    def handler(request):
+        code = next(replies, None)
+        return httpx.Response(code, headers={"retry-after": "1"}) if code else httpx.Response(200, json=matrix_reply(request))
+
+    router = _router(handler, tmp_path, clock=clock)
+    _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], [(0.01, 51.5), (0.02, 51.5)]), allowance)
+    assert held == [False]
+
+
 def test_malformed_once_then_good_succeeds(tmp_path):
     calls = []
 
@@ -200,7 +275,7 @@ def test_malformed_once_then_good_succeeds(tmp_path):
     result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], [(0.01, 51.5), (0.02, 51.5)]),
                   allowance)
     assert np.isfinite(result.minutes).all()
-    assert allowance.retries == 1 and len(calls) == 2
+    assert allowance.retries == 1 and allowance.bad_replies == 1 and len(calls) == 2
 
 
 def test_a_null_entry_is_one_unreachable_pair(tmp_path):
@@ -238,29 +313,65 @@ def test_snapped_points_and_names_are_returned(tmp_path):
 POISON = (0.017, 51.5)
 
 
-def _poisoned(calls):
+def _poisoned(calls, bad=(POISON,), bad_origins=()):
+    """Any request that holds a bad destination or a bad origin answers NoRoute."""
     def handler(request):
         calls.append(request)
-        coords, _, dst = _coords(request)
-        if any(coords[d] == pytest.approx(POISON) for d in dst):
+        coords, src, dst = _coords(request)
+        if any(coords[d] == pytest.approx(b) for d in dst for b in bad) or \
+                any(coords[o] == pytest.approx(b) for o in src for b in bad_origins):
             return httpx.Response(200, json={"code": "NoRoute", "message": "No route found"})
         return httpx.Response(200, json=matrix_reply(request))
     return handler
 
 
+DESTS = [(0.001 * (j + 1), 51.5) for j in range(20)]
+
+
 def test_noroute_isolates_and_drops_the_one_bad_destination(tmp_path):
     calls = []
     router = _router(_poisoned(calls), tmp_path)
-    dests = [(0.001 * (j + 1), 51.5) for j in range(20)]
-    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], dests), _roomy())
-    bad = dests.index(POISON)
-    assert result.unresolved.tolist() == [j == bad for j in range(20)]
+    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], DESTS), _roomy())
+    bad = DESTS.index(POISON)
+    assert result.unresolved.any(axis=0).tolist() == [j == bad for j in range(20)]
     assert np.isinf(result.minutes[:, bad]).all()
     assert np.isfinite(np.delete(result.minutes, bad, axis=1)).all()
     assert len(calls) <= 1 + 2 * math.ceil(math.log2(20))
 
 
-def test_a_wholly_unroutable_tile_is_split_once_then_dropped(tmp_path):
+def test_two_bad_destinations_in_different_halves_are_both_isolated(tmp_path):
+    calls = []
+    bad = (DESTS[2], DESTS[15])
+    router = _router(_poisoned(calls, bad=bad), tmp_path)
+    origins = [(0.0, 51.5), (0.0, 51.501)]
+    result = _run(router, lambda r: r.duration_matrix("walking", origins, DESTS), _roomy())
+    assert result.unresolved.any(axis=0).tolist() == [j in (2, 15) for j in range(20)]
+    assert np.isfinite(np.delete(result.minutes, [2, 15], axis=1)).all()
+
+
+def test_a_bad_origin_is_found_and_the_others_keep_their_times(tmp_path):
+    calls = []
+    origins = [(0.0, 51.5), (0.0, 51.501), (0.0, 51.502)]
+    router = _router(_poisoned(calls, bad=(), bad_origins=(origins[1],)), tmp_path)
+    result = _run(router, lambda r: r.duration_matrix("walking", origins, DESTS), _roomy())
+    # The bad origin's row is answered (no route anywhere), not left unchecked.
+    assert not result.unresolved.any()
+    assert np.isinf(result.minutes[1]).all()
+    assert np.isfinite(result.minutes[[0, 2]]).all()
+
+
+def test_a_bad_origin_in_a_batched_mode_touches_only_its_row(tmp_path):
+    calls = []
+    origins = [(0.0, 51.5 + i / 1000) for i in range(8)]   # 8 traffic drivers: 2 origin batches
+    router = _router(_poisoned(calls, bad=(), bad_origins=(origins[5],)), tmp_path)
+    dests = DESTS[:12]
+    result = _run(router, lambda r: r.duration_matrix("driving-traffic", origins, dests), _roomy())
+    assert not result.unresolved.any()
+    assert np.isinf(result.minutes[5]).all()
+    assert np.isfinite(np.delete(result.minutes, 5, axis=0)).all()
+
+
+def test_a_wholly_unroutable_tile_is_split_within_the_slack_then_dropped(tmp_path):
     calls = []
 
     def handler(request):
@@ -268,19 +379,39 @@ def test_a_wholly_unroutable_tile_is_split_once_then_dropped(tmp_path):
         return httpx.Response(200, json={"code": "NoRoute"})
 
     router = _router(handler, tmp_path)
-    dests = [(0.001 * (j + 1), 51.5) for j in range(20)]
-    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], dests), _roomy())
+    allowance = SolveAllowance(elements=10**6, requests={"matrix": 11})   # 1 planned + 10 slack
+    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], DESTS), allowance)
     assert result.unresolved.all()
-    assert len(calls) == 3
+    assert len(calls) == 11
+    assert result.skipped.any()                     # what the slack couldn't reach is marked
+
+
+@pytest.mark.parametrize("reply", [
+    (200, {"code": "NoSegment"}),
+    (422, {"code": "NoRoute", "message": "No route"}),
+])
+def test_other_no_route_replies_are_split_too(tmp_path, reply):
+    status, body = reply
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        coords, _, dst = _coords(request)
+        if any(coords[d] == pytest.approx(POISON) for d in dst):
+            return httpx.Response(status, json=body)
+        return httpx.Response(200, json=matrix_reply(request))
+
+    router = _router(handler, tmp_path)
+    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], DESTS), _roomy())
+    assert result.unresolved.any(axis=0).sum() == 1
 
 
 def test_noroute_without_slack_drops_what_it_cannot_check(tmp_path):
     calls = []
     router = _router(_poisoned(calls), tmp_path)
-    dests = [(0.001 * (j + 1), 51.5) for j in range(20)]
     allowance = SolveAllowance(elements=10**6, requests={"matrix": 1})
-    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], dests), allowance)
-    assert result.unresolved.all()
+    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], DESTS), allowance)
+    assert result.unresolved.all() and result.skipped.all()
     assert len(calls) == 1
     assert allowance.spent_requests["matrix"] == 1
 
@@ -289,10 +420,34 @@ def test_noroute_recovery_waits_for_no_rate_slot(tmp_path):
     calls = []
     clock = FakeClock()
     router = _router(_poisoned(calls), tmp_path, clock=clock, rates_per_min={"matrix": 1})
-    dests = [(0.001 * (j + 1), 51.5) for j in range(20)]
-    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], dests), _roomy())
+    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], DESTS), _roomy())
     assert result.unresolved.all()
     assert len(calls) == 1 and clock.slept == []
+
+
+def test_recovery_the_guard_refuses_is_skipped_not_an_error(tmp_path):
+    calls = []
+    clock = FakeClock()
+    s = Settings(usage_db_path=str(tmp_path / "u.db"))
+    # The daily budget holds the first request (1 x 20 elements) and nothing more.
+    store = UsageStore(s.usage_db_path, {"matrix": 25}, {"matrix": 10**9}, clock)
+    guard = UpstreamGuard(s, store, clock)
+    router = MapboxMatrixRouter("pk.test", httpx.AsyncClient(transport=httpx.MockTransport(_poisoned(calls))), guard)
+    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], DESTS), _roomy())
+    assert result.unresolved.all() and result.skipped.all()
+    assert len(calls) == 1
+
+
+def test_recovery_leaves_room_for_planned_requests_not_yet_sent():
+    allowance = SolveAllowance(elements=1000, requests={"matrix": 20},
+                               plan_elements=500, plan_requests={"matrix": 10})
+    allowance.take(40, "matrix", planned=True)          # 1 of 10 planned requests sent
+    assert allowance.can_recover(40, "matrix", free_slots=30)
+    assert not allowance.can_recover(40, "matrix", free_slots=9)    # 9 planned still to go
+    assert not allowance.can_recover(600, "matrix", free_slots=30)  # their elements too
+    for _ in range(10):
+        allowance.take(1, "matrix")                     # spend the 10 requests of slack
+    assert not allowance.can_recover(1, "matrix", free_slots=30)
 
 
 # ── caps and concurrency ────────────────────────────────────────────

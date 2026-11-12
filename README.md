@@ -125,7 +125,9 @@ API.
 
 To time real solves, run a server and `python scripts/try_solves.py http://localhost:8000
 --repeat 4 --pause 15`. Against live Mapbox, cap the spend on that server first
-(`MATRIX_DAILY_BUDGET=8000`, and a scratch `USAGE_DB_PATH`).
+(`MATRIX_DAILY_BUDGET=8000`, `CLIENT_DAILY_SHARE=1` so the one client running the script may
+use all of it, and a scratch `USAGE_DB_PATH`). The p95 it prints counts only solves that
+answered 200, and it says so when some didn't.
 
 ## Opening examples
 
@@ -189,26 +191,40 @@ Isochrone polygons are fetched from the **Mapbox Isochrone API** and vector tile
 5. Return the best meeting point, top-k runners-up and a meeting area polygon.
 
 Each answer is shown where the Matrix API snapped it onto the street network, with the
-street's name when Mapbox gives one: the times are to that point. A candidate more than
-150 m from its snapped point (more on coarse grids: 10% of the cell edge) is not offered as
-an answer, because it is probably in water, a rail yard or a park; it can still guide the
-finer stage. Alternatives that snap within 150 m of a better one are left out. People are
-scored in id order and ties are broken by a fixed rule, so the same group in any order gets
-the same answer.
+street's name when Mapbox gives one. Each travel mode's times are to that mode's own snapped
+point; the point shown is the walking one (then cycling, then driving), and `snap_m` is its
+distance from the grid point searched. A candidate is offered only if every mode's snapped
+point is within 150 m of the grid point (10% of the cell edge on coarse grids, where hex
+centres are rarely that close to a road) and within 150 m of the point shown, so everyone's
+trip ends close to the star; if some trip ends more than 50 m away, the answer says so.
+Candidates that fail this are probably in water, a rail yard or a park; they can still guide
+the finer stage. If nothing in the search passes, candidates up to three times the limit
+are offered with a note, and beyond that the search fails (`no_feasible_meeting_point`,
+reason `off_street`). Alternatives that snap within 150 m of a better one are left out.
+People are scored in id order and ties are broken by a fixed rule, so the same group in
+any order gets the same answer.
 
 Matrix replies are read strictly. A `null` duration means that one pair has no route. A
-reply with `code: "NoRoute"` is split in half until the one destination that fails is
-found and dropped; if both halves fail, the whole block is dropped. Anything else that is
-missing or malformed (wrong row or column count, a value that isn't a number of seconds,
-a missing waypoint) is a provider error: it is asked for once more, then the solve answers
-`502 upstream_error`. It is never read as "unreachable".
+reply with `code: "NoRoute"` (or `NoSegment`, also in a 4xx body) is split to find what
+fails: by destinations first, down to the one that fails for everyone, which is dropped;
+when both halves fail, by origins, down to a starting point that reaches none of the places
+the others reach, which is then a confirmed "no route" for that person. Splitting stops
+where the solve's recovery allowance runs out; what is left is unchecked. Anything else
+that is missing or malformed (wrong row or column count, a value that isn't a number of
+seconds, a missing waypoint) is a provider error: it is asked for once more, then the solve
+answers `502 upstream_error`. It is never read as "unreachable".
+
+People are named only from replies that answered for them. An unchecked pair says nothing
+about anyone's start: more than a quarter of a stage's places unchecked fails the search
+(`422 unroutable_area`), or, in the finer stage, keeps the coarse answer.
 
 An answer that is less good than usual says so in `notes` (shown on the page): places were
-left unchecked, the finer stage didn't finish, or nothing was near a street. More than a
-quarter of a stage's places left unchecked fails the search (`422 unroutable_area`), or, in
-the finer stage, keeps the coarse answer. `diagnostics` counts what was dropped
-(`dropped_no_route`, `dropped_off_street`), retried (`retries`) and spent
-(`matrix_requests`, `matrix_elements`).
+left unchecked, the finer stage didn't finish, few places were near a street, some trips
+end a short way from the star, or the map service sent a bad reply that was asked for
+again. `diagnostics` counts what was dropped (`dropped_no_route`, `unchecked_for_budget`,
+`dropped_off_street`, over the stages the answer was chosen from), retried (`retries`,
+`bad_replies`) and sent (`matrix_requests`, `matrix_elements`). `fine_resolution` is the
+finer resolution searched and `answer_resolution` the one the answer came from.
 
 ## API Endpoints
 
@@ -223,9 +239,10 @@ the finer stage, keeps the coarse answer. `diagnostics` counts what was dropped
 
 Errors are returned as `{"code": "<stable code>", "detail": "<fixed sentence>"}`. They never
 include upstream URLs, tokens or upstream response bodies. One error adds two fields:
-`422 no_feasible_meeting_point` has `reason` (`no_route`, `over_time_limit` or
-`no_common_place`) and `who`, a list of `{index, reason}` where `index` is the person's
-position in the request. The page turns that into a sentence with names; the server never
+`422 no_feasible_meeting_point` has `reason` (`no_route`, `over_time_limit`,
+`no_common_place` or `off_street`) and `who`, a list of `{index, reason}` where `index` is
+the person's position in the request; for someone cut off (`reaches_few`, under
+`no_common_place`) it also has `reach` and `of`, the places they reach of those checked. The page turns that into a sentence with names; the server never
 sees names and never echoes request data.
 
 The server-side warped-map renderer (`/api/warped-map`, which decoded vector tiles in Python)
@@ -285,9 +302,12 @@ finer stage can't run (budget, rate or upstream trouble), the coarse result is r
 a note (`diagnostics.stage` says which). One search runs at a time.
 
 A search may also spend a little beyond its plan on recovery: up to 10 more requests per
-rate bucket (never above the bucket's rate) for asking again after a bad reply or splitting
-a NoRoute reply. Admission checks only the plan. A recovery request is sent only while a rate
-slot is free; otherwise the places it would have checked are dropped and counted.
+travel mode (never above the bucket's rate) for asking again after a bad reply or splitting
+a NoRoute reply. Admission checks only the plan. A recovery request is sent only if, after
+it, every planned request still to be sent has its requests, elements and free rate slots;
+it never waits for a slot, and if the guard refuses it for any reason the places it would
+have checked are left unchecked and counted. A 429 retry belongs to a planned request and
+waits as before.
 
 All of this is per process. **Run one worker on one replica.** The start commands pass
 `--workers 1`; the app warns if `WEB_CONCURRENCY` > 1. Adding workers or replicas needs a

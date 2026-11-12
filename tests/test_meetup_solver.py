@@ -179,25 +179,74 @@ def test_a_place_far_from_any_street_is_not_offered_and_the_answer_is_on_its_str
     assert all(c.name == "High Street" for c in resp.top)
 
 
-def test_a_walker_and_a_driver_are_shown_the_walking_point():
+def _two_mode_snaps(walk_m, drive_m):
     def snap(mode, d):
         if mode == "walking":
-            return Snap(d[0], d[1] + 0.02 * KM_LAT, "Footpath")
-        return Snap(d[0], d[1] + 0.1 * KM_LAT, "Main Road")
+            return Snap(d[0], d[1] + walk_m / 1000 * KM_LAT, "Footpath")
+        return Snap(d[0], d[1] + drive_m / 1000 * KM_LAT, "Main Road")
+    return snap
 
+
+def test_a_walker_and_a_driver_are_shown_the_walking_point():
     resp = run([person("a", -1, 0, "driving"), person("b", 1, 0, "walking")],
-               FixedRouter(straight_line, snap_fn=snap))
+               FixedRouter(straight_line, snap_fn=_two_mode_snaps(20, 60)))
     assert resp.best.name == "Footpath"
-    assert resp.best.snap_m == pytest.approx(100, abs=1)   # the largest over the modes
+    assert resp.best.snap_m == pytest.approx(20, abs=1)   # the shown point's own distance
+    assert solver.NOTE_SPREAD not in resp.notes            # the driver ends 40 m away
 
 
-def test_when_nothing_is_near_a_street_the_rule_is_waived_with_a_note():
+def test_trips_ending_away_from_the_star_are_said():
+    # Walking point 20 m north of the grid point, driving point 120 m south: 140 m apart.
+    resp = run([person("a", -1, 0, "driving"), person("b", 1, 0, "walking")],
+               FixedRouter(straight_line, snap_fn=_two_mode_snaps(20, -120)))
+    assert solver.NOTE_SPREAD in resp.notes
+
+
+def test_modes_that_snap_far_apart_are_not_offered():
+    # Both points are within 150 m of the grid point, on opposite sides: 260 m apart, as on
+    # two banks of a river. Neither is offered; nothing else is, so it is an error.
+    with pytest.raises(NoFeasiblePoint) as exc:
+        run([person("a", -1, 0, "driving"), person("b", 1, 0, "walking")],
+            FixedRouter(straight_line, snap_fn=_two_mode_snaps(130, -130)))
+    assert exc.value.extra["reason"] == "off_street"
+
+
+def test_when_little_is_near_a_street_the_rule_is_relaxed_with_a_note():
     def snap(mode, d):
-        return Snap(d[0], d[1] + 2.0 * KM_LAT, "Distant Lane")   # 2 km from every grid point
+        return Snap(d[0], d[1] + 0.3 * KM_LAT, "Distant Lane")   # 300 m from every grid point
 
     resp = run([person("a", -1, 0), person("b", 1, 0)], FixedRouter(straight_line, snap_fn=snap))
     assert resp.best.name == "Distant Lane"
     assert solver.NOTE_OFF_STREET in resp.notes
+    assert resp.diagnostics["dropped_off_street"] > 0
+
+
+def test_nothing_near_a_street_is_an_error_not_a_far_answer():
+    def snap(mode, d):
+        return Snap(d[0], d[1] + 2.0 * KM_LAT, "Distant Lane")   # 2 km from every grid point
+
+    with pytest.raises(NoFeasiblePoint) as exc:
+        run([person("a", -1, 0), person("b", 1, 0)], FixedRouter(straight_line, snap_fn=snap))
+    assert exc.value.extra == {"reason": "off_street", "who": []}
+
+
+def test_many_places_far_from_a_street_get_a_note():
+    def snap(mode, d):
+        far = hash(d) % 3 != 0       # two in three grid points are 400 m from a street
+        return Snap(d[0], d[1] + (0.4 if far else 0.02) * KM_LAT, "Lane")
+
+    resp = run([person("a", -1, 0), person("b", 1, 0)], FixedRouter(straight_line, snap_fn=snap))
+    assert solver.NOTE_FEW_STREETS in resp.notes
+    assert solver.NOTE_OFF_STREET not in resp.notes
+
+
+def test_the_star_is_inside_the_meeting_area():
+    from shapely.geometry import Point, shape
+
+    resp = run([person("a", -1, 0), person("b", 1, 0)],
+               FixedRouter(straight_line, snap_fn=lambda m, d: Snap(d[0], d[1] + 0.12 * KM_LAT, "High St")))
+    area = shape(resp.meeting_area_geojson["geometry"])
+    assert area.contains(Point(resp.best.lon, resp.best.lat))
 
 
 def test_alternatives_that_snap_to_the_same_spot_are_shown_once():
@@ -231,7 +280,8 @@ class UncheckedFineStage(FixedRouter):
     async def duration_matrix(self, mode, origins, destinations):
         result = await super().duration_matrix(mode, origins, destinations)
         if self.calls > 1:
-            result.unresolved = np.arange(len(destinations)) % 2 == 0
+            mask = np.arange(len(destinations)) % 2 == 0
+            result.unresolved = np.broadcast_to(mask, result.minutes.shape).copy()
         return result
 
 
@@ -239,6 +289,27 @@ def test_a_mostly_unchecked_fine_stage_keeps_the_coarse_answer_with_a_note():
     resp = run([person("a", -1, 0), person("b", 1, 0)], UncheckedFineStage(straight_line))
     assert resp.diagnostics["stage"] == "coarse"
     assert solver.NOTE_FINE_SKIPPED in resp.notes
+    # The discarded stage's holes say nothing about the answer shown.
+    assert solver.NOTE_UNCHECKED not in resp.notes
+    assert resp.diagnostics["dropped_no_route"] == 0
+
+
+def test_one_mode_left_unchecked_blames_nobody():
+    # The walking replies never came back answered; the cyclist and the driver are fine.
+    people = [person("w", -1, 0, "walking"), person("c", 1, 0, "cycling"), person("d", 0, 1, "driving")]
+    with pytest.raises(UnroutableArea):
+        run(people, FixedRouter(straight_line, unresolved_fn=lambda m, d: m == "walking"))
+
+
+def test_only_the_person_whose_start_has_no_route_is_named():
+    people = [person("w", -1, 0, "walking"), person("c", 1, 0, "cycling"), person("d", 0, 1, "driving")]
+
+    def fn(mode, o, d):   # answered, and the walker reaches nothing
+        return math.inf if mode == "walking" else straight_line(mode, o, d)
+
+    with pytest.raises(NoFeasiblePoint) as exc:
+        run(people, FixedRouter(fn))
+    assert exc.value.extra == {"reason": "no_route", "who": [{"index": 0, "reason": "no_route"}]}
 
 
 def test_someone_who_can_reach_nothing_is_named_by_position():
@@ -276,7 +347,24 @@ def test_two_people_with_no_place_in_common():
 
     with pytest.raises(NoFeasiblePoint) as exc:
         run(people, FixedRouter(fn))
+    # Two halves of the same size: nobody reaches fewer places than the other.
     assert exc.value.extra == {"reason": "no_common_place", "who": []}
+
+
+def test_someone_cut_off_with_a_few_places_is_named():
+    people = [person("a", -1, 0), person("isle", 1.5, 0)]
+    island = at(1.5, 0)
+
+    def fn(mode, o, d):
+        on_island = km_between(d, island) < 1.6   # a few coarse cells
+        mine = km_between(o, island) < 0.01
+        return straight_line(mode, o, d) if on_island == mine else math.inf
+
+    with pytest.raises(NoFeasiblePoint) as exc:
+        run(people, FixedRouter(fn))
+    (who,) = exc.value.extra["who"]
+    assert exc.value.extra["reason"] == "no_common_place"
+    assert who["index"] == 1 and who["reason"] == "reaches_few" and 0 < who["reach"] < who["of"]
 
 
 def test_the_no_place_error_names_nobody_and_echoes_nothing(client):

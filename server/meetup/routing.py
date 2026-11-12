@@ -7,12 +7,14 @@ Two implementations:
 
 Each returns a MatrixResult: minutes from every origin to every destination, where the
 router put each destination (Mapbox snaps it to the nearest road or path and names that
-street), and which destinations could not be checked at all.
+street), and which origin-destination pairs were never answered.
 
 The Mapbox router reads every reply strictly. A null entry means that one pair has no
-route. A NoRoute reply is split to find the destination that fails, which is then dropped
-and counted. Anything else that is missing or malformed is a provider error: retried once,
-then a 502. Nothing is dropped silently.
+route. A NoRoute reply is split, over destinations and then origins, to find what fails:
+a destination that fails for everyone is dropped, and an origin that reaches none of the
+places other origins reach is marked as having no route. Anything else that is missing or
+malformed is a provider error: asked for once more, then a 502. Nothing is dropped
+silently.
 """
 from __future__ import annotations
 
@@ -28,7 +30,7 @@ from typing import Any, Awaitable, Iterable
 import httpx
 import numpy as np
 
-from server.errors import Busy, UpstreamError
+from server.errors import ApiError, Busy, UpstreamError
 from server.guard.guard import UpstreamGuard
 from server.meetup.candidates import haversine_km
 from server.meetup.limits import (
@@ -55,6 +57,9 @@ FALLBACK_SPEEDS_KMH = {
 # Seconds to wait before asking again after a bad reply (on the guard's clock).
 BAD_REPLY_RETRY_S = 0.5
 MAX_NAME_CHARS = 80
+# Reply codes that mean "no route for these coordinates" (Directions uses NoSegment for a
+# point it cannot place on the network). Read from 200 and 4xx bodies alike.
+NO_ROUTE_CODES = ("NoRoute", "NoSegment")
 
 
 @dataclass(frozen=True)
@@ -67,35 +72,57 @@ class Snap:
 
 @dataclass
 class MatrixResult:
-    minutes: np.ndarray        # (n_origins, n_destinations); inf = no route for that pair
-    snaps: list[Snap]          # one per destination
-    unresolved: np.ndarray     # bool per destination: dropped after NoRoute, no times at all
+    minutes: np.ndarray            # (n_origins, n_destinations); inf = no route, or not answered
+    snaps: list[Snap]              # one per destination
+    # (n_origins, n_destinations) bool: the pair was never answered (a NoRoute reply that
+    # could not be narrowed down, or a request this solve could not afford). A 1-D mask
+    # (one flag per destination) is taken to apply to every origin.
+    unresolved: np.ndarray
+    # Same shape: the subset of `unresolved` that was skipped for lack of budget.
+    skipped: np.ndarray | None = None
+
+    def __post_init__(self) -> None:
+        shape = self.minutes.shape
+        if self.unresolved.ndim == 1:
+            self.unresolved = np.broadcast_to(self.unresolved, shape).copy()
+        if self.skipped is None:
+            self.skipped = np.zeros(shape, dtype=bool)
 
 
 @dataclass
 class SolveAllowance:
     """
     What one solve may send, retries included: elements and requests per rate bucket.
-    Also holds the solve's concurrency gate and its recovery counters.
+    Holds the solve's concurrency gate and its counters, and keeps the plan's own share
+    free for planned requests not yet sent: recovery spends only what is left over.
     """
     elements: int
     requests: dict[str, int]
     concurrency: int = DEFAULT_IN_FLIGHT["matrix"]
+    plan_elements: int = 0
+    plan_requests: dict[str, int] = field(default_factory=dict)
     spent_elements: int = 0
     spent_requests: Counter = field(default_factory=Counter)
-    retries: int = 0
+    planned_elements: int = 0                                 # spent on planned requests
+    planned_requests: Counter = field(default_factory=Counter)
+    sent_requests: int = 0                                    # requests that went out
+    sent_elements: int = 0
+    retries: int = 0                                          # 5xx and bad replies asked again
+    bad_replies: int = 0                                      # malformed replies seen
     _gate: asyncio.Semaphore | None = field(default=None, repr=False)
 
     @classmethod
     def for_plan(cls, plan: SolvePlan, settings: Settings) -> SolveAllowance:
-        """The plan's cost plus a little recovery slack, never above a bucket's rate."""
+        """The plan's cost plus its recovery slack, never above a bucket's rate."""
         requests = {
-            b: max(n, min(n + RECOVERY_REQUESTS, settings.rates_per_min.get(b, n)))
+            b: max(n, min(n + plan.recovery_requests.get(b, RECOVERY_REQUESTS),
+                          settings.rates_per_min.get(b, n)))
             for b, n in plan.requests.items()
         }
         elements = max(plan.elements,
-                       min(plan.elements + 2 * plan.max_tile_elements, settings.max_solve_elements))
-        return cls(elements, requests, concurrency=max(1, settings.in_flight.get("matrix", 1)))
+                       min(plan.elements + plan.recovery_elements, settings.max_solve_elements))
+        return cls(elements, requests, concurrency=max(1, settings.in_flight.get("matrix", 1)),
+                   plan_elements=plan.elements, plan_requests=dict(plan.requests))
 
     @property
     def gate(self) -> asyncio.Semaphore:
@@ -108,12 +135,23 @@ class SolveAllowance:
         return (self.spent_elements + units <= self.elements
                 and self.spent_requests[bucket] + 1 <= self.requests.get(bucket, 0))
 
-    def take(self, units: int, bucket: str) -> None:
+    def can_recover(self, units: int, bucket: str, free_slots: int) -> bool:
+        """Room for an optional request after every planned request still to be sent."""
+        unsent = max(0, self.plan_requests.get(bucket, 0) - self.planned_requests[bucket])
+        unsent_elements = max(0, self.plan_elements - self.planned_elements)
+        return (self.spent_elements + units + unsent_elements <= self.elements
+                and self.spent_requests[bucket] + 1 + unsent <= self.requests.get(bucket, 0)
+                and free_slots > unsent)
+
+    def take(self, units: int, bucket: str, planned: bool = False) -> None:
         if not self.can_take(units, bucket):
             raise Busy("The routing service is busy. Please try again in a minute.",
                        headers={"Retry-After": "60"})
         self.spent_elements += units
         self.spent_requests[bucket] += 1
+        if planned:
+            self.planned_elements += units
+            self.planned_requests[bucket] += 1
 
 
 # Set by the solve route; None for callers without a per-solve plan.
@@ -123,8 +161,9 @@ solve_allowance: contextvars.ContextVar[SolveAllowance | None] = contextvars.Con
 
 async def gather_or_cancel(aws: Iterable[Awaitable[Any]]) -> list[Any]:
     """
-    Run awaitables at once and return their results in order. The first failure cancels
-    the rest (and waits for them), then is raised as itself, never as an ExceptionGroup.
+    Run awaitables at once and return their results in order. Any failure cancels the rest
+    (and waits for them); then the failure of the earliest task in list order is raised as
+    itself, never as an ExceptionGroup.
     """
     tasks = [asyncio.ensure_future(a) for a in aws]
     if not tasks:
@@ -167,7 +206,7 @@ class EuclideanRouter(Router):
 
 
 class _NoRoute(Exception):
-    """Mapbox answered code NoRoute for a whole request."""
+    """Mapbox answered NoRoute (or NoSegment) for a whole request."""
 
 
 class _Malformed(Exception):
@@ -177,28 +216,38 @@ class _Malformed(Exception):
 
 
 class _Skipped(Exception):
-    """A recovery request that this solve cannot afford right now."""
+    """An optional request that this solve cannot afford right now."""
 
 
 @dataclass
 class _Block:
+    """One tile's answer, filled in as its pieces come back."""
     minutes: np.ndarray
     snaps: list[Snap]
     unresolved: np.ndarray
+    skipped: np.ndarray
+    answered: np.ndarray   # per destination: a reply has placed it (its snap is real)
 
     @classmethod
-    def dropped(cls, n_orig: int, dests: list[Coord]) -> _Block:
-        return cls(np.full((n_orig, len(dests)), np.inf), [Snap(lon, lat) for lon, lat in dests],
-                   np.ones(len(dests), dtype=bool))
+    def unanswered(cls, n_orig: int, dests: list[Coord]) -> _Block:
+        shape = (n_orig, len(dests))
+        return cls(np.full(shape, np.inf), [Snap(lon, lat) for lon, lat in dests],
+                   np.ones(shape, dtype=bool), np.zeros(shape, dtype=bool),
+                   np.zeros(len(dests), dtype=bool))
 
     @classmethod
-    def join(cls, blocks: list[_Block]) -> _Block:
-        return cls(np.hstack([b.minutes for b in blocks]), [s for b in blocks for s in b.snaps],
-                   np.concatenate([b.unresolved for b in blocks]))
+    def ok(cls, minutes: np.ndarray, snaps: list[Snap]) -> _Block:
+        return cls(minutes, snaps, np.zeros(minutes.shape, dtype=bool),
+                   np.zeros(minutes.shape, dtype=bool), np.ones(len(snaps), dtype=bool))
 
 
 def _number(v: Any) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return False
+    try:
+        return math.isfinite(v)
+    except OverflowError:  # an integer too large for a float
+        return False
 
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]+")
@@ -215,12 +264,13 @@ def parse_matrix(data: Any, n_orig: int, n_dest: int) -> tuple[np.ndarray, list[
     """
     Read one Matrix reply for n_orig sources and n_dest destinations (padding included).
     Returns minutes (inf for a null pair) and one snap per destination. Raises _NoRoute for
-    code NoRoute and _Malformed for anything else that is not exactly what was asked for.
+    code NoRoute or NoSegment and _Malformed for anything else that is not exactly what was
+    asked for.
     """
     if not isinstance(data, dict):
         raise _Malformed("not an object")
     code = data.get("code")
-    if code == "NoRoute":
+    if code in NO_ROUTE_CODES:
         raise _NoRoute()
     if code != "Ok":
         raise _Malformed("code")
@@ -253,6 +303,14 @@ def parse_matrix(data: Any, n_orig: int, n_dest: int) -> tuple[np.ndarray, list[
     return out, snaps
 
 
+def _body_code(resp: httpx.Response) -> Any:
+    try:
+        data = resp.json()
+    except ValueError:
+        return None
+    return data.get("code") if isinstance(data, dict) else None
+
+
 class MapboxMatrixRouter(Router):
     """
     Mapbox Directions Matrix API.
@@ -274,10 +332,12 @@ class MapboxMatrixRouter(Router):
     ) -> MatrixResult:
         n_o, n_d = len(origins), len(destinations)
         minutes = np.full((n_o, n_d), np.inf)
-        snaps: list[Snap | None] = [None] * n_d
-        unresolved = np.zeros(n_d, dtype=bool)
+        unresolved = np.zeros((n_o, n_d), dtype=bool)
+        skipped = np.zeros((n_o, n_d), dtype=bool)
+        snaps: list[Snap] = [Snap(lon, lat) for lon, lat in destinations]
+        snap_from = [n_o] * n_d   # the first origin batch whose reply placed each destination
         if n_o == 0 or n_d == 0:
-            return MatrixResult(minutes, [Snap(lon, lat) for lon, lat in destinations], unresolved)
+            return MatrixResult(minutes, snaps, unresolved, skipped)
 
         allowance = solve_allowance.get()
         gate = allowance.gate if allowance is not None else asyncio.Semaphore(
@@ -286,66 +346,137 @@ class MapboxMatrixRouter(Router):
         async def run(o_rng: range, d_rng: range) -> None:
             block = await self._tile(mode, [origins[i] for i in o_rng],
                                      [destinations[j] for j in d_rng], gate)
-            minutes[o_rng.start:o_rng.stop, d_rng.start:d_rng.stop] = block.minutes
+            rows, cols = slice(o_rng.start, o_rng.stop), slice(d_rng.start, d_rng.stop)
+            minutes[rows, cols] = block.minutes
+            unresolved[rows, cols] = block.unresolved
+            skipped[rows, cols] = block.skipped
             for k, j in enumerate(d_rng):
-                unresolved[j] |= block.unresolved[k]
-                if o_rng.start == 0:  # several origin batches: the first one's snap
-                    snaps[j] = block.snaps[k]
+                if block.answered[k] and o_rng.start < snap_from[j]:
+                    snaps[j], snap_from[j] = block.snaps[k], o_rng.start
 
         await gather_or_cancel(run(o, d) for o, d in matrix_tiles(n_o, n_d, matrix_max_coords(mode)))
-        dropped = int(unresolved.sum())
+        dropped = int(unresolved.any(axis=0).sum())
         if dropped:
-            log.warning("matrix no-route profile=%s dropped=%d of=%d", mode, dropped, n_d)
-        return MatrixResult(
-            minutes,
-            [s if s is not None else Snap(*destinations[j]) for j, s in enumerate(snaps)],
-            unresolved,
-        )
+            log.warning("matrix no-route profile=%s unchecked=%d of=%d skipped=%d", mode, dropped,
+                        n_d, int(skipped.any(axis=0).sum()))
+        return MatrixResult(minutes, snaps, unresolved, skipped)
 
+    # ── NoRoute: narrow it down ─────────────────────────────────────
     async def _tile(self, mode: str, origins: list[Coord], dests: list[Coord],
                     gate: asyncio.Semaphore) -> _Block:
         try:
-            return await self._fetch(mode, origins, dests, gate, recovery=False)
+            minutes, snaps = await self._fetch(mode, origins, dests, gate, recovery=False)
+            return _Block.ok(minutes, snaps)
         except _NoRoute:
-            log.warning("matrix no-route reply profile=%s size=%d", mode, len(dests))
-            return await self._split(mode, origins, dests, gate)
+            pass
+        log.warning("matrix no-route reply profile=%s origins=%d size=%d", mode, len(origins),
+                    len(dests))
+        block = _Block.unanswered(len(origins), dests)
+        await self._resolve(mode, origins, dests, list(range(len(origins))),
+                            list(range(len(dests))), block, gate, origins_ok=False)
+        return block
 
-    async def _split(self, mode: str, origins: list[Coord], dests: list[Coord],
-                     gate: asyncio.Semaphore) -> _Block:
+    async def _try(self, mode: str, origins: list[Coord], dests: list[Coord], o_idx: list[int],
+                   d_idx: list[int], block: _Block, gate: asyncio.Semaphore) -> str:
+        """Ask for one piece of a tile. "ok" (written into the block), "no_route" or "skipped"."""
+        try:
+            minutes, snaps = await self._fetch(mode, [origins[i] for i in o_idx],
+                                               [dests[j] for j in d_idx], gate, recovery=True)
+        except _NoRoute:
+            return "no_route"
+        except (_Skipped, ApiError):
+            # Optional: whatever stops it (no budget, no free rate slot, the guard, the map
+            # service) leaves this piece unchecked; the planned answer still stands.
+            block.skipped[np.ix_(o_idx, d_idx)] = True
+            return "skipped"
+        cells = np.ix_(o_idx, d_idx)
+        block.minutes[cells] = minutes
+        block.unresolved[cells] = False
+        for k, j in enumerate(d_idx):
+            block.snaps[j] = snaps[k]
+            block.answered[j] = True
+        return "ok"
+
+    async def _resolve(self, mode: str, origins: list[Coord], dests: list[Coord],
+                       o_idx: list[int], d_idx: list[int], block: _Block,
+                       gate: asyncio.Semaphore, origins_ok: bool) -> None:
         """
-        `dests` answered NoRoute together. Ask for each half: a half that still says NoRoute
-        while the other is fine is split again, down to the one destination that fails,
-        which is dropped. If both halves say NoRoute, the whole block is dropped: the cause is
-        an origin, or the whole area. A request this solve can't afford drops its half.
+        These origins and destinations answered NoRoute together. Ask for each half of the
+        destinations. A half that fails while the other is fine is split again, down to the
+        destination that fails, which stays unanswered (dropped). If both halves fail, the
+        origins are checked (one bad starting point fails every request it is in); if they
+        are not the cause, both halves are split further. Stops where the solve's recovery
+        allowance runs out, leaving the rest unchecked.
         """
-        if len(dests) == 1:
-            return _Block.dropped(len(origins), dests)
-        mid = len(dests) // 2
-        halves = [dests[:mid], dests[mid:]]
+        if len(d_idx) > 1:
+            mid = len(d_idx) // 2
+            halves = [d_idx[:mid], d_idx[mid:]]
+            results = await gather_or_cancel(
+                self._try(mode, origins, dests, o_idx, h, block, gate) for h in halves)
+            failed = [h for h, r in zip(halves, results) if r == "no_route"]
+            if not failed:
+                return
+            if "ok" in results:
+                # The other half answered for these same origins, so the origins are fine.
+                await self._resolve(mode, origins, dests, o_idx, failed[0], block, gate, True)
+                return
+            if len(failed) == 2 and len(o_idx) > 1 and not origins_ok:
+                if await self._split_origins(mode, origins, dests, o_idx, d_idx, block, gate):
+                    return
+                origins_ok = True  # every origin half fails too: the destinations are the cause
+            await gather_or_cancel(
+                self._resolve(mode, origins, dests, o_idx, h, block, gate, origins_ok)
+                for h in failed)
+            return
+        if len(o_idx) > 1 and not origins_ok:
+            await self._split_origins(mode, origins, dests, o_idx, d_idx, block, gate)
+        # One destination that fails for everyone: it stays unanswered (dropped).
 
-        async def attempt(half: list[Coord]) -> _Block | str:
-            try:
-                return await self._fetch(mode, origins, half, gate, recovery=True)
-            except _NoRoute:
-                return "no_route"
-            except _Skipped:
-                return "skipped"
-
-        results = await gather_or_cancel(attempt(h) for h in halves)
+    async def _split_origins(self, mode: str, origins: list[Coord], dests: list[Coord],
+                             o_idx: list[int], d_idx: list[int], block: _Block,
+                             gate: asyncio.Semaphore) -> bool:
+        """
+        Ask for each half of the origins against the same destinations. If one half
+        answers, the destinations are fine and the cause is in the other half: narrow it
+        down to the origin(s) that reach none of them. Returns False when both halves still
+        fail, so the destinations are the cause.
+        """
+        mid = len(o_idx) // 2
+        halves = [o_idx[:mid], o_idx[mid:]]
+        results = await gather_or_cancel(
+            self._try(mode, origins, dests, h, d_idx, block, gate) for h in halves)
         if all(r == "no_route" for r in results):
-            return _Block.dropped(len(origins), dests)
-        blocks = []
-        for half, r in zip(halves, results):
-            if r == "no_route":
-                blocks.append(await self._split(mode, origins, half, gate))
-            elif r == "skipped":
-                blocks.append(_Block.dropped(len(origins), half))
-            else:
-                blocks.append(r)
-        return _Block.join(blocks)
+            return False
+        for h, r in zip(halves, results):
+            if r != "no_route":
+                continue
+            if "ok" in results:
+                await self._bad_origins(mode, origins, dests, h, d_idx, block, gate)
+            else:  # the other half was skipped: nothing more can be learned now
+                block.skipped[np.ix_(h, d_idx)] = True
+        return True
 
+    async def _bad_origins(self, mode: str, origins: list[Coord], dests: list[Coord],
+                           o_idx: list[int], d_idx: list[int], block: _Block,
+                           gate: asyncio.Semaphore) -> None:
+        """These origins fail against destinations that other origins reach."""
+        if len(o_idx) == 1:
+            # This starting point reaches none of places others reach: answered, no route.
+            cells = np.ix_(o_idx, d_idx)
+            block.minutes[cells] = np.inf
+            block.unresolved[cells] = False
+            return
+        mid = len(o_idx) // 2
+        halves = [o_idx[:mid], o_idx[mid:]]
+        results = await gather_or_cancel(
+            self._try(mode, origins, dests, h, d_idx, block, gate) for h in halves)
+        for h, r in zip(halves, results):
+            if r == "no_route":
+                await self._bad_origins(mode, origins, dests, h, d_idx, block, gate)
+
+    # ── one request ─────────────────────────────────────────────────
     async def _fetch(self, mode: str, origins: list[Coord], destinations: list[Coord],
-                     gate: asyncio.Semaphore, recovery: bool) -> _Block:
+                     gate: asyncio.Semaphore, recovery: bool) -> tuple[np.ndarray, list[Snap]]:
         # Mapbox requires at least 2 matrix elements (n_origins * n_destinations >= 2).
         # Pad with a duplicate destination if needed; we discard the extra column below.
         n_orig, n_dest = len(origins), len(destinations)
@@ -364,38 +495,54 @@ class MapboxMatrixRouter(Router):
             f"?annotations=duration&sources={sources}&destinations={dests}"
             f"&access_token={self.token}"
         )
-        async with gate:
-            minutes, snaps = await self._get(url, mode, n_orig, len(padded), recovery)
-        return _Block(minutes[:, :n_dest], snaps[:n_dest], np.zeros(n_dest, dtype=bool))
+        minutes, snaps = await self._get(url, mode, n_orig, len(padded), gate, recovery)
+        return minutes[:, :n_dest], snaps[:n_dest]
 
     async def _get(self, url: str, mode: str, n_orig: int, n_padded: int,
-                   recovery: bool) -> tuple[np.ndarray, list[Snap]]:
+                   gate: asyncio.Semaphore, recovery: bool) -> tuple[np.ndarray, list[Snap]]:
         # Each attempt, retries included, takes a rate slot, is charged to the budget and
-        # counts against this solve's allowance. A recovery request, or the one retry of a
-        # bad reply, is sent only if the allowance has room and a rate slot is free now.
+        # counts against this solve's allowance. Optional sends (a recovery request, or the
+        # one retry of a bad reply) go only if the allowance has room after every planned
+        # request still to be sent, and never wait for an in-flight or rate slot. A 429
+        # retry is a planned request's: it waits, as before. The gate is held only around
+        # the send, not while backing off.
         allowance = solve_allowance.get()
         bucket = rate_bucket(mode)
         units = n_orig * n_padded
         window = self.guard.window_for("matrix", mode)
         retried = False
         for attempt in range(3):
+            optional = recovery or retried
             if allowance is not None:
-                if (recovery or retried) and not (allowance.can_take(units, bucket)
-                                                  and window.available() > 0):
+                if optional and not allowance.can_recover(units, bucket, window.available()):
                     if retried:
-                        raise UpstreamError()
+                        raise UpstreamError()   # a bad reply we cannot ask for again
                     raise _Skipped()
-                allowance.take(units, bucket)
-            async with self.guard.upstream("matrix", units, profile=mode):
-                resp = await mapbox_send(self.client, url, api="matrix", profile=mode)
+                allowance.take(units, bucket, planned=attempt == 0 and not recovery)
+            try:
+                async with gate:
+                    async with self.guard.upstream("matrix", units, profile=mode,
+                                                   wait=not optional):
+                        if allowance is not None:
+                            allowance.sent_requests += 1
+                            allowance.sent_elements += units
+                        resp = await mapbox_send(self.client, url, api="matrix", profile=mode)
+            except ApiError:
+                if retried:
+                    raise UpstreamError() from None
+                raise
             if resp.status_code == 429:
                 fail(resp, api="matrix", profile=mode)
+                if attempt == 2:
+                    break
                 await self.guard.clock.sleep(_retry_after(resp, 0.6 * 2**attempt,
                                                           self.MAX_RETRY_AFTER_S))
                 continue
             if resp.status_code >= 500:
                 fail(resp, api="matrix", profile=mode)  # logs status only
             elif resp.is_error:
+                if _body_code(resp) in NO_ROUTE_CODES:
+                    raise _NoRoute()
                 raise fail(resp, api="matrix", profile=mode)
             else:
                 try:
@@ -403,20 +550,27 @@ class MapboxMatrixRouter(Router):
                 except ValueError:
                     log.warning("upstream bad json api=matrix profile=%s status=%d",
                                 mode, resp.status_code)
+                    self._bad_reply(allowance)
                 else:
                     try:
                         return parse_matrix(data, n_orig, n_padded)
                     except _Malformed as exc:
                         log.warning("upstream bad payload api=matrix profile=%s reason=%s",
                                     mode, exc.reason)
-            # A 5xx or a bad reply: one more try, then a provider error.
-            if retried:
+                        self._bad_reply(allowance)
+            # A 5xx or a bad reply: one more try if one is left, then a provider error.
+            if retried or attempt == 2:
                 raise UpstreamError()
             retried = True
             if allowance is not None:
                 allowance.retries += 1
             await self.guard.clock.sleep(BAD_REPLY_RETRY_S)
         raise Busy("The routing service is busy. Please try again in a minute.")
+
+    @staticmethod
+    def _bad_reply(allowance: SolveAllowance | None) -> None:
+        if allowance is not None:
+            allowance.bad_replies += 1
 
 
 def _retry_after(resp: httpx.Response, default: float, cap: float) -> float:

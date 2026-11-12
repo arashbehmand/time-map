@@ -62,6 +62,20 @@ export function noPlaceSentence(err, names) {
     return `No place we checked is within ${limits}. Raise the limit or move people closer.`;
   }
   if (err.reason === "no_common_place") {
+    // Who reaches fewer places than the best-connected person (cut off by water, say).
+    const few = (err.who || []).filter((w) => w.reason === "reaches_few" &&
+      typeof names[w.index] === "string" && names[w.index]);
+    if (few.length === 1) {
+      const w = few[0];
+      const counted = Number.isInteger(w.reach) && Number.isInteger(w.of) && w.of > 0
+        ? `${w.reach} of the ${w.of}` : "a few of the";
+      return `${names[w.index]} can only get to ${counted} places we checked, and none of those ` +
+        "work for everyone. Try a faster way for them to travel, or move someone closer.";
+    }
+    if (few.length > 1) {
+      return `${joinNames(few.map((w) => names[w.index]))} can only get to a few of the places we ` +
+        "checked, so no place works for everyone. Try faster ways for them to travel, or move people closer.";
+    }
     return "There's no place we checked that everyone can get to. " +
       "Try moving people closer, or pick other ways to travel.";
   }

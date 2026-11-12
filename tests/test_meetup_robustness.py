@@ -101,15 +101,19 @@ def test_random_requests_never_fail_unhandled_and_never_hide_trouble(mapbox, mat
             continue
         diag, notes = body["diagnostics"], body["notes"]
         assert fault not in ("all_noroute", "malformed_always", "500_always"), (fault, diag)
-        # A place left unchecked is always said.
-        if diag["dropped_no_route"]:
+        # A place left unchecked in the stages the answer came from is always said.
+        if diag["dropped_no_route"] or diag["unchecked_for_budget"]:
             assert solver.NOTE_UNCHECKED in notes, (fault, diag)
-        # NoRoute here always means a point that fails: it is found, dropped and said.
+        # NoRoute here always means a point that fails: it is dropped or left unchecked in
+        # the answer's stages (and said), or it lost the closer search (and that is said).
         if behaviour.no_route_replies:
-            assert diag["dropped_no_route"] > 0 and notes, (fault, diag)
-        # An answer after a bad reply used the reply asked for again.
+            assert diag["dropped_no_route"] + diag["unchecked_for_budget"] > 0 or \
+                solver.NOTE_FINE_SKIPPED in notes, (fault, diag)
+            assert notes, (fault, diag)
+        # An answer after a bad reply used the reply asked for again, and says so.
         if behaviour.bad_replies:
-            assert diag["retries"] >= 1, (fault, diag)
+            assert diag["retries"] >= 1 and diag["bad_replies"] >= 1, (fault, diag)
+            assert solver.NOTE_BAD_REPLY in notes, (fault, diag)
     assert_clean(caplog.text)
     # The run exercised both answers and refusals.
     assert any(code == 200 for _, code in seen) and any(code != 200 for _, code in seen)

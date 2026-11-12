@@ -27,10 +27,11 @@ MATRIX_DEFAULT_COORDS = 25
 # The smallest candidate count a plan shrinks to before refusing.
 MIN_CANDIDATES = 20
 
-# Extra requests per rate bucket a solve may spend on recovery (a retried bad reply, or
-# splitting a NoRoute reply to find the point that fails). Not part of admission: a plan is
-# admitted on its own cost, and recovery uses this slack only while a rate slot is free.
-# One poisoned 23-destination tile needs at most 2 * ceil(log2 23) = 10 requests.
+# Extra requests per mode a solve may spend on recovery (a retried bad reply, or splitting a
+# NoRoute reply to find the point that fails). Not part of admission: a plan is admitted on
+# its own cost, and recovery spends only what is left after every planned request still to
+# be sent, in requests, elements and free rate slots. One bad destination in a
+# 23-destination request takes at most 2 * ceil(log2 23) = 10 requests to find.
 RECOVERY_REQUESTS = 10
 
 
@@ -80,8 +81,13 @@ class SolvePlan:
     fine_max: int
     elements: int
     requests: dict[str, int] = field(default_factory=dict)
-    # The most elements any one planned request is billed for (sizes the recovery slack).
+    # The most elements any one planned request is billed for.
     max_tile_elements: int = 2
+    # Recovery slack on top of the plan (not part of admission): requests per rate bucket,
+    # RECOVERY_REQUESTS for each mode in it, and elements for two of the largest requests
+    # per mode.
+    recovery_requests: dict[str, int] = field(default_factory=dict)
+    recovery_elements: int = 0
 
 
 class GroupTooSpread(ApiError):
@@ -180,7 +186,11 @@ def plan_solve(req: SolveRequest, settings: Settings, limits: SolveLimits | None
         smallest = cost
         if not over_static(cost) and over_live(cost) is None:
             res, coarse_max, fine_max, elements, requests, max_tile = cost
-            return SolvePlan(center, radius, res, coarse_max, fine_max, elements, requests, max_tile)
+            recovery = Counter()
+            for mode in modes:
+                recovery[rate_bucket(mode)] += RECOVERY_REQUESTS
+            return SolvePlan(center, radius, res, coarse_max, fine_max, elements, requests, max_tile,
+                             dict(recovery), 2 * max_tile * len(modes))
 
     if smallest is None or over_static(smallest):
         raise SearchTooExpensive()

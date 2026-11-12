@@ -56,8 +56,18 @@ test("time limits and no common place have their own sentences", () => {
   assert.match(noPlaceSentence(noPlace("no_common_place", []), ["Ana", "Ben"]), /no place we checked that everyone can get to/);
 });
 
+test("someone cut off with a few places is named, with the counts", () => {
+  const s = noPlace("no_common_place", [{ index: 1, reason: "reaches_few", reach: 3, of: 40 }]);
+  assert.equal(noPlaceSentence(s, ["Ana", "Ben"]),
+    "Ben can only get to 3 of the 40 places we checked, and none of those work for everyone. " +
+    "Try a faster way for them to travel, or move someone closer.");
+  const two = noPlace("no_common_place", [{ index: 0, reason: "reaches_few" }, { index: 2, reason: "reaches_few" }]);
+  assert.match(noPlaceSentence(two, ["Ana", "Ben", "Cy"]), /^Ana and Cy can only get to a few of the places/);
+});
+
 test("anything else falls back to the server's sentence", () => {
   assert.equal(noPlaceSentence(new ApiError(502, "upstream_error", "The map service is unavailable."), ["Ana"]), "");
   assert.equal(noPlaceSentence(noPlace("no_route", [{ index: 5, reason: "no_route" }]), ["Ana"]), "");
   assert.equal(noPlaceSentence(noPlace("something_new", []), ["Ana"]), "");
+  assert.equal(noPlaceSentence(noPlace("off_street", []), ["Ana"]), "");   // the server's own sentence
 });

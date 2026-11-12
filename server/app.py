@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import re
@@ -122,10 +123,22 @@ async def glyph_proxy(request: Request, fontstack: str, range_pbf: str):
 # ── Pages and PWA assets ────────────────────────────────────────────
 page_router = APIRouter()
 
+# Our own pages, scripts and styles: the browser revalidates them on every load (a 304 when
+# unchanged), so a deploy shows up at once. Without this, browsers cache them heuristically
+# and could mix an old module with a new one.
+APP_CACHE = {"Cache-Control": "no-cache"}
+
+
+class AppFiles(StaticFiles):
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers.setdefault("Cache-Control", "no-cache")
+        return response
+
 
 @page_router.get("/")
 def portfolio():
-    return FileResponse(_ROOT / "static" / "portfolio" / "index.html")
+    return FileResponse(_ROOT / "static" / "portfolio" / "index.html", headers=APP_CACHE)
 
 
 @page_router.get("/manifest.json")
@@ -133,15 +146,31 @@ def pwa_manifest():
     return FileResponse(
         _ROOT / "static" / "manifest.json",
         media_type="application/manifest+json",
+        headers=APP_CACHE,
     )
 
 
+def static_build_id(root: Path) -> str:
+    """A short hash of every file under static/ except sw.js: it changes exactly when the
+    shipped files change, so each deploy gets its own service-worker cache."""
+    digest = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        rel = path.relative_to(root).as_posix()
+        if rel == "sw.js":
+            continue
+        digest.update(rel.encode() + b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()[:12]
+
+
 @page_router.get("/sw.js")
-def pwa_service_worker():
-    return FileResponse(
-        _ROOT / "static" / "sw.js",
+def pwa_service_worker(request: Request):
+    source = (_ROOT / "static" / "sw.js").read_text()
+    return Response(
+        content=source.replace("__BUILD__", request.app.state.build_id),
         media_type="application/javascript",
-        headers={"Cache-Control": "no-cache"},
+        headers=APP_CACHE,
     )
 
 
@@ -212,6 +241,7 @@ def create_app(
         state.usage.close()
 
     app = FastAPI(title="Time-Map", lifespan=lifespan)
+    app.state.build_id = static_build_id(_ROOT / "static")
     install_error_handlers(app)
     app.add_middleware(GZipMiddleware, minimum_size=500)
     # Same-origin pages only: no CORS middleware, so other sites cannot read our API.
@@ -224,10 +254,11 @@ def create_app(
     app.include_router(proxy_router)
     app.include_router(page_router)
 
-    app.mount("/icons", StaticFiles(directory=str(_ROOT / "static" / "icons")), name="icons")
-    app.mount("/meetup", StaticFiles(directory=str(_ROOT / "static" / "meetup"), html=True),
+    app.mount("/icons", AppFiles(directory=str(_ROOT / "static" / "icons")), name="icons")
+    app.mount("/shared", AppFiles(directory=str(_ROOT / "static" / "shared")), name="shared")
+    app.mount("/meetup", AppFiles(directory=str(_ROOT / "static" / "meetup"), html=True),
               name="meetup")
-    app.mount("/warp", StaticFiles(directory=str(_ROOT / "static" / "warp"), html=True),
+    app.mount("/warp", AppFiles(directory=str(_ROOT / "static" / "warp"), html=True),
               name="warp")
     return app
 

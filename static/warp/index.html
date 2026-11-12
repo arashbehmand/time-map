@@ -2,54 +2,72 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#0f0f1a" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f6f5f2" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <title>Isochrone Warp Map</title>
+  <title>How far can I get? · Time-Map</title>
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"
         integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous" />
+  <link rel="stylesheet" href="/shared/ui.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="map-container"></div>
-  <canvas id="warp-canvas"></canvas>
-  <canvas id="overlay-canvas"></canvas>
-  <div id="controls">
-    <a href="/" id="portfolio-link">← Portfolio</a>
-    <form id="search-form">
-      <input id="search" type="text" placeholder="🔍 Search place or lat,lon…" autocomplete="off"
-             title="Searches are sent to OpenStreetMap Nominatim through this site." />
+  <canvas id="warp-canvas" aria-hidden="true"></canvas>
+  <canvas id="overlay-canvas" aria-hidden="true"></canvas>
+  <button id="origin-pin" type="button" aria-label="Starting point. Drag it, or use the arrow keys, to move it."></button>
+
+  <header id="top">
+    <div id="top-row">
+      <a href="/" class="back-link">← Time-Map</a>
+      <h1>How far can I get from here?</h1>
+    </div>
+    <form id="search-form" role="search">
+      <label class="visually-hidden" for="search">Search for a place</label>
+      <input id="search" type="search" placeholder="Search for a place" autocomplete="off" enterkeyhint="search" />
+      <button class="btn" type="submit">Search</button>
+      <button class="btn" type="button" id="locate-btn">Use my location</button>
     </form>
-    <select id="profile">
-      <option value="walking" selected>🚶 Walking</option>
-      <option value="cycling">🚴 Cycling</option>
-      <option value="driving">🚗 Driving</option>
-    </select>
-    <label>Minutes: <input id="times" type="text" value="5,10,15,20" /></label>
-    <label>Zoom:
-      <input id="zoom" type="range" min="10" max="16" value="14" />
-      <span id="zoom-val">14</span>
-    </label>
-    <button id="warp-toggle">⟳ Warp</button>
-    <button id="center-btn">📍 Centre</button>
-    <span id="status">Waiting for location…</span>
+    <p class="search-note">Searches go to OpenStreetMap Nominatim through this site.</p>
+  </header>
+
+  <div id="location-card" class="card" hidden>
+    <p>Start from where you are? Your location is only used to place the pin and work out travel times.</p>
+    <div class="row">
+      <button class="btn primary" type="button" id="location-yes">Use my location</button>
+      <button class="btn" type="button" id="location-no">Keep the example</button>
+    </div>
   </div>
+
+  <button id="back-to-pin" class="btn" type="button" hidden>Back to the pin</button>
+
+  <section id="legend" class="card" aria-label="What the map shows">
+    <fieldset class="chips" id="mode-chips">
+      <legend class="label">How are you travelling?</legend>
+      <label class="chip"><input type="radio" name="mode" value="walking" checked /><span>Walk</span></label>
+      <label class="chip"><input type="radio" name="mode" value="cycling" /><span>Cycle</span></label>
+      <label class="chip"><input type="radio" name="mode" value="driving" /><span>Drive</span></label>
+    </fieldset>
+    <p id="from"></p>
+    <p id="sentence" aria-live="polite"></p>
+    <p id="limits">No public transport yet. <span id="zoom-hint" hidden>Zoom out to see every ring.</span></p>
+    <div class="row">
+      <button id="view-toggle" class="btn primary" type="button" aria-pressed="false">Show time map</button>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
   <a id="mapbox-logo" href="https://www.mapbox.com/" target="_blank" rel="noopener" aria-label="Mapbox"><img
      src="/icons/mapbox-logo.svg" alt="Mapbox" width="80" height="20" /></a>
   <div id="attribution">
     <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener">© Mapbox</a>
     <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>
     <strong><a href="https://apps.mapbox.com/feedback/" target="_blank" rel="noopener">Improve this map</a></strong>
-    <span class="attr-note">· Searches use OpenStreetMap Nominatim</span>
-  </div>
-  <div id="loading" hidden>
-    <div class="spinner"></div>
-    <span id="loading-msg">Computing warp…</span>
   </div>
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"
           integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
   <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
 </body>
 </html>

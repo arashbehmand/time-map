@@ -2,66 +2,86 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#1a1a2e" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f6f5f2" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <title>Meetup Optimizer</title>
+  <title>Where should we meet? · Time-Map</title>
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"
         integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous" />
+  <link rel="stylesheet" href="/shared/ui.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="sidebar">
-    <div id="sidebar-header">
-      <a href="/" id="back-link">← Portfolio</a>
-      <h1>Meetup Optimizer</h1>
-      <p>Find the fairest meeting point for your group</p>
+  <div id="map" role="region" aria-label="Map. Tap it to add a person where you tap."></div>
+
+  <main id="panel">
+    <header>
+      <a href="/" class="back-link">← Time-Map</a>
+      <h1>Where should we meet?</h1>
+      <p>Add where everyone starts. We find the place that's fairest for all of you.</p>
+    </header>
+
+    <div id="example-note" class="note" hidden>
+      <p>Example: three friends in London. Change anything to make it yours.</p>
     </div>
 
-    <div id="add-form">
-      <h2>Add Participant</h2>
-      <input id="name-input"  type="text"   placeholder="Name" autocomplete="off" />
-      <div id="loc-wrap">
-        <input id="loc-input" type="text" placeholder="Location — type or click map" autocomplete="off" />
-        <button id="pick-btn" title="Click map to pick location">📌</button>
+    <section id="answer" aria-live="polite" hidden></section>
+
+    <section aria-labelledby="group-heading">
+      <div class="row spread">
+        <h2 id="group-heading">The group</h2>
+        <button id="new-group-btn" class="btn link" type="button">Start a new group</button>
       </div>
-      <p class="search-note">Place searches are sent to OpenStreetMap Nominatim through this site.
-        To keep an address private, pick the spot on the map instead.</p>
-      <select id="mode-select">
-        <option value="walking">🚶 Walking</option>
-        <option value="cycling">🚴 Cycling</option>
-        <option value="driving">🚗 Driving</option>
-      </select>
-      <button id="add-btn">+ Add participant</button>
-    </div>
+      <ul id="people"></ul>
+      <p id="people-empty" class="hint">Nobody yet. Add at least 2 people.</p>
+    </section>
 
-    <div id="participants-section">
-      <div id="participants-list"></div>
-    </div>
+    <section aria-labelledby="add-heading">
+      <h2 id="add-heading">Add someone</h2>
+      <form id="add-form">
+        <label class="field"><span>Name (optional)</span>
+          <input id="name-input" type="text" autocomplete="off" />
+        </label>
+        <label class="field"><span>Where do they start?</span>
+          <input id="loc-input" type="search" placeholder="A street, station or area" autocomplete="off" enterkeyhint="go" />
+        </label>
+        <label class="field"><span>How do they travel?</span>
+          <select id="mode-select">
+            <option value="walking">Walking</option>
+            <option value="cycling">Cycling</option>
+            <option value="driving">Driving</option>
+          </select>
+        </label>
+        <div class="row">
+          <button id="add-btn" class="btn" type="submit">Add person</button>
+          <button id="locate-btn" class="btn" type="button">Use my location</button>
+        </div>
+      </form>
+      <p id="add-status" class="status" role="status" aria-live="polite"></p>
+      <div id="toast" class="toast" hidden><span id="toast-text"></span>
+        <button id="toast-undo" class="btn link" type="button">Undo</button></div>
+      <p class="hint">Or tap the map to add someone where you tap.</p>
+      <p class="search-note">Searches go to OpenStreetMap Nominatim through this site.
+        To keep an address private, tap the map instead.</p>
+    </section>
 
-    <div id="options-section">
-      <label>Objective
-        <select id="objective">
-          <option value="hybrid">Balanced (hybrid)</option>
-          <option value="minimax">Fairest (minimax)</option>
-          <option value="sum">Fastest average (sum)</option>
-        </select>
-      </label>
-      <button id="toggle-isochrones-btn" hidden>🌐 Show Isochrones</button>
-      <button id="find-btn" disabled>Find Meeting Point</button>
-    </div>
+    <section aria-labelledby="choice-heading">
+      <fieldset class="chips" id="objective">
+        <legend id="choice-heading" class="label">What matters most?</legend>
+        <label class="chip"><input type="radio" name="objective" value="minimax" checked /><span>Fairest</span></label>
+        <label class="chip"><input type="radio" name="objective" value="sum" /><span>Quickest on average</span></label>
+      </fieldset>
+      <p class="hint" id="objective-hint">Fairest keeps the longest trip as short as possible.</p>
+      <button id="find-btn" class="btn primary wide" type="button" disabled>Add at least 2 people</button>
+    </section>
 
-    <div id="status-bar" hidden></div>
-
-    <div id="results-section" hidden></div>
-  </div>
-
-  <div id="map"></div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </main>
 
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"
           integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
   <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
 </body>
 </html>

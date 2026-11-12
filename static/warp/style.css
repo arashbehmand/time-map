@@ -1,79 +1,81 @@
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #1a1a2e; overflow: hidden; font-family: system-ui, sans-serif; }
+html, body { height: 100%; overflow: hidden; }
+body { background: #f0ede9; }
 
-/* MapLibre renders here — transparent but interactive for pan/zoom */
+/* MapLibre renders here: invisible, but it takes the pan and zoom gestures.
+   The canvases above it ignore the pointer. */
 #map-container {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  opacity: 0; z-index: 3;
+  position: fixed; inset: 0; opacity: 0; z-index: 1;
 }
+body.no-bend #map-container { opacity: 1; }
+body.no-bend #warp-canvas { display: none; }
 
-/* WebGL warp output */
+/* The bent (or plain) map, drawn by the shader. */
+/* Both canvases cover exactly the map container's box (inset: 0), which is what the
+   script measures, so the bend, the rings and the pin share one coordinate system. */
 #warp-canvas {
-  position: fixed; top: 0; left: 0;
-  width: 100vw; height: 100vh; z-index: 1;
+  position: fixed; inset: 0; width: 100%; height: 100%; z-index: 2;
   pointer-events: none;
 }
-
-/* 2D overlay: isochrone rings + location dot */
+/* Rings, labels and the pin's shadow. */
 #overlay-canvas {
-  position: fixed; top: 0; left: 0;
-  width: 100vw; height: 100vh; z-index: 2;
+  position: fixed; inset: 0; width: 100%; height: 100%; z-index: 3;
   pointer-events: none;
 }
 
-#controls {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-  padding: 8px 12px;
-  background: rgba(255,255,255,.92); backdrop-filter: blur(6px);
-  font-size: 13px;
+/* The starting point. Positioned from map.project on every frame. */
+#origin-pin {
+  position: fixed; left: 0; top: 0; z-index: 4;
+  width: 44px; height: 44px; margin: -22px 0 0 -22px; padding: 0;
+  border: none; border-radius: 50%; background: transparent; cursor: grab;
+  touch-action: none;
 }
-#controls select, #controls input[type=text] {
-  padding: 4px 8px; border: 1px solid #bbb; border-radius: 4px;
+#origin-pin::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%;
+  background: #c2185b; border: 3px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,.45);
 }
-#controls input[type=text] { width: 140px; }
-#search-form { display: contents; }
-#search { width: 220px !important; }
-#controls button {
-  padding: 4px 12px; border: none; border-radius: 4px;
-  background: #4361ee; color: #fff; cursor: pointer;
-}
-#portfolio-link {
-  color: #4361ee; text-decoration: none; font-size: 12px; white-space: nowrap;
-}
-#portfolio-link:hover { text-decoration: underline; }
-#warp-toggle {
-  padding: 4px 12px; border: 1.5px solid #bbb; border-radius: 4px;
-  background: #fff; color: #555; cursor: pointer; font-size: 12px;
-}
-#warp-toggle.active {
-  background: #4361ee; color: #fff; border-color: #4361ee;
-}
-#status { margin-left: auto; color: #666; font-size: 12px; }
+#origin-pin.dragging { cursor: grabbing; }
+#origin-pin.dragging::after { transform: scale(1.25); }
+#origin-pin[hidden] { display: none; }
+#origin-pin:focus-visible { border-radius: 50%; }
 
-#loading {
-  position: fixed; inset: 0; z-index: 20;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 14px;
-  background: rgba(26, 26, 46, 0.55); backdrop-filter: blur(3px);
-  color: #fff; font-size: 14px; font-weight: 500;
+#top {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 12px; background: rgba(255,255,255,.95); box-shadow: var(--shadow);
 }
-#loading[hidden] { display: none; }
-.spinner {
-  width: 40px; height: 40px;
-  border: 4px solid rgba(255,255,255,.25);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
+#top-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+#top h1 { font-size: 17px; }
+#search-form { display: flex; gap: 6px; flex-wrap: wrap; }
+#search { flex: 1 1 180px; width: auto; }
+.search-note { font-size: 12px; color: var(--text-2); }
+
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+#location-card {
+  position: fixed; z-index: 11; left: 12px; right: 12px; top: 140px; max-width: 420px;
+  display: flex; flex-direction: column; gap: 10px; margin: 0 auto;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+#location-card[hidden] { display: none; }
+
+#back-to-pin { position: fixed; z-index: 10; right: 12px; top: 140px; box-shadow: var(--shadow); }
+#back-to-pin[hidden] { display: none; }
+
+#legend {
+  position: fixed; z-index: 10; left: 12px; bottom: 34px; max-width: 460px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+#from { font-weight: 700; }
+#sentence { font-size: 16px; }
+#limits { font-size: 13px; color: var(--text-2); }
+#zoom-hint[hidden] { display: none; }
 
 /* Map credits. The MapLibre map is hidden (opacity 0), so its own attribution control
    would be invisible; these sit above every canvas. Required by OpenStreetMap and Mapbox. */
 #attribution {
   position: fixed; right: 0; bottom: 0; z-index: 5;
   padding: 2px 6px; font-size: 11px; line-height: 1.4;
-  background: rgba(255, 255, 255, 0.8); color: #333; border-top-left-radius: 4px;
+  background: rgba(255, 255, 255, 0.85); color: #333; border-top-left-radius: 4px;
   max-width: calc(100vw - 100px);
 }
 #attribution a { color: #333; text-decoration: none; margin-right: 4px; }
@@ -83,4 +85,13 @@ body { background: #1a1a2e; overflow: hidden; font-family: system-ui, sans-serif
   display: block; width: 80px; height: 20px; line-height: 0;
 }
 #mapbox-logo img { width: 80px; height: 20px; }
-@media (max-width: 480px) { .attr-note { display: none; } }
+
+@media (max-width: 640px) {
+  #top { padding: 6px 10px; gap: 4px; }
+  #top h1 { font-size: 15px; }
+  .search-note { display: none; }
+  #search-form .btn { min-height: 38px; padding: 6px 10px; }
+  #legend { left: 8px; right: 8px; bottom: 30px; max-width: none; padding: 10px 12px; gap: 4px; }
+  #sentence { font-size: 15px; }
+  #location-card, #back-to-pin { top: 112px; }
+}

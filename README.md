@@ -4,15 +4,26 @@ Interactive tools for visualising travel time and finding fair meeting points, b
 
 Powered by [Mapbox](https://www.mapbox.com/) — this project relies on several Mapbox APIs for its core functionality:
 
-- **[Mapbox Isochrone API](https://docs.mapbox.com/api/navigation/isochrone/)** — generates travel-time contour polygons used by the Isochrone Warp map
-- **[Mapbox Directions Matrix API](https://docs.mapbox.com/api/navigation/matrix/)** — computes real network travel times between participants and candidate meeting points in the Meetup Optimizer
+- **[Mapbox Isochrone API](https://docs.mapbox.com/api/navigation/isochrone/)** — generates travel-time contour polygons used by the warp map
+- **[Mapbox Directions Matrix API](https://docs.mapbox.com/api/navigation/matrix/)** — computes real network travel times between participants and candidate meeting points in the meetup tool
 - **[Mapbox Vector Tiles](https://docs.mapbox.com/api/maps/vector-tiles/)** — provides the base map geometry (roads, buildings, labels) rendered via MapLibre GL
 - **[Mapbox Fonts / Glyphs](https://docs.mapbox.com/api/maps/fonts/)** — serves font glyphs for map label rendering
 
-| Tool | Description |
-|------|-------------|
-| **Isochrone Warp Map** | A map that bends to travel time. Isochrone boundaries become concentric circles — equal travel time appears at equal distance from you, regardless of direction. |
-| **Meetup Optimizer** | Find the fairest meeting point for a group with different starting locations and transport modes. Minimises worst-case or weighted-average travel time using H3 hexagonal search and the Mapbox Directions Matrix API. |
+| Tool | Question | What it shows |
+|------|----------|---------------|
+| **Warp map** (`/warp/`) | How far can I get from here? | A pin and the 5/10/15/20-minute travel-time lines around it. "Show time map" bends the map so those lines become circles: distance from the pin means travel time. |
+| **Meetup** (`/meetup/`) | Where should we meet? | Where everyone starts, and the place that keeps the longest trip shortest ("Fairest") or the average trip shortest ("Quickest on average"), with each person's minutes. |
+
+Both open on a saved London example, so the first view makes no routing request.
+
+### Built with
+
+- **Warp map:** isochrones from the Mapbox Isochrone API, turned into a radial lookup table
+  per angle on the server; a WebGL2 GLSL fragment shader bends the MapLibre frame per pixel.
+- **Meetup:** candidate points on an H3 hexagonal grid, travel times from the Mapbox
+  Directions Matrix API, and a minimax (fairest) or weighted-sum (quickest on average)
+  objective. The API also accepts a `hybrid` blend, which the page no longer offers.
+- **Both:** FastAPI, MapLibre GL JS, vanilla JavaScript modules with no build step.
 
 ## Prerequisites
 
@@ -56,8 +67,8 @@ Open [http://localhost:8000](http://localhost:8000) in your browser for the land
 | Route | App |
 |-------|-----|
 | `/` | Landing page |
-| `/warp/` | Isochrone Warp Map |
-| `/meetup/` | Meetup Optimizer |
+| `/warp/` | How far can I get? (warp map) |
+| `/meetup/` | Where should we meet? (meetup) |
 
 ## Project Structure
 
@@ -86,14 +97,43 @@ server/                          # FastAPI backend
     ├── candidates.py            # H3 hex candidate generation
     ├── routing.py               # Mapbox Directions Matrix integration
     └── solver.py                # Minimax / hybrid / sum optimisation
-static/                          # Frontend assets (vanilla JS, no build step)
-├── warp/                        # Isochrone Warp — vanilla JS + WebGL2
-├── meetup/                      # Meetup Optimizer — vanilla JS + MapLibre GL
+static/                          # Frontend assets (vanilla JS modules, no build step)
+├── shared/                      # ui.css, api.js (errors, search), latest.js (latest answer only)
+├── warp/                        # Warp map — app.js (WebGL2), warpmath.js, example.json
+├── meetup/                      # Meetup — app.js, example.json
 ├── portfolio/                   # Landing page
 ├── manifest.json                # PWA manifest
-├── sw.js                        # Service worker (app shell caching)
+├── sw.js                        # Service worker (versioned per deploy, network first)
 └── icons/                       # PWA icons
+scripts/make_examples.py         # Regenerates the two saved examples
+tests/js/                        # node --test: warp maths, latest-answer helper
 ```
+
+## Tests
+
+```bash
+ruff check . && pytest
+node --test tests/js/*.test.js   # Node 20+, no packages to install
+```
+
+## Opening examples
+
+`static/warp/example.json` and `static/meetup/example.json` are real answers for a London
+example (King's Cross, walking; three friends cycling from Angel, Vauxhall and Marble Arch). They are what each page shows before
+anyone changes anything, so opening a page costs no routing request. Regenerate them after
+changing the warp maths or the response shapes:
+
+```bash
+uvicorn server.app:app --port 8000            # with a real MAPBOX_ROUTING_TOKEN
+python scripts/make_examples.py http://localhost:8000
+```
+
+## Service worker
+
+`/sw.js` is served with its cache name set to a hash of the files under `static/`, so every
+deploy that changes them gets a new cache and the old one is deleted. It caches only this
+site's own app files, fetched network first (the cache is used only offline). It never
+touches `/api/`, `/tiles/`, `/glyphs/` or any other site, MapLibre's CDN included.
 
 ## How the Warp Works
 
@@ -108,9 +148,21 @@ The `RadialIsochroneWarp` samples each isochrone boundary at 2048 angular bins, 
 
 The frontend renders via a GLSL fragment shader that reads a 2048x1 LUT texture and performs the inverse warp per-pixel in real time. MapLibre GL renders tiles off-screen; the shader samples the resulting texture with warp-corrected UVs.
 
+World pixels follow MapLibre's convention (a 512-px world at zoom 0), so a radius computed at
+zoom *z* is the same number of screen pixels on the map at zoom *z*. The page asks for one
+answer per (pin, travel mode) at a fixed reference zoom (walking 14, cycling 12, driving 11)
+and rescales it by 2^(zoom − reference) as you zoom, around the pin's screen position. Panning,
+zooming and resizing therefore never send a request, and nothing is fetched while the normal
+map is showing: moving the pin there shows only the pin, and "Show time map" fetches the answer
+for the newest pin and mode, draws its lines, then bends them. Where a bent area's source is off
+screen, it is drawn grey and the legend says to zoom out. The shader reads the lookup table with
+`texelFetch` and interpolates between angles itself, because 32-bit float textures are not
+filterable on every device. `static/warp/warpmath.js` holds the same maths for the overlay
+and the tests.
+
 Isochrone polygons are fetched from the **Mapbox Isochrone API** and vector tile geometry from the **Mapbox Vector Tiles API**.
 
-## How the Meetup Optimizer Works
+## How the Meetup Works
 
 1. Generate candidate meeting points on an [H3 hexagonal grid](https://h3geo.org/) covering the participants' bounding box
 2. Query the **Mapbox Directions Matrix API** for actual network travel times from each participant to each candidate (batched by transport mode)
@@ -220,8 +272,8 @@ Participant locations are often people's homes.
   request paths, including `/tiles/z/x/y`.
 - Place searches are POSTed to our server, so they stay out of URLs and access logs, and are
   then sent to Nominatim. The pages say so next to the search box.
-- When scenarios become shareable links (#3), keep the scenario in the URL fragment, which
-  is never sent to the server. Round locations unless their owner opts in.
+- Shareable links are still planned. When they come, keep the scenario in the URL fragment,
+  which is never sent to the server. Round locations unless their owner opts in.
 
 Provider terms and where we stand on each: [docs/provider-terms.md](docs/provider-terms.md).
 

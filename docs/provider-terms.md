@@ -53,6 +53,24 @@ Pricing: "Up to 100,000 Free" monthly matrix elements, then $2.00 per 1,000.
 We did not find a display requirement for Matrix results on that page. We show only the
 resulting times and a meeting point.
 
+## Saved examples (stored Mapbox output)
+
+Each tool opens on a saved London example, so the first view makes no routing request:
+
+- `static/warp/example.json`: the radial profile (per-angle radii) the server built from one
+  Mapbox Isochrone response for King's Cross, walking, 5/10/15/20 minutes.
+- `static/meetup/example.json`: one solve, i.e. travel times from Mapbox Matrix for three
+  public starting points (Angel, Vauxhall, Marble Arch) to the chosen meeting places.
+
+They are made by `scripts/make_examples.py` and committed, so they are a stored copy of
+Mapbox-derived results shown to every visitor. The Isochrone clause above (results shown on a
+Mapbox map) applies to the warp example in the same way it applies to live answers.
+
+**Open question:** whether Mapbox's product terms allow storing and redistributing these
+results. Those terms were not read (see the tiles note below). If they don't, drop the files
+and let each page ask for its first answer, or take the examples from a source with
+compatible terms.
+
 ## Mapbox Vector Tiles API and Fonts API
 
 Sources: <https://docs.mapbox.com/api/maps/vector-tiles/>, <https://docs.mapbox.com/api/maps/fonts/>

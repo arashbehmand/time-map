@@ -3,8 +3,10 @@ Viewport and coordinate conversions.
 
 Three coordinate spaces:
   1. Geographic: (longitude, latitude) — EPSG:4326
-  2. World pixels: (wx, wy) — Slippy Map convention at a given zoom
-     x ∈ [0, 256·2^z), increases east; y ∈ [0, 256·2^z), increases south
+  2. World pixels: (wx, wy) — MapLibre's convention at a given zoom
+     x ∈ [0, 512·2^z), increases east; y ∈ [0, 512·2^z), increases south.
+     MapLibre GL draws a 512-px world at zoom 0, so a radius computed here at zoom z
+     is the same number of CSS pixels on a MapLibre map at zoom z.
   3. Canvas pixels: (cx, cy) — origin at top-left of the canvas,
      user location at (width/2, height/2)
 """
@@ -14,7 +16,7 @@ import math
 
 import numpy as np
 
-TILE_SIZE: float = 256.0
+TILE_SIZE: float = 512.0
 
 # ── geographic ↔ world pixels ────────────────────────────────────────
 

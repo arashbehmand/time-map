@@ -649,7 +649,7 @@ function updateLegend(g, pin) {
     setText(sentenceEl, W.legendSentence(state.mode, g.a.minutes, state.u > 0.5));
   } else if (state.dragging) {
     setText(sentenceEl, "Drop the pin where you want to start.");
-  } else if (!state.bent) {
+  } else if (state.canBend && !state.bent) {
     setText(sentenceEl, `Press "Show time map" to see how far you can ${words.verb} from the pin.`);
   } else {
     setText(sentenceEl, "Working out how far you can get from the pin.");
@@ -761,7 +761,9 @@ function requestAnswer({ frame = false, delay = 250 } = {}) {
     if (frameWhenAnswered) { frameWhenAnswered = false; frameAnswer(cached); }
     return;
   }
-  if (!state.bent || !state.canBend) {
+  // Without bending (no WebGL2) the lines on the normal map are the only answer, so they
+  // are fetched whenever the inputs change.
+  if (state.canBend && !state.bent) {
     setStatus("");
     return;
   }
@@ -833,6 +835,10 @@ function initPin() {
       anim = { from: 0, to: 0, start: 0, dur: 0 };
       pinEl.classList.add("dragging");
       supersedeLookups();
+      // A request still on its way is for the old pin: drop it, so its late error can't
+      // switch the time map off before the drop.
+      clearTimeout(requestTimer);
+      latest.cancel();
     }
     if (drag.moved) state.dragPos = { x: e.clientX + drag.dx, y: e.clientY + drag.dy };
   });

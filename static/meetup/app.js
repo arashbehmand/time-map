@@ -37,6 +37,7 @@ let resolveTimer = null;
 let tapTimer = null;
 let undoTimer = null;
 let markerDrags = 0;           // a marker is being dragged: its place isn't final yet
+let styleReady = false;        // the map style has loaded once (layers can be added from then on)
 
 // ── DOM ─────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -135,6 +136,7 @@ function initMap() {
   });
   map.touchZoomRotate.disableRotation();
   map.addControl(new MapboxLogoControl(), "bottom-left");
+  map.once("load", () => { styleReady = true; });
 
   // Tapping the map adds a person there, except:
   // - a tap on a marker or popup;
@@ -636,7 +638,14 @@ async function toggleReach() {
 
   setStatus("Working out how far everyone can get…", "busy");
   const res = await reaches.run(snap, async (signal) => {
-    if (!map.isStyleLoaded()) await new Promise((resolve) => map.once("load", resolve));
+    // Layers need the style, not every tile: isStyleLoaded() is also false while tiles load
+    // after a pan, and "load" fires only once. A cancel stops the wait.
+    if (!styleReady) {
+      await new Promise((resolve, reject) => {
+        map.once("load", resolve);
+        signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+      });
+    }
     return Promise.all(jobs.map(async ({ p, minutes }) => {
       try {
         const geo = await postJSON("/api/isochrones", {

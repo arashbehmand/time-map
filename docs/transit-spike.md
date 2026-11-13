@@ -414,8 +414,10 @@ Checking the first build against its own outputs found, besides the calibration:
 3. Extend the table's stations to the 5 km feed area (Cheshunt), and add the South East BODS
    buses for the buffer's southern edge.
 4. Check the near-duplicate bus trips (370, 407, 216, K3, 406) against TfL's timetable.
-5. Read the rail (RSP) and TfL derived-data terms before publishing anything; run the UK2GTFS
-   check.
+5. Before publishing anything: read the agreement that covers the rail timetable (only RSP's
+   template is read; its clauses are in [transit-sources.md](transit-sources.md)) and TfL's
+   derived-data terms, and settle the clause 3.3.2 notice. Only derived tables may ever be
+   published, never the source timetables. Run the UK2GTFS check.
 6. Tighten the accepted lines as the tables improve.
 
 ## UK2GTFS on TfL's Underground files

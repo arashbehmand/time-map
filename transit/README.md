@@ -86,7 +86,8 @@ TfL's terms for the data are at <https://tfl.gov.uk/corporate/terms-and-conditio
   rail data's licence does not allow publishing derived tables. Interline's UK rail GTFS on
   Transitland allows derived products with the credit "Powered by National Rail Enquiries".
 - **Rail Data Marketplace** (<https://raildata.org.uk/>, free): only to read the Rail Settlement
-  Plan data licence if it can't be read without signing in.
+  Plan agreement that covers the free timetable. Only RSP's licence template has been read
+  (`docs/transit-sources.md`).
 
 ## Setup (once)
 
@@ -226,12 +227,18 @@ calendar.
 
 ## Publishing
 
-`python -m transit.build package` makes the archive. Until `[publication] licences_cleared`
-is set to true in `sources.toml`, its `LICENSE-DATA.txt` says it is not licensed for
-publication, and `publish` refuses. Set the flag only after the licences in
-`docs/transit-sources.md` allow publishing derived tables and the owner has agreed. Then
-`python -m transit.build publish --confirm` makes a **draft** GitHub release. Published, the
-tables are derived from OpenStreetMap and go out under the ODbL with every credit:
+**Only derived tables may ever be published, never the source timetables.** The feeds, the
+OSM extract and the prepared feeds stay in `transit/data/`; RSP's licence (clause 3.3.3)
+forbids passing the rail timetable on. `.gitignore` keeps feed, extract and table files out
+of git anywhere in the repo, and `tests/test_no_data_in_git.py` fails if one is tracked.
+
+`python -m transit.build package` makes the archive of derived tables. Until
+`[publication] licences_cleared` is set to true in `sources.toml`, its `LICENSE-DATA.txt`
+says it is not licensed for publication, and `publish` refuses. Set the flag only after the
+licences in `docs/transit-sources.md` allow publishing derived tables and the owner has
+agreed. Then `python -m transit.build publish --confirm` makes a **draft** GitHub release.
+Published, the tables are derived from OpenStreetMap and go out under the ODbL, with the RSP
+notice of clause 3.3.2 (worded as agreed with RSP, if RSP asks for one) and every credit:
 
 - Powered by TfL Open Data
 - © OpenStreetMap contributors

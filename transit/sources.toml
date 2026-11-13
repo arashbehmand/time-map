@@ -1,0 +1,235 @@
+# Inputs of the London transit build: where each comes from, its licence and its credit.
+# docs/transit-sources.md quotes the licence text behind each line and the date it was read.
+
+[gb_transit]
+name = "gb-transit (planarnetwork): National Rail + TfL tube, DLR, trams, river boats, cable car"
+repo = "planarnetwork/gb-transit"
+assets = ["gtfs-rail-and-tfl.zip", "feed-meta.json", "validation-rail-and-tfl.json"]
+feed = "gtfs-rail-and-tfl.zip"
+auth = "none (GitHub release)"
+licence = "Rail Settlement Plan data licence (RDG); NRE Knowledgebase licence; Open Government Licence v3.0 (NaPTAN); TfL Transport Data Service terms"
+attribution = ["Powered by TfL Open Data", "Contains OS data (c) Crown copyright and database rights", "Geomni UK Map data (c) and database rights", "Contains public sector information licensed under the Open Government Licence v3.0", "Timetable data from Rail Delivery Group / Rail Settlement Plan"]
+may_publish_derived = "unknown until the RSP licence is read"
+
+[bods]
+name = "Bus Open Data Service: London region GTFS (ITO World conversion)"
+url = "https://data.bus-data.dft.gov.uk/timetable/download/gtfs-file/london/"
+file = "itm_london_gtfs.zip"
+auth = "none (downloads without a login on 2026-11-12); BODS_API_KEY optional"
+licence = "Open Government Licence v3.0"
+attribution = ["Contains public sector information licensed under the Open Government Licence v3.0 (Bus Open Data Service)"]
+route_types = [3]
+may_publish_derived = "yes (OGL)"
+
+[osm]
+name = "OpenStreetMap: Geofabrik England extract"
+url = "https://download.geofabrik.de/europe/united-kingdom/england-latest.osm.pbf"
+file = "england-latest.osm.pbf"
+auth = "none"
+licence = "Open Database License 1.0"
+attribution = ["(c) OpenStreetMap contributors"]
+may_publish_derived = "yes, under ODbL (share-alike for the derived database)"
+
+[region]
+name = "ONS London region boundary (Regions December 2023, BGC, E12000007)"
+file = "transit/london_region.geojson"
+licence = "Open Government Licence v3.0"
+attribution = ["Source: Office for National Statistics licensed under the Open Government Licence v3.0", "Contains OS data (c) Crown copyright and database right 2023"]
+
+[bank_holidays]
+name = "GOV.UK bank holidays"
+url = "https://www.gov.uk/bank-holidays.json"
+licence = "Open Government Licence v3.0"
+
+[tfl_txc]
+name = "TfL Journey Planner timetables (TransXChange): UK2GTFS check and bus fallback only"
+url = "https://tfl.gov.uk/tfl/syndication/feeds/journey-planner-timetables.zip"
+file = "journey-planner-timetables.zip"
+auth = "none (downloads without a login on 2026-11-12)"
+licence = "TfL Transport Data Service terms"
+attribution = ["Powered by TfL Open Data"]
+
+[tfl_api]
+name = "TfL Unified API (Journey Planner, line lists, status): the gate's reference"
+url = "https://api.tfl.gov.uk"
+auth = "TFL_APP_KEY (free; see transit/README.md)"
+licence = "TfL Transport Data Service terms"
+attribution = ["Powered by TfL Open Data"]
+
+# ── Publishing ──────────────────────────────────────────────────────
+# Set to true only after the RSP rail licence and TfL's derived-data terms are read and allow
+# publishing the tables (docs/transit-sources.md). Until then the archive says it is not
+# licensed and `publish` refuses.
+[publication]
+licences_cleared = false
+
+# ── Lines that must be present with trips on both service dates ──────
+# Each sentinel matches routes by agency (regex on agency_name), route (regex on
+# route_short_name + route_long_name) and/or stops (two regexes on stop names that one
+# trip must serve, in either order). Every given test must match. `days = "weekday"` checks
+# a line on the weekday only; `min_trips` (default 1) catches a line the clip has cut to a token
+# service (Gatwick Express keeps 1 Saturday trip inside the clip: it runs Victoria non-stop out).
+[[sentinel]]
+name = "Bakerloo"
+agency = "(?i)underground"
+route = "(?i)^bakerloo$"
+
+[[sentinel]]
+name = "Central"
+agency = "(?i)underground"
+route = "(?i)^central$"
+
+[[sentinel]]
+name = "Circle"
+agency = "(?i)underground"
+route = "(?i)^circle$"
+
+[[sentinel]]
+name = "District"
+agency = "(?i)underground"
+route = "(?i)^district$"
+
+[[sentinel]]
+name = "Hammersmith & City"
+agency = "(?i)underground"
+route = "(?i)^hammersmith (?:&|and) city$"
+
+[[sentinel]]
+name = "Jubilee"
+agency = "(?i)underground"
+route = "(?i)^jubilee$"
+
+[[sentinel]]
+name = "Metropolitan"
+agency = "(?i)underground"
+route = "(?i)^metropolitan$"
+
+[[sentinel]]
+name = "Northern"
+agency = "(?i)underground"
+route = "(?i)^northern$"
+
+[[sentinel]]
+name = "Piccadilly"
+agency = "(?i)underground"
+route = "(?i)^piccadilly$"
+
+[[sentinel]]
+name = "Victoria"
+agency = "(?i)underground"
+route = "(?i)^victoria$"
+
+[[sentinel]]
+name = "Waterloo & City"
+agency = "(?i)underground"
+route = "(?i)^waterloo (?:&|and) city$"
+days = "weekday"        # no Saturday service
+
+[[sentinel]]
+name = "DLR"
+min_trips = 500
+agency = "(?i)docklands|dlr"
+
+[[sentinel]]
+name = "Trams"
+min_trips = 300
+agency = "(?i)tram"
+
+[[sentinel]]
+name = "Cable car"
+agency = "(?i)cable"
+
+[[sentinel]]
+name = "River boats"
+agency = "(?i)clipper|uber boat|river"
+
+[[sentinel]]
+name = "Overground Liberty (Romford - Upminster)"
+agency = "(?i)overground"
+stops = ["(?i)^romford", "(?i)^upminster"]
+
+[[sentinel]]
+name = "Overground Lioness (Euston - Watford Junction)"
+agency = "(?i)overground"
+stops = ["(?i)^london euston|^euston", "(?i)^watford junction"]
+
+[[sentinel]]
+name = "Overground Mildmay (Stratford - Richmond)"
+agency = "(?i)overground"
+stops = ["(?i)^stratford", "(?i)^richmond"]
+
+[[sentinel]]
+name = "Overground Suffragette (Gospel Oak - Barking Riverside)"
+agency = "(?i)overground"
+stops = ["(?i)^gospel oak", "(?i)^barking riverside"]
+
+[[sentinel]]
+name = "Overground Weaver (Liverpool Street - Chingford)"
+agency = "(?i)overground"
+stops = ["(?i)^london liverpool street|^liverpool street", "(?i)^chingford"]
+
+[[sentinel]]
+name = "Overground Windrush (Highbury & Islington - West Croydon)"
+agency = "(?i)overground"
+stops = ["(?i)^highbury", "(?i)^west croydon"]
+
+[[sentinel]]
+name = "Elizabeth line central tunnel (Paddington - Whitechapel)"
+min_trips = 300
+agency = "(?i)elizabeth"
+stops = ["(?i)^london paddington|^paddington", "(?i)^whitechapel"]
+
+[[sentinel]]
+name = "Heathrow Express (Paddington - Heathrow T2&3)"
+min_trips = 100
+agency = "(?i)heathrow express"
+stops = ["(?i)^london paddington|^paddington", "(?i)heathrow.*(?:2|two)"]
+
+[[sentinel]]
+name = "Thameslink (London Bridge - East Croydon)"
+min_trips = 100
+agency = "(?i)thameslink"
+stops = ["(?i)^london bridge", "(?i)^east croydon"]
+
+[[sentinel]]
+name = "Southern (London Bridge - East Croydon)"
+min_trips = 100
+agency = "(?i)southern"
+stops = ["(?i)^london bridge", "(?i)^east croydon"]
+
+[[sentinel]]
+name = "Southeastern"
+agency = "(?i)southeastern"
+
+[[sentinel]]
+name = "South Western Railway"
+agency = "(?i)south western"
+
+[[sentinel]]
+name = "c2c"
+agency = "(?i)c2c"
+
+[[sentinel]]
+name = "Greater Anglia"
+agency = "(?i)greater anglia"
+
+[[sentinel]]
+name = "Great Western Railway"
+agency = "(?i)great western|^gwr$"
+
+[[sentinel]]
+name = "Chiltern Railways"
+agency = "(?i)chiltern"
+
+[[sentinel]]
+name = "Bus 73"
+route_type = 3
+route = "^73$"
+
+[[sentinel]]
+name = "Bus 25"
+route_type = 3
+route = "^25$"
+
+[bus_count]
+min_routes = 600

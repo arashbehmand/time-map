@@ -762,9 +762,11 @@ They are also derived from the sources below; their credits must be kept:
 LICENCE_PENDING = """\
 London transit tables (time-map), build {build}
 
-NOT LICENSED FOR PUBLICATION. The rail timetable's licence (Rail Settlement Plan) and
-TfL's terms for derived data have not been read (docs/transit-sources.md), so no rights
-are granted over these tables, walksheds or points. Do not share this archive.
+NOT LICENSED FOR PUBLICATION. The agreement that covers the rail timetable (Rail
+Settlement Plan; only RSP's licence template has been read) and TfL's terms for derived
+data have not been read (docs/transit-sources.md), so no rights are granted over these
+tables, walksheds or points. Do not share this archive. The source timetables are never
+part of it and must never be shared.
 
 They are derived from the sources below; their credits must be kept:
 
@@ -813,7 +815,8 @@ def stage_publish(b: Build, args) -> None:
     """A draft GitHub release. Only when the licences allow it and the owner said yes."""
     if not licences_cleared():
         raise SystemExit("publish refused: sources.toml [publication] licences_cleared is false (the rail "
-                         "and TfL derived-data terms have not been read; docs/transit-sources.md)")
+                         "agreement and TfL's derived-data terms have not been read, only RSP's "
+                         "template; docs/transit-sources.md)")
     if not args.confirm:
         raise SystemExit("publish needs --confirm: the licences in docs/transit-sources.md must allow "
                          "publishing derived tables, and the owner must agree")

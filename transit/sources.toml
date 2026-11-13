@@ -9,7 +9,7 @@ feed = "gtfs-rail-and-tfl.zip"
 auth = "none (GitHub release)"
 licence = "Rail Settlement Plan data licence (RDG); NRE Knowledgebase licence; Open Government Licence v3.0 (NaPTAN); TfL Transport Data Service terms"
 attribution = ["Powered by TfL Open Data", "Contains OS data (c) Crown copyright and database rights", "Geomni UK Map data (c) and database rights", "Contains public sector information licensed under the Open Government Licence v3.0", "Timetable data from Rail Delivery Group / Rail Settlement Plan"]
-may_publish_derived = "unknown until the RSP licence is read"
+may_publish_derived = "unknown: only RSP's licence template was read, not the agreement for the free timetable; the source timetable itself may never be passed on (clause 3.3.3)"
 
 [bods]
 name = "Bus Open Data Service: London region GTFS (ITO World conversion)"
@@ -57,9 +57,10 @@ licence = "TfL Transport Data Service terms"
 attribution = ["Powered by TfL Open Data"]
 
 # ── Publishing ──────────────────────────────────────────────────────
-# Set to true only after the RSP rail licence and TfL's derived-data terms are read and allow
-# publishing the tables (docs/transit-sources.md). Until then the archive says it is not
-# licensed and `publish` refuses.
+# Set to true only after the agreement that covers the rail timetable (not RSP's template) and
+# TfL's derived-data terms are read and allow publishing the derived tables, and the clause
+# 3.3.2 notice is settled (docs/transit-sources.md). Until then the archive says it is not
+# licensed and `publish` refuses. The source timetables are never published.
 [publication]
 licences_cleared = false
 

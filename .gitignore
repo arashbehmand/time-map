@@ -17,3 +17,28 @@ usage.sqlite3*
 transit/data/
 transit/out/
 transit/.venv/
+# Timetable feeds, map extracts and travel-time tables never go in git, wherever they sit
+# (tests/test_no_data_in_git.py checks it).
+*.zip
+*.ZIP
+*.npy
+*.npz
+*.pbf
+*.osm
+*.parquet
+*.sqlite3
+*.mca
+*.MCA
+*.cif
+*.CIF
+RJTT*
+agency.txt
+calendar*.txt
+feed_info.txt
+frequencies.txt
+routes.txt
+shapes.txt
+stop_times.txt
+stops.txt
+transfers.txt
+trips.txt

@@ -615,8 +615,9 @@ async function directionChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spr
         const frame = localFrame(o);
         if (sm) seams.push({ origin: o.id, window: w, sources: json.sources, ...nearFieldSeam(field) });
         if (o.id === "baker-street" && sm) {
-          const [x, y] = frame.toLocal(wp.lon, wp.lat);
+          // At the station itself (the timetable's position), not the toy network's.
           const st = (json.stations || []).find((s) => s.name === "Wembley Park");
+          const [x, y] = st ? frame.toLocal(st.lon, st.lat) : frame.toLocal(wp.lon, wp.lat);
           wembley.push({ window: w, fieldMinutes: Math.round(sampleField(field, x, y) * 10) / 10, stationRowMinutes: st ? st.minutes : null, sources: json.sources });
         }
         for (const sp of spreads) {

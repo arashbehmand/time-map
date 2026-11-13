@@ -32,7 +32,7 @@ import numpy as np
 import shapely
 from shapely.geometry import mapping
 
-from server.warp.field import Grid, LocalFrame, mercator, metres_per_unit
+from server.warp.field import WALK_M_PER_MIN, Grid, LocalFrame, mercator, metres_per_unit
 from transit.tables import Walksheds, compose_row, decode_minutes
 
 log = logging.getLogger("time_map.transit")
@@ -44,6 +44,7 @@ RASTER_M = 50.0                 # raster pixel, metres (at the build's mean lati
 RING_MINUTES = 2.0              # one res-10 ring further, on foot (about 131 m at 4 km/h)
 MAX_RING = 3
 STATION_SNAP_M = 100.0          # a pin this close to a station starts from its own row
+STATION_WALK_M = 150.0          # around a station, the last steps are walked straight
 FILL_PASSES = 3                 # 100 m grid: gaps up to about 300 m from a known node
 COVERAGE_BUFFER_M = 1200.0
 COVERAGE_SIMPLIFY_M = 300.0
@@ -326,6 +327,36 @@ class TransitData:
             ci[inside] = raster[iy[inside], ix[inside]]
             known = ci >= 0
             out[known] = per_cell[ci[known]]
+        # A place that is itself a table point (a station, a cell centre) ends there: its own
+        # time, with no walk from a nearby access point (compose_pair's dest_point).
+        px, py = frame.to_local(self.lon[self.ok], self.lat[self.ok])
+        pi = np.rint((np.asarray(px) - grid.x0) / grid.cell).astype(np.int64)
+        pj = np.rint((np.asarray(py) - grid.y0) / grid.cell).astype(np.int64)
+        on = (pi >= 0) & (pj >= 0) & (pi < grid.nx) & (pj < grid.ny)
+        own = row[self.ok][on]
+        jj, ii = pj[on], pi[on]
+        cur = out[jj, ii]
+        better = np.isfinite(own) & ~(cur <= own)
+        out[jj[better], ii[better]] = own[better]
+        # And the last few steps from a station, straight at 4 km/h: within STATION_WALK_M the
+        # walkshed's whole minutes from the nearest cell centre are coarser than the walk.
+        st = np.array([s.idx for s in self.stations], dtype=np.int64)
+        if len(st):
+            sx, sy = frame.to_local(self.lon[st], self.lat[st])
+            sx, sy, smin = np.asarray(sx), np.asarray(sy), row[st]
+            reach = int(np.ceil(STATION_WALK_M / grid.cell))
+            ci = np.rint((sx - grid.x0) / grid.cell).astype(np.int64)
+            cj = np.rint((sy - grid.y0) / grid.cell).astype(np.int64)
+            for dj in range(-reach, reach + 1):
+                for di in range(-reach, reach + 1):
+                    ni, nj = ci + di, cj + dj
+                    ok = (ni >= 0) & (nj >= 0) & (ni < grid.nx) & (nj < grid.ny) & np.isfinite(smin)
+                    d = np.hypot(grid.x0 + ni * grid.cell - sx, grid.y0 + nj * grid.cell - sy)
+                    ok &= d <= STATION_WALK_M
+                    cand = smin[ok] + d[ok] / WALK_M_PER_MIN
+                    cur = out[nj[ok], ni[ok]]
+                    take = ~(cur <= cand)
+                    out[nj[ok][take], ni[ok][take]] = cand[take]
         filled = np.zeros(X.shape, dtype=bool)
         for _ in range(FILL_PASSES):
             gap = np.isnan(out)

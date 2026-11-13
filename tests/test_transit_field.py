@@ -58,7 +58,11 @@ def test_field_on_the_grid_fills_the_pond_and_marks_no_time(data):
     j, i = at(*C)
     assert np.isinf(m[j, i])                                     # Saturday: no time to C's area
     j, i = at(*B)
-    assert m[j, i] <= 5 + 2 and not filled[j, i]                 # B: on the line
+    # B, a station: the node nearest it takes its own time; the next ones out add the walk.
+    assert m[j, i] == 5 and not filled[j, i]
+    x, y = frame.to_local(*B)
+    d = float(np.hypot(X[j, i + 1] - x, Y[j, i + 1] - y))
+    assert m[j, i + 1] <= 5 + d / (4000 / 60) + 1e-9
     assert np.isnan(m[0, 0])                                     # far corner: no data
     m8, _, _ = data.field(*A, "wd08", frame, grid)
     j, i = at(*C)

@@ -1,5 +1,6 @@
 // Every sentence the warp page shows (#5, W-02). Pure. No jargon: tests/test_static.py
-// checks these strings.
+// checks these strings, and tests/js/warp-words.test.js checks what they say.
+import { spacing } from "../shared/mesh/rings.js";
 
 const VERBS = { walking: "walk", cycling: "cycle", driving: "drive", transit: "get" };
 
@@ -7,9 +8,15 @@ export function fromLine(origin) {
   return `From: ${origin.label}${origin.example ? " (example)" : ""}`;
 }
 
-export function sentence(mode, outer, step, bent) {
-  if (bent) return `Distance from the pin now means travel time: each ring is ${step} minutes more.`;
-  return `The coloured bands show where you can ${VERBS[mode]} to within ${outer} minutes, ${step} minutes per band.`;
+// "every 5 minutes up to 30, then every 10 up to 60, then every 15", from a ring plan.
+export function spacingWords(plan) {
+  const sp = spacing(plan);
+  return sp.map((s, i) => `${i ? "then every " + s.step : "every " + s.step + " minutes"}${sp[i + 1] ? " up to " + sp[i + 1].from : ""}`).join(", ");
+}
+
+export function sentence(mode, outer, plan, bent) {
+  if (bent) return `Distance from the pin now means travel time: a ring ${spacingWords(plan)}.`;
+  return `The coloured bands show where you can ${VERBS[mode]} to within ${outer} minutes, a band ${spacingWords(plan)}.`;
 }
 
 export function limits(field) {
@@ -32,6 +39,10 @@ export const DEV_ONLY = "Development only: these public transport times are not 
 export const BEND_LABEL = { off: "Bend the map (experimental)", on: "Back to the normal map" };
 export const NO_BEND = "This browser can't bend the map. The bands still show on the normal map.";
 export const PREPARING = "Preparing the bent map…";
+export const TILES_MISSING = "Some map tiles didn't load. Trying again…";
+export const TILES_FAILED = "The map tiles didn't load, so the map can't bend right now.";
+export const BEND_FAILED = "The bent map couldn't be prepared. Press the button to try again.";
+export const EXPIRED = "These public transport times have expired, so this shows walking.";
 export const UPDATING = "Updating…";
 
 export function beyond(outer) {

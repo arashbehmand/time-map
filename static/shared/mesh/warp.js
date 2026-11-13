@@ -16,7 +16,7 @@
 //
 // toScreen() is the "lon/lat → screen" function #6 reuses. WARP_GLSL is the same arithmetic
 // for the vertex shaders; both use the constants below, and the tests hold them together.
-import { GRID_NO_DATA, NO_DATA, sampleField, sampleGrid } from "./field.js";
+import { BEYOND, GRID_NO_DATA, NO_DATA, sampleField, sampleGrid } from "./field.js";
 import { geoScreen, localFrame } from "./frame.js";
 
 export const DIR_EPS = 1e-6;    // metres: inside this radius the bearing is undefined (target 0)
@@ -47,7 +47,7 @@ export function createWarp(spec) {
     const f = spec.field, max = spec.maxMinutes ?? Infinity;
     target = (x, y) => {
       const t = sampleField(f, x, y);
-      if (t === NO_DATA || t > max) return null;
+      if (t === NO_DATA || t >= BEYOND || t > max) return null;
       const [dx, dy] = dir(x, y, t);
       return [dx * t, dy * t];
     };
@@ -316,6 +316,8 @@ vec3 fieldTarget(vec2 p) {
   float c01 = texelFetch(u_warpTex, i + ivec2(0, 1), 0).r;
   float c11 = texelFetch(u_warpTex, i + ivec2(1, 1), 0).r;
   if (min(min(c00, c10), min(c01, c11)) < 0.0) return polarUnknown(p);
+  // A beyond corner (BEYOND in field.js) is a status, never blended into a time.
+  if (max(max(c00, c10), max(c01, c11)) >= ${BEYOND.toExponential()}) return polarUnknown(p);
   float t = mix(mix(c00, c10, a.x), mix(c01, c11, a.x), a.y);
   if (t > u_warpGrid.w) return polarUnknown(p);
   return vec3(polarDir(p, t) * t, 1.0);

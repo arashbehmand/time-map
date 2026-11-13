@@ -2,12 +2,14 @@
 // the current tile set into per-pass buffers. With back-end C it also evaluates the warp
 // for every vertex. A newer request makes older work stale: its results are dropped, and
 // fetches it no longer needs are aborted.
+import { bandMesh, bandPolygons } from "./contours.js";
 import { localFrame } from "./frame.js";
-import { createField, createTargetGrid } from "./field.js";
+import { createField, createTargetGrid, sampleField } from "./field.js";
 import { censusTile, LINE_VERTS, packScene, spacingForZoom, tessellateTile, vectorTileFeatures } from "./pipeline.js";
 import { TILE_URL } from "./schema-streets-v8.js";
-import { sheetIndex } from "./hit.js";
-import { createWarp } from "./warp.js";
+import { meshSheetIndex } from "./hit.js";
+import { makeEdgeTest, refineFills } from "./refine.js";
+import { createWarp, targetsFor } from "./warp.js";
 
 // The server's tile limit (16 at once, server/settings.py) is per process, shared by every
 // visitor; past it a request waits up to 10 s, then gets 503. Keep well under it.
@@ -225,16 +227,51 @@ async function census(msg) {
   self.postMessage({ type: "census", gen: msg.gen, tiles: out });
 }
 
-// What is under a finger on the bent map (hit.js), built here so the page never stalls on
-// half a million triangles: "sheets" builds the index for a warp, "sheets-query" asks it.
+// The warp page's field work, off its main thread (#5, W-02):
+//   bands         the normal map's travel-time bands as GeoJSON (contours.js), for one field
+//                 and one set of ring levels
+//   layers        the bent view's band mesh, refined like the map (refine.js), with its CPU
+//                 targets when the renderer needs them; the overlap index (hit.js) is built
+//                 from the same triangles, so a tap reads what the bands are drawn with
+//   sheets-query  what is under a finger, from the last layers built
 let sheets = null;
-function sheetsMessage(msg) {
-  if (msg.type === "sheets") {
-    const field = createField(msg.spec.field);
-    if (msg.spec.field.filled) field.filled = msg.spec.field.filled;
-    const warp = createWarp({ kind: "polar", field, maxMinutes: msg.spec.maxMinutes, angles: msg.spec.angles || null });
-    sheets = { key: msg.key, index: sheetIndex(field, warp, { maxMinutes: msg.spec.maxMinutes }) };
-    self.postMessage({ type: "sheets-ready", key: msg.key, triangles: sheets.index.triangles });
+
+function fieldOf(spec) {
+  const f = createField(spec);
+  if (spec.filled) f.filled = spec.filled;
+  return f;
+}
+
+function fieldMessage(msg) {
+  if (msg.type === "bands") {
+    const f = fieldOf(msg.field);
+    const fc = bandPolygons(f, localFrame(f.origin), msg.levels, { skipFilled: true });
+    self.postMessage({ type: "bands-result", id: msg.id, key: msg.key, fc });
+  } else if (msg.type === "layers") {
+    if (sheets && sheets.key === msg.key && sheets.result) {
+      self.postMessage(sheets.result.message, sheets.result.copy());
+      return;
+    }
+    const f = fieldOf(msg.field);
+    const warp = createWarp({ kind: "polar", field: f, maxMinutes: msg.maxMinutes, angles: msg.angles || null });
+    const m = bandMesh(f, msg.box);
+    const n = m.pos.length / 2;
+    const r = refineFills({ pos: m.pos, index: m.index, style: new Float32Array(n), zoom: new Uint8Array(n) },
+      makeEdgeTest(f, msg.maxMinutes, msg.eps, msg.angles || null), { maxDepth: 3 });
+    const minutes = new Float32Array(r.pos.length / 2);
+    minutes.set(m.minutes);
+    for (let v = n; v < minutes.length; v++) minutes[v] = sampleField(f, r.pos[2 * v], r.pos[2 * v + 1]);
+    const mesh = { pos: r.pos, minutes, index: r.index };
+    const targets = msg.cpu ? targetsFor(warp, mesh.pos) : null;
+    const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped };
+    // The index keeps pos and minutes, so the page gets copies.
+    const copy = () => {
+      const out = { pos: mesh.pos.slice(), minutes: mesh.minutes.slice(), index: mesh.index.slice(), targets: targets ? targets.slice() : null };
+      Object.assign(message, out);
+      return [out.pos.buffer, out.minutes.buffer, out.index.buffer, ...(out.targets ? [out.targets.buffer] : [])];
+    };
+    sheets = { key: msg.key, index: meshSheetIndex(mesh, warp), result: { message, copy } };
+    self.postMessage(message, copy());
   } else {
     const hits = sheets && sheets.key === msg.key ? sheets.index.query(msg.lx, msg.ly, msg.r) : null;
     self.postMessage({ type: "sheets-result", id: msg.id, key: msg.key, hits });
@@ -243,7 +280,10 @@ function sheetsMessage(msg) {
 
 self.onmessage = (e) => {
   const msg = e.data;
-  if (msg.type === "sheets" || msg.type === "sheets-query") { sheetsMessage(msg); return; }
+  if (msg.type === "bands" || msg.type === "layers" || msg.type === "sheets-query") {
+    try { fieldMessage(msg); } catch (err) { self.postMessage({ type: "error", gen: msg.gen ?? -1, key: msg.key, message: String(err && err.message || err) }); }
+    return;
+  }
   if (msg.type === "scene") buildScene(msg).catch((err) => self.postMessage({ type: "error", gen: msg.gen, message: String(err && err.message || err) }));
   else if (msg.type === "clear") { cache.clear(); resident = 0; peakResident = 0; self.postMessage({ type: "cleared", gen: msg.gen }); }
   else if (msg.type === "census") census(msg).catch((err) => self.postMessage({ type: "error", gen: msg.gen, message: String(err && err.message || err) }));

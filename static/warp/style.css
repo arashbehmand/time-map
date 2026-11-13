@@ -86,7 +86,6 @@ body.no-bend #mesh-canvas { display: none; }
 #transit-credits[hidden] { display: none; }
 #sentence { font-size: 16px; }
 #limits { font-size: 13px; color: var(--text-2); }
-#zoom-hint[hidden] { display: none; }
 
 /* Map credits. The MapLibre map is hidden (opacity 0), so its own attribution control
    would be invisible; these sit above every canvas. Required by OpenStreetMap and Mapbox. */

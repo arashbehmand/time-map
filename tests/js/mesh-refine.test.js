@@ -96,8 +96,14 @@ test("refinement stays inside the room it is given", () => {
   const mesh = gridMesh(-1000, RIVER_Y - 10 * STEP, 20);
   const t = makeEdgeTest(field, 60, EPS);
   assert.equal(refineFills(mesh, t, { room: 0 }).added, 0);
+  // Not enough room for the whole pass: nothing is split (a partial pass could leave a
+  // T-junction where two meshes share a boundary but not vertex indexes).
   const some = refineFills(mesh, t, { room: 25 });
-  assert.ok(some.added <= 25 && some.skipped > 0);
+  assert.equal(some.added, 0);
+  assert.ok(some.skipped > 25);
+  assert.equal(some.index, mesh.index);
+  const all = refineFills(mesh, t);
+  assert.ok(refineFills(mesh, t, { room: all.added }).added === all.added);
   const lines = refineLines({ seg: Float32Array.from([-800, RIVER_Y + 30, -800, RIVER_Y - 30]), style: new Float32Array(1), zoom: new Uint8Array(1) },
     t, { room: 6, segCost: 6 });
   assert.equal(lines.added, 1);

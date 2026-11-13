@@ -1,31 +1,31 @@
-// What is under a finger on the bent map (#5, W-02): every sheet of the field drawn at a
-// spot, even where folds stack several, with its source place and minutes. Pure.
+// What is under a finger on the bent map (#5, W-02): every sheet drawn at a spot, even where
+// folds stack several, with its source place and minutes. Pure.
 //
-// sheetIndex(field, warp, {maxMinutes}) maps each cell of the field into layout units
-// (minutes, the polar target) as two triangles and buckets them in a 0.5-minute grid. A cell
-// with a corner that is unknown, past the outer ring or filled in (water, parkland) is left
-// out: it isn't drawn as a place. query(lx, ly, r) returns every triangle within r layout
+// meshSheetIndex(mesh, warp) maps a triangle mesh ({pos, minutes, index}, local metres) into
+// layout units (minutes, the polar target) and buckets its triangles in a 0.5-minute grid. The
+// warp page passes the band layer's own mesh, refined like the map (refine.js), so a tap reads
+// the same triangles the bands are drawn with. A vertex the warp doesn't place (unknown, past
+// the outer ring) drops its triangles. query(lx, ly, r) returns every triangle within r layout
 // units of the point, as source places, merged into sheets: hits whose sources are within
 // `merge` metres of each other are one sheet (the one nearest the finger is kept).
+//
+// sheetIndex(field, warp, {maxMinutes}) does the same over the field's own cells (two
+// triangles each; cells with a corner unknown, past the ring or filled in are left out).
 const BUCKET = 0.5;
 
-export function sheetIndex(f, warp, { maxMinutes = Infinity, merge = 300 } = {}) {
-  const { nx, ny, x0, y0, cell, minutes } = f;
-  const filled = f.filled || null;
-  const tx = new Float64Array(nx * ny), ty = new Float64Array(nx * ny);
-  const ok = new Uint8Array(nx * ny);
-  for (let j = 0; j < ny; j++) {
-    for (let i = 0; i < nx; i++) {
-      const k = j * nx + i, t = minutes[k];
-      if (!(t >= 0) || t > maxMinutes || (filled && filled[k])) continue;
-      const p = warp.target(x0 + i * cell, y0 + j * cell);
-      if (!p) continue;
-      tx[k] = p[0]; ty[k] = p[1]; ok[k] = 1;
-    }
+export function meshSheetIndex({ pos, minutes, index }, warp, { merge = 300 } = {}) {
+  const n = pos.length / 2;
+  const tx = new Float64Array(n), ty = new Float64Array(n), ok = new Uint8Array(n);
+  for (let v = 0; v < n; v++) {
+    const p = warp.target(pos[2 * v], pos[2 * v + 1]);
+    if (!p) continue;
+    tx[v] = p[0]; ty[v] = p[1]; ok[v] = 1;
   }
   const buckets = new Map();
   const tris = [];
-  const add = (a, b, c) => {
+  for (let i = 0; i + 2 < index.length; i += 3) {
+    const a = index[i], b = index[i + 1], c = index[i + 2];
+    if (!(ok[a] && ok[b] && ok[c])) continue;
     const id = tris.length / 3;
     tris.push(a, b, c);
     const bx0 = Math.floor(Math.min(tx[a], tx[b], tx[c]) / BUCKET), bx1 = Math.floor(Math.max(tx[a], tx[b], tx[c]) / BUCKET);
@@ -35,14 +35,6 @@ export function sheetIndex(f, warp, { maxMinutes = Infinity, merge = 300 } = {})
       let list = buckets.get(key);
       if (!list) buckets.set(key, (list = []));
       list.push(id);
-    }
-  };
-  for (let j = 0; j + 1 < ny; j++) {
-    for (let i = 0; i + 1 < nx; i++) {
-      const a = j * nx + i, b = a + 1, c = a + nx + 1, d = a + nx;
-      if (!(ok[a] && ok[b] && ok[c] && ok[d])) continue;
-      add(a, b, c);
-      add(a, c, d);
     }
   }
   const tri = Int32Array.from(tris);
@@ -59,10 +51,9 @@ export function sheetIndex(f, warp, { maxMinutes = Infinity, merge = 300 } = {})
         const ia = tri[3 * id], ib = tri[3 * id + 1], ic = tri[3 * id + 2];
         const h = closestBary(lx, ly, tx[ia], ty[ia], tx[ib], ty[ib], tx[ic], ty[ic]);
         if (h.d > r) continue;
-        const sx = (n) => x0 + (n % nx) * cell, sy = (n) => y0 + Math.floor(n / nx) * cell;
         hits.push({
-          x: h.u * sx(ia) + h.v * sx(ib) + h.w * sx(ic),
-          y: h.u * sy(ia) + h.v * sy(ib) + h.w * sy(ic),
+          x: h.u * pos[2 * ia] + h.v * pos[2 * ib] + h.w * pos[2 * ic],
+          y: h.u * pos[2 * ia + 1] + h.v * pos[2 * ib + 1] + h.w * pos[2 * ic + 1],
           minutes: h.u * minutes[ia] + h.v * minutes[ib] + h.w * minutes[ic],
           distance: h.d,
         });
@@ -77,6 +68,29 @@ export function sheetIndex(f, warp, { maxMinutes = Infinity, merge = 300 } = {})
   }
 
   return { triangles: tri.length / 3, query };
+}
+
+export function sheetIndex(f, warp, { maxMinutes = Infinity, merge = 300 } = {}) {
+  const { nx, ny, x0, y0, cell, minutes } = f;
+  const filled = f.filled || null;
+  const pos = new Float64Array(2 * nx * ny);
+  const good = new Uint8Array(nx * ny);
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i, t = minutes[k];
+      pos[2 * k] = x0 + i * cell; pos[2 * k + 1] = y0 + j * cell;
+      good[k] = t >= 0 && t <= maxMinutes && !(filled && filled[k]) ? 1 : 0;
+    }
+  }
+  const index = [];
+  for (let j = 0; j + 1 < ny; j++) {
+    for (let i = 0; i + 1 < nx; i++) {
+      const a = j * nx + i, b = a + 1, c = a + nx + 1, d = a + nx;
+      if (!(good[a] && good[b] && good[c] && good[d])) continue;
+      index.push(a, b, c, a, c, d);
+    }
+  }
+  return meshSheetIndex({ pos, minutes, index }, warp, { merge });
 }
 
 // The point of triangle abc nearest p, as barycentric weights (u, v, w) and its distance d.

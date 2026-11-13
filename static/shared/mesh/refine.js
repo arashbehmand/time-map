@@ -11,8 +11,11 @@
 //              share an edge always agree; midpoints are shared through one map per pass.
 //              Fills split by the 1-, 2- and 3-edge patterns, recursively, up to `maxDepth`.
 //   budget     each new fill vertex counts one shaded vertex, each new segment `segCost`.
-//              Out of room, an edge splits only if its midpoint already exists (so the
-//              neighbour that made it still matches), and the rest are counted as skipped.
+//              Fills are all or nothing: if a pass would need more room than it has, it is
+//              left unrefined (and counted as skipped). Splitting only some edges of a pass
+//              could leave a T-junction where two meshes share a boundary but not vertex
+//              indexes (tiles, clipped blocks). Lines are independent, so they split while
+//              room lasts.
 //
 // With true bearings the test reads minutes alone: the bearing's own curvature moves a 48 m
 // chord by under 0.01 minute beyond 500 m from the pin, so jumps in the field (a river, a
@@ -95,6 +98,7 @@ export function refineFills({ pos, index, style, zoom }, test, { maxDepth = 3, r
     }
   }
   for (let i = 0; i < index.length; i += 3) tri(index[i], index[i + 1], index[i + 2], 0);
+  if (skipped) return { pos, index, style, zoom, added: 0, skipped: skipped + added };
   if (!added) return { pos, index, style, zoom, added: 0, skipped };
   const n = n0 + added;
   const P = new Float32Array(2 * n), S = new Float32Array(n), Z = new Uint8Array(n);

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { bandPolygons, nestRings, regionRings, signedArea } from "../../static/shared/mesh/contours.js";
 import { BEYOND, fieldFromFunction, NO_DATA } from "../../static/shared/mesh/field.js";
 import { localFrame } from "../../static/shared/mesh/frame.js";
-import { bandColor, ringPlan } from "../../static/shared/mesh/rings.js";
+import { bandColor, ringPlan, spacing } from "../../static/shared/mesh/rings.js";
 
 const origin = { lon: -0.1233, lat: 51.5308 };
 const WALK = 4000 / 60;
@@ -71,12 +71,15 @@ test("a saddle joins its diagonal when the cell's mean is inside", () => {
   assert.equal(nestRings(regionRings(make(6), 2.9)).length, 2);    // 3 > 2.9: two pieces
 });
 
-test("the ring plan: every 5 to 30, 10 to 60, 15 beyond, and the outer ring", () => {
+test("the ring plan: every 5 to 30, then 10 (or 15) to 60, 15 beyond, and the outer ring", () => {
   assert.deepEqual(ringPlan(30).map((r) => r.minutes), [5, 10, 15, 20, 25, 30]);
-  assert.deepEqual(ringPlan(45).map((r) => r.minutes), [5, 10, 15, 20, 25, 30, 40, 45]);
+  assert.deepEqual(ringPlan(45).map((r) => r.minutes), [5, 10, 15, 20, 25, 30, 45]);
+  assert.deepEqual(ringPlan(60).map((r) => r.minutes), [5, 10, 15, 20, 25, 30, 40, 50, 60]);
   assert.deepEqual(ringPlan(90).map((r) => r.minutes), [5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 90]);
-  assert.deepEqual(ringPlan(90).filter((r) => r.major).map((r) => r.minutes), [15, 30, 45, 60, 75, 90].filter((m) => [15, 30, 60, 75, 90].includes(m)));
+  assert.deepEqual(ringPlan(90).filter((r) => r.major).map((r) => r.minutes), [15, 30, 60, 75, 90]);
   assert.equal(ringPlan(120).length, 13);
+  assert.deepEqual(spacing(ringPlan(90)), [{ from: 0, step: 5 }, { from: 30, step: 10 }, { from: 60, step: 15 }]);
+  assert.deepEqual(spacing(ringPlan(45)), [{ from: 0, step: 5 }, { from: 30, step: 15 }]);
   assert.match(bandColor(0, 11), /^#[0-9a-f]{6}$/);
   assert.notEqual(bandColor(0, 11), bandColor(10, 11));
 });

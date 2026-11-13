@@ -2,7 +2,8 @@
 // frame vector tests/test_field.py checks on the Python side.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BEYOND, decodeField, NO_DATA, nodeAt } from "../../static/shared/mesh/field.js";
+import { BEYOND, decodeField, knownMinutes, NO_DATA, nodeAt, sampleField } from "../../static/shared/mesh/field.js";
+import { createWarp } from "../../static/shared/mesh/warp.js";
 import { localFrame } from "../../static/shared/mesh/frame.js";
 
 test("decodeField reads tenths, no data, beyond and the filled mark", () => {
@@ -19,4 +20,14 @@ test("decodeField reads tenths, no data, beyond and the filled mark", () => {
 test("frame.js agrees with the Python twin's vector", () => {
   const [x, y] = localFrame({ lon: -0.1233, lat: 51.5308 }).toLocal(-0.0195, 51.5035);
   assert.ok(Math.abs(x - 7188.271472) < 1e-3 && Math.abs(y - 3038.111369) < 1e-3);
+});
+
+test("beyond is a status, never blended into a time", () => {
+  const f = { kind: "field", origin: { lon: 0, lat: 51 }, cell: 100, nx: 2, ny: 2, x0: 0, y0: 0,
+              minutes: new Float32Array([30, BEYOND, 30, 30]) };
+  assert.equal(sampleField(f, 1, 1), BEYOND);                  // next to a beyond corner
+  assert.equal(knownMinutes(f, 1, 1), NO_DATA);                // labels and taps show nothing
+  assert.equal(createWarp({ kind: "polar", field: f, maxMinutes: 45 }).target(1, 1), null);
+  const g = { ...f, minutes: new Float32Array([30, 32, 30, 30]) };
+  assert.ok(Math.abs(knownMinutes(g, 50, 0) - 31) < 1e-9);
 });

@@ -26,10 +26,10 @@ export const WINDOWS = ["wd08", "wd13", "wd19", "sa13"];
 // The timetable window nearest the time in London now (the server's default too).
 export function defaultWindow(date = new Date()) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", weekday: "short", hour: "numeric", hourCycle: "h23",
+    timeZone: "Europe/London", weekday: "short", hour: "2-digit", hourCycle: "h23",
   }).formatToParts(date).map((p) => [p.type, p.value]));
   if (parts.weekday === "Sat" || parts.weekday === "Sun") return "sa13";
-  const h = Number(parts.hour);
+  const h = Number(parts.hour) % 24;                // some engines say 24 for midnight
   return h < 11 ? "wd08" : h < 16 ? "wd13" : "wd19";
 }
 
@@ -38,11 +38,18 @@ export const FADE_MS = 300;       // the ordinary map dissolves into the mesh be
 export const RING_FROM_U = 0.9;   // the exact rings appear over the last tenth of the morph
 export const BAND_OPACITY = 0.38;
 
-// The mesh is refined to half a pixel at the largest px-per-minute it is drawn at: the outer
-// ring at 0.42 of a 1440 × 900 view's short side.
-export function refineEps(outer) {
-  const kMax = (0.42 * 900) / outer;
-  return 0.5 / kMax;
+// The mesh is refined to half a pixel at the largest px-per-minute it is drawn at. The bent
+// view is framed at k (px per minute) and may zoom in one level more (k × 2), no further.
+export const BENT_ZOOM_IN = 1;
+export function refineEps(kFit) {
+  return 0.5 / (kFit * 2 ** BENT_ZOOM_IN);
+}
+
+// The day after `validUntil` (YYYY-MM-DD), in London, the tables are expired.
+export function expired(validUntil, date = new Date()) {
+  if (!validUntil) return false;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(date);
+  return today > validUntil;
 }
 
 // Is (lon, lat) inside a GeoJSON Polygon or MultiPolygon (lon/lat)?

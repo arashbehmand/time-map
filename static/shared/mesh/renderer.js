@@ -132,7 +132,7 @@ void main() {
 // Travel-time bands on the bent map (#5, W-02): the field's own cells, coloured by band from
 // their minutes, with a 1 px line at each ring. They move with the map, so on the bent map the
 // bands turn into the rings. Drawn over water and parks, under the fold tint and the lines.
-export const MAX_LEVELS = 16;
+export const MAX_LEVELS = 24;          // ringPlan(180) is 17; the page offers at most 13
 const BAND_VS = (d) => `${COMMON(d)}
 in vec2 a_pos;
 in float a_min;
@@ -441,7 +441,8 @@ export function createMeshRenderer(canvas, opts = {}) {
   }
 
   function setBandUniforms(L, bands) {
-    const n = Math.min(MAX_LEVELS, bands.levels.length);
+    if (bands.levels.length > MAX_LEVELS) throw new Error(`band layer: ${bands.levels.length} levels, at most ${MAX_LEVELS}`);
+    const n = bands.levels.length;
     const levels = new Float32Array(MAX_LEVELS), colors = new Float32Array(3 * MAX_LEVELS);
     for (let i = 0; i < n; i++) {
       levels[i] = bands.levels[i];

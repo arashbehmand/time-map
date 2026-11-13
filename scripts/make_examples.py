@@ -11,10 +11,10 @@ elements), then writes static/warp/example-field.json and static/meetup/example.
 it whenever the field or the response shapes change. --out-dir writes somewhere else.
 
 --from-saved FILE writes the warp example without any request, from the radial example the
-old warp page used (static/warp/example.json in git history before the radial table was
-retired): a real Mapbox walking answer for King's Cross, 5/10/15/20 minutes at Mapbox's
-5.1 km/h, relabelled to the page's 4 km/h. It lacks the islands and holes a live answer has,
-so regenerate from a server when a token is at hand.
+old warp page used (`git show eab881a:static/warp/example.json > old.json`; the file left the
+tree with the radial table): a real Mapbox walking answer for King's Cross, 5/10/15/20 minutes
+at Mapbox's 5.1 km/h, relabelled to the page's 4 km/h. It reaches 25.5 minutes and lacks the
+islands and holes a live answer has, so regenerate from a server when a token is at hand.
 """
 from __future__ import annotations
 
@@ -95,7 +95,8 @@ def warp_from_saved(path: Path) -> dict:
     minutes[oj, oi] = 0.0
     ex = {"origin": {"lon": o["lon"], "lat": o["lat"], "label": o["label"]}, "mode": "walking",
           "window": None, "window_label": None, **grid.header(), "minutes_b64": F.encode(minutes, filled),
-          "sources": "mapbox", "limit_minutes": 60, "approximate": True, "valid_until": None,
+          "sources": "mapbox", "limit_minutes": int(np.nanmax(np.where(np.isfinite(minutes), minutes, np.nan))),
+          "approximate": True, "valid_until": None,
           "notes": ["saved_example"], "credits": [], "development_only": False}
     check_warp(ex)
     return ex

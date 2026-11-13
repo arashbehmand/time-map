@@ -402,6 +402,7 @@ function g5Width(lab, rand) {
   }
   cands.sort((a, b) => b.stretch - a.stretch);
   results.stretched = { skipped: cands.length ? "no stretched segment long enough on screen" : "no on-screen segment stretched 4:1" };
+  let stretchedDone = false;
   for (const best of cands.slice(0, 30)) {
     const { g, k } = best;
     const dx = g[4 * k + 2] - g[4 * k], dy = g[4 * k + 3] - g[4 * k + 1];
@@ -419,9 +420,27 @@ function g5Width(lab, rand) {
     const p0 = r.renderLines(live, 1, one, [0, 0, 1, 1], PLAIN);
     const mid = [(scr[0].x + scr[1].x) / 2, (scr[0].y + scr[1].y) / 2];
     const rect = [Math.round((mid[0] - 20) * p0.dpr), Math.round((mid[1] - 20) * p0.dpr), Math.round(40 * p0.dpr), Math.round(40 * p0.dpr)];
-    const got = r.renderLines(live, 1, one, rect, PLAIN);
-    results.stretched = { stretch: round(best.stretch, 1), widthPx: round(widthIn(got.cov, rect, scr.map((q) => [q.x * p0.dpr, q.y * p0.dpr]), p0.dpr)), nominalPx: round(p0.widths[style]) };
-    if (Math.abs(results.stretched.widthPx - results.stretched.nominalPx) > 0.25) fails.push("stretched");
+    if (!stretchedDone) {
+      const got = r.renderLines(live, 1, one, rect, PLAIN);
+      results.stretched = { stretch: round(best.stretch, 1), widthPx: round(widthIn(got.cov, rect, scr.map((q) => [q.x * p0.dpr, q.y * p0.dpr]), p0.dpr)), nominalPx: round(p0.widths[style]) };
+      if (Math.abs(results.stretched.widthPx - results.stretched.nominalPx) > 0.25) fails.push("stretched");
+      stretchedDone = true;
+    }
+    // The scale-aware check compares the drawn coverage near the middle of the span with one
+    // expectation from the span's midpoint, so the span must not cross a fold: there the
+    // drawn pieces fade (FOLD_FADE) and the expectation may not. Spans that do are recorded
+    // and the next candidate is tried.
+    const dets = [];
+    for (let i = 0; i <= 8; i++) {
+      const f = i / 8, jj = warp.screenJacobian(local[0][0] + (local[1][0] - local[0][0]) * f, local[0][1] + (local[1][1] - local[0][1]) * f, live, 1);
+      dets.push(jj ? jj.det : NaN);
+    }
+    const fold = dets.some((d) => !(d > 0)) && dets.some((d) => d > 0);
+    if (fold) {
+      results.scaleAwareSkipped = (results.scaleAwareSkipped || 0) + 1;
+      results.scaleAwareFoldSpan = results.scaleAwareFoldSpan || { detMin: round(Math.min(...dets.filter(Number.isFinite)), 6), detMax: round(Math.max(...dets.filter(Number.isFinite)), 6) };
+      continue;
+    }
     // The scale-aware style on the same segment: what the shader draws must be what
     // lineEmphasis() and the class's bent strength give in JS. Compared as coverage across
     // the line: a capsule of half-width h device px covers 2h, or (h + ½)² under h = ½.

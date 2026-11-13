@@ -13,16 +13,16 @@
 // stays up until the new one is ready.
 import { createLatest } from "/shared/latest.js";
 import { friendly, geocode, loadPref, postJSON, prefersReducedMotion, savePref } from "/shared/api.js";
-import { bandMesh, bandPolygons } from "/shared/mesh/contours.js";
+import { bandPolygons } from "/shared/mesh/contours.js";
 import { tileCover } from "/shared/mesh/cover.js";
-import { decodeField, nodeAt, sampleField } from "/shared/mesh/field.js";
+import { decodeField, knownMinutes, nodeAt } from "/shared/mesh/field.js";
 import { fitFor, reachBox } from "/shared/mesh/fit.js";
 import { cameraFromMap, localFrame } from "/shared/mesh/frame.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "/shared/mesh/labels.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "/shared/mesh/pipeline.js";
 import { createMeshRenderer } from "/shared/mesh/renderer.js";
 import { bandColor, bandRgb, ringPlan } from "/shared/mesh/rings.js";
-import { angularSpread, createWarp, dotScale, targetsFor } from "/shared/mesh/warp.js";
+import { angularSpread, createWarp, dotScale } from "/shared/mesh/warp.js";
 import * as V from "./views.js";
 import * as T from "./words.js";
 
@@ -41,7 +41,6 @@ const S = {
   directions: V.DEFAULT_DIRECTIONS,
   active: null,          // the field drawn now: {key, json, field, frame}
   bent: false,           // what the person asked for
-  bentOnce: false,       // after the first bend, scenes are prepared for every new field
   u: 0, fade: 0,         // morph (0 ordinary … 1 bent) and the mesh's opacity
   anim: null,
   mesh: null,            // the bent view drawn now: {key, gen, spec, warp, frame, scene, labels, kRef, zRef}
@@ -51,6 +50,8 @@ const S = {
   transit: { available: false },
   renderer: null, worker: null,
   frameWhenReady: false,
+  notice: "",            // why the page is showing something else (London only, expired): stays until the next choice
+  tapSeq: 0, bandsSeq: 0,
   placed: [], tap: null, tapMark: null,
   requests: 0, timings: [], drawn: 0,
 };
@@ -117,7 +118,11 @@ function requestField({ frame = false, delay = 0 } = {}) {
   latest.cancel();
   if (frame) S.frameWhenReady = true;
   const key = currentKey();
-  const cached = fields.get(key);
+  let cached = fields.get(key);
+  if (cached && cached.json.mode === "transit" && V.expired(cached.json.valid_until)) {
+    fields.delete(key);                    // a tab left open past the tables' last day
+    cached = null;
+  }
   if (cached) { remember(key, cached); activate(key, cached); return; }
   setStatus(T.UPDATING, "busy");
   const snap = { lon: S.origin.lon, lat: S.origin.lat, mode: S.mode, window: S.window, key };
@@ -132,11 +137,18 @@ function requestField({ frame = false, delay = 0 } = {}) {
       }, signal));
     } catch (e) {
       if (e && e.code === "outside_transit_area") { toWalking(T.LONDON_ONLY); return; }
+      if (e && e.code === "transit_unavailable") { toWalking(T.NO_TRANSIT); return; }
       setStatus(friendly(e), "error");
+      if (e && e.name !== "AbortError") clearField();
       return;
     }
     if (res.stale) return;
-    const entry = entryFrom(res.value);
+    let entry;
+    try { entry = entryFrom(res.value); } catch {
+      setStatus(friendly(new Error("bad field")), "error");
+      clearField();
+      return;
+    }
     remember(snap.key, entry);
     S.timings.push({ kind: "field", ms: performance.now() - t0 });
     if (snap.key === currentKey()) activate(snap.key, entry);
@@ -148,8 +160,18 @@ function toWalking(message) {
   checkRadio("mode", "walking");
   S.outer = V.MODES.walking.defaultOuter;
   buildOuterChips();
+  S.notice = message;                      // shown with the limits until the next choice
   requestField({ frame: true });
-  setStatus(message, "error");
+  dirty = true;
+}
+
+// No field for the pin shown: nothing is drawn around it (rather than the old pin's bands).
+function clearField() {
+  S.active = null;
+  const src = map && map.getSource("bands");
+  if (src) src.setData({ type: "FeatureCollection", features: [] });
+  if (S.bent) setBent(false);
+  dirty = true;
 }
 
 // A field becomes the one drawn: bands on the normal map at once; the bent view when its scene
@@ -162,21 +184,29 @@ function activate(key, entry) {
   updateBands();
   updateCredits();
   if (S.frameWhenReady) { S.frameWhenReady = false; frameView(); }
-  if (S.bent || S.bentOnce) prepareMesh();
+  if (S.bent) prepareMesh();
   dirty = true;
 }
 
 // ── The ordinary view: bands on the normal map ───────────────────────
 function levels() { return ringPlan(S.outer).map((r) => r.minutes); }
 
+// The bands are contoured in the worker (a transit field is about 300k nodes): the page never
+// stalls on them. Without a worker (no WebGL2), here.
 function updateBands() {
-  const src = map && map.getSource("bands");
-  if (!src || !S.active) return;
+  if (!map || !map.getSource("bands") || !S.active) return;
   const lv = levels();
-  const fc = bandPolygons(S.active.field, S.active.frame, lv, { skipFilled: true });
-  for (const f of fc.features) f.properties.color = bandColor(f.properties.band, lv.length);
-  src.setData(fc);
+  const key = `${S.active.key}|${lv.join(",")}`;
   buildBandLegend(lv);
+  if (!S.worker) { showBands(key, bandPolygons(S.active.field, S.active.frame, lv, { skipFilled: true })); return; }
+  S.worker.postMessage({ type: "bands", id: ++S.bandsSeq, key, levels: lv, field: workerField(S.active.field) });
+}
+
+function showBands(key, fc) {
+  if (!S.active || key !== `${S.active.key}|${levels().join(",")}`) return;   // overtaken
+  const n = levels().length;
+  for (const f of fc.features) f.properties.color = bandColor(f.properties.band, n);
+  map.getSource("bands").setData(fc);
 }
 
 function buildBandLegend(lv) {
@@ -215,26 +245,40 @@ function meshSpec(entry) {
 function plainField(f) {
   return { origin: f.origin, cell: f.cell, nx: f.nx, ny: f.ny, x0: f.x0, y0: f.y0, minutes: f.minutes };
 }
+function workerField(f) { return { ...plainField(f), filled: f.filled }; }
 
-// Ask the worker for the scene of the active field; it is swapped in when it arrives.
-function prepareMesh() {
-  if (!S.renderer || !S.renderer.supported || !S.active) return;
+// The bent view wanted now: the active field, the outer ring, the directions setting.
+const desiredMeshKey = () => (S.active ? `${S.active.key}|${S.outer}|${S.directions}` : "");
+
+// Ask the worker for the bent view of the active field: the map's scene, and the band layer
+// with its overlap index. It is swapped in when both have arrived, if still the one wanted.
+function prepareMesh({ retry = false } = {}) {
+  if (!bendOffered() || !S.active) return;
   const entry = S.active;
+  const key = desiredMeshKey();
+  if (S.mesh && S.mesh.key === key && !retry) { S.pendingMesh = null; return; }
+  if (S.pendingMesh && S.pendingMesh.key === key && !retry) return;
   const spec = meshSpec(entry);
-  const key = `${entry.key}|${S.outer}|${S.directions}`;
-  if (S.mesh && S.mesh.key === key) return;
-  if (S.pendingMesh && S.pendingMesh.key === key) return;
   measureBox();
   const fit = fitFor(spec, entry.frame, box.w, box.h, S.outer);
-  const cover = tileCover(entry.frame, reachBox(spec, S.outer));
+  const reach = reachBox(spec, S.outer);
+  const cover = tileCover(entry.frame, reach);
+  const eps = V.refineEps(fit.k);
   const gen = ++S.gen;
-  S.pendingMesh = { key, gen, entry, spec, warp: createWarp(spec), frame: entry.frame, kRef: fit.k, zRef: fit.zoom, requestedAt: performance.now() };
+  const prev = retry && S.mesh && S.mesh.key === key ? S.mesh : null;
+  S.pendingMesh = { key, gen, entry, spec, outer: S.outer, warp: createWarp(spec), frame: entry.frame,
+                    kRef: fit.k, zRef: fit.zoom, requestedAt: performance.now(), retried: retry,
+                    layers: prev ? prev.layers : null, scene: null };
   S.worker.postMessage({
     type: "scene", gen, origin: entry.frame.origin, tiles: cover.tiles,
     spacingDiv: DEFAULT_SPACING_DIV, budget: DEFAULT_BUDGET, source: "tiles",
     warp: needsCpuTargets() ? { kind: "polar", field: plainField(entry.field), maxMinutes: S.outer, angles: spec.angles || null } : null,
-    refine: { field: plainField(entry.field), maxMinutes: S.outer, eps: V.refineEps(S.outer), angles: spec.angles || null },
+    refine: { field: plainField(entry.field), maxMinutes: S.outer, eps, angles: spec.angles || null },
   });
+  if (!prev) {
+    S.worker.postMessage({ type: "layers", key, gen, field: workerField(entry.field), maxMinutes: S.outer,
+                           angles: spec.angles || null, eps, box: reach, cpu: needsCpuTargets() });
+  }
   if (S.bent && !S.mesh) setStatus(T.PREPARING, "busy");
 }
 
@@ -245,37 +289,64 @@ function onWorker(e) {
     if (w) { sheetWaiters.delete(msg.id); w(msg.hits || []); }
     return;
   }
+  if (msg.type === "bands-result") { showBands(msg.key, msg.fc); return; }
+  const p = S.pendingMesh;
   if (msg.type === "error") {
-    if (S.pendingMesh && msg.gen === S.pendingMesh.gen) setStatus(friendly(new Error(msg.message)), "error");
+    if (p && (msg.gen === p.gen || msg.key === p.key)) {
+      S.pendingMesh = null;                 // so pressing Bend again asks again
+      if (!S.mesh || S.mesh.key !== p.key) {
+        if (S.bent) setBent(false);
+        setStatus(T.BEND_FAILED, "error");
+      }
+    }
     return;
   }
-  if (msg.type !== "scene") return;
-  const p = S.pendingMesh;
-  const m = S.mesh;
-  if (p && msg.gen === p.gen) {
-    if (msg.partial && m) return;                   // keep the old view until the scene is whole
-    installMesh(p, msg.scene, !msg.partial);
-    if (!msg.partial) { S.pendingMesh = null; S.timings.push({ kind: "scene", ms: performance.now() - p.requestedAt }); }
-  } else if (m && msg.gen === m.gen) {
-    m.scene = msg.scene;                            // the rest of a scene already shown
-    S.renderer.setScene(msg.scene);
-    m.labels = labelsFor(m);
-    dirty = true;
+  if (msg.type === "layers-result") {
+    if (p && msg.key === p.key) { p.layers = msg; tryInstall(p, p.sceneWhole); }
+    return;
+  }
+  if (msg.type !== "scene" || !p || msg.gen !== p.gen) return;   // overtaken: never shown
+  if (p.key !== desiredMeshKey()) { S.pendingMesh = null; return; }
+  const stats = msg.scene.stats || {};
+  if (!msg.partial && stats.cover > 0 && stats.loaded === 0) {
+    S.pendingMesh = null;                   // no tile at all: there is no map to bend
+    if (!S.mesh || S.mesh.key !== p.key) { if (S.bent) setBent(false); }
+    setStatus(T.TILES_FAILED, "error");
+    return;
+  }
+  if (msg.partial && S.mesh) return;        // keep the old view until the scene is whole
+  p.scene = msg.scene;
+  p.sceneWhole = !msg.partial;
+  tryInstall(p, !msg.partial);
+}
+
+// Both halves in: install. A scene missing tiles is shown, and asked for once more after 5 s
+// (only the missing tiles are fetched again; the rest are cached in the worker).
+function tryInstall(p, whole) {
+  if (!p.scene || !p.layers || S.pendingMesh !== p) return;
+  installMesh(p, whole);
+  if (!whole) return;
+  S.pendingMesh = null;
+  S.timings.push({ kind: "scene", ms: performance.now() - p.requestedAt });
+  const missing = (p.scene.stats || {}).missing || 0;
+  if (missing > 0 && !p.retried) {
+    setStatus(T.TILES_MISSING, "busy");
+    setTimeout(() => { if (S.mesh && S.mesh.key === p.key && !S.pendingMesh) prepareMesh({ retry: true }); }, 5000);
+  } else if (statusEl.textContent === T.TILES_MISSING || statusEl.textContent === T.PREPARING) {
+    setStatus(missing > 0 ? T.TILES_FAILED : "");
   }
 }
 
-function installMesh(p, scene, whole) {
+function installMesh(p, whole) {
   const r = S.renderer;
-  const field = p.entry.field;
   r.setWarp(p.spec);
-  const bands = bandMesh(field, reachBox(p.spec, S.outer));
-  if (needsCpuTargets()) bands.targets = targetsFor(p.warp, bands.pos);
+  const L = p.layers;
+  const bands = { pos: L.pos, minutes: L.minutes, index: L.index, targets: L.targets };
   r.setBandMesh(bands);
   if (p.entry.json.mode === "transit") r.setFoldMesh({ pos: bands.pos, index: bands.index, targets: bands.targets || null });
-  r.setScene(scene);
-  S.mesh = { ...p, scene };
+  r.setScene(p.scene);
+  S.mesh = { ...p };
   S.mesh.labels = labelsFor(S.mesh);
-  S.worker.postMessage({ type: "sheets", key: p.key, spec: { field: { ...plainField(field), filled: field.filled }, maxMinutes: S.outer, angles: p.spec.angles || null } });
   if (whole && statusEl.textContent === T.PREPARING) setStatus("");
   dirty = true;
   if (whole) maybeStartBend();            // bend only once every tile is in
@@ -284,7 +355,7 @@ function installMesh(p, scene, whole) {
 // Label candidates: the timetable's stations (with their minutes) for public transport, the
 // tiles' stations otherwise, and the tiles' places.
 function labelsFor(m) {
-  const minutesOf = (x, y) => sampleField(m.entry.field, x, y);
+  const minutesOf = (x, y) => knownMinutes(m.entry.field, x, y);
   let labels = m.scene.labels;
   if (m.entry.json.mode === "transit" && m.entry.json.stations) {
     const stations = m.entry.json.stations.map((s) => {
@@ -301,9 +372,25 @@ function bendOffered() { return S.renderer && S.renderer.supported && V.bendOffe
 
 function setBent(on) {
   S.bent = !!(on && bendOffered());
-  if (S.bent) { S.bentOnce = true; prepareMesh(); maybeStartBend(); }
-  else animateTo(0);
+  if (S.bent) { prepareMesh(); maybeStartBend(); } else { S.pendingMesh = null; animateTo(0); }
   updateLegend();
+}
+
+// While the bent map covers it, the normal map's layers are hidden, so MapLibre fetches no
+// tiles for a map nobody sees; the bent view may zoom in one level past its framing, no more
+// (the mesh is refined for that, views.refineEps).
+let basemapShown = true;
+function showBasemap(on) {
+  if (!map || basemapShown === on) return;
+  basemapShown = on;
+  for (const layer of map.getStyle().layers) {
+    if (layer.id !== "bg") map.setLayoutProperty(layer.id, "visibility", on ? "visible" : "none");
+  }
+}
+function flatNow() {
+  S.u = 0; S.fade = 0; S.anim = null;
+  showBasemap(true);
+  if (map) map.setMaxZoom(null);
 }
 
 // Bend once the scene for the field drawn now is ready.
@@ -317,6 +404,8 @@ function maybeStartBend() {
 // Two steps each way: the normal map dissolves into the unbent mesh, then the mesh moves.
 function animateTo(target) {
   S.anim = { to: target, start: performance.now(), u0: S.u, f0: S.fade, reduce: prefersReducedMotion() };
+  if (target === 0) showBasemap(true);
+  else if (S.mesh && map) map.setMaxZoom(S.mesh.zRef + V.BENT_ZOOM_IN);
 }
 
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
@@ -324,20 +413,24 @@ const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 function stepAnim(now) {
   const a = S.anim;
   if (!a) return;
-  if (a.reduce) { S.u = S.fade = a.to; S.anim = null; dirty = true; return; }
+  const settle = () => {
+    if (a.to === 1) showBasemap(false);
+    else if (map) map.setMaxZoom(null);
+  };
+  if (a.reduce) { S.u = S.fade = a.to; S.anim = null; settle(); dirty = true; return; }
   const t = now - a.start;
   if (a.to === 1) {
     const fadeDur = V.FADE_MS * (1 - a.f0), morphDur = V.MORPH_MS * (1 - a.u0);
     S.fade = fadeDur > 0 ? Math.min(1, a.f0 + (1 - a.f0) * Math.min(1, t / fadeDur)) : 1;
     const mt = t - fadeDur;
     S.u = morphDur > 0 ? (mt <= 0 ? a.u0 : a.u0 + (1 - a.u0) * ease(Math.min(1, mt / morphDur))) : 1;
-    if (S.fade >= 1 && S.u >= 1) S.anim = null;
+    if (S.fade >= 1 && S.u >= 1) { S.anim = null; settle(); }
   } else {
     const morphDur = V.MORPH_MS * a.u0, fadeDur = V.FADE_MS * a.f0;
     S.u = morphDur > 0 ? a.u0 * (1 - ease(Math.min(1, t / morphDur))) : 0;
     const ft = t - morphDur;
     S.fade = fadeDur > 0 ? (ft <= 0 ? a.f0 : a.f0 * (1 - Math.min(1, ft / fadeDur))) : 0;
-    if (S.fade <= 0 && S.u <= 0) S.anim = null;
+    if (S.fade <= 0 && S.u <= 0) { S.anim = null; settle(); }
   }
   dirty = true;
 }
@@ -367,14 +460,14 @@ function drawFrame(now) {
   const m = S.mesh;
   if (S.fade > 0 && m && S.renderer && !S.renderer.lost) {
     const cam = camera(m);
-    const lv = levels();
+    const lv = ringPlan(m.outer).map((r) => r.minutes);   // the installed view's rings, not the next one's
     const stats = S.renderer.draw(cam, S.u, {
       showFolds: m.entry.json.mode === "transit", adaptive: true,
       bands: { levels: lv, colors: lv.map((_, i) => bandRgb(i, lv.length)), opacity: V.BAND_OPACITY },
     });
     if (!stats.skipped) S.drawn = now;
     pin = { x: cam.pin[0], y: cam.pin[1] };
-    drawRings(cam);
+    drawRings(cam, m.outer);
     drawLabels(m, cam);
   } else {
     const p = map.project([S.origin.lon, S.origin.lat]);
@@ -394,12 +487,12 @@ function drawFrame(now) {
   show(pinEl, !pinGone);
 }
 
-function drawRings(cam) {
+function drawRings(cam, outer) {
   const a = Math.max(0, Math.min(1, (S.u - V.RING_FROM_U) / (1 - V.RING_FROM_U)));
   if (a <= 0) return;
   ctx.save();
   ctx.globalAlpha = a;
-  for (const r of ringPlan(S.outer)) {
+  for (const r of ringPlan(outer)) {
     ctx.beginPath();
     ctx.arc(cam.pin[0], cam.pin[1], cam.k * r.minutes, 0, 2 * Math.PI);
     ctx.strokeStyle = r.major ? "rgba(31, 78, 156, 0.85)" : "rgba(31, 78, 156, 0.35)";
@@ -423,7 +516,7 @@ function drawLabels(m, cam) {
   S.placed = placeLabels(m.labels, {
     screenOf, measure,
     jacobianOf: (x, y) => m.warp.screenJacobian(x, y, cam, u),
-    minutesOf: (x, y) => sampleField(m.entry.field, x, y),
+    minutesOf: (x, y) => knownMinutes(m.entry.field, x, y),
     width: cam.width, height: cam.height, cap: phone ? LABEL_CAP.phone : LABEL_CAP.desktop,
     obstacles: [[cam.pin[0] - 12, cam.pin[1] - 12, cam.pin[0] + 12, cam.pin[1] + 12]],
   });
@@ -477,12 +570,14 @@ function loop(now) {
 // ── Legend ───────────────────────────────────────────────────────────
 function updateLegend() {
   const bentNow = S.u > 0.5;
-  const plan = ringPlan(S.outer);
+  const outer = bentNow && S.mesh ? S.mesh.outer : S.outer;
   setText($("from"), T.fromLine(S.origin));
   setText($("sentence"), S.dragging ? "Drop the pin where you want to start."
-    : T.sentence(S.mode, S.outer, plan.length > 1 ? plan[1].minutes - plan[0].minutes : S.outer, bentNow));
-  setText($("limits"), S.origin.example ? T.EXAMPLE_NOTE : T.limits(S.active && S.active.json));
-  setText($("beyond"), T.beyond(S.outer));
+    : T.sentence(S.mode, outer, ringPlan(outer), bentNow));
+  const limits = S.origin.example ? T.EXAMPLE_NOTE : T.limits(S.active && S.active.json);
+  setText($("limits"), S.notice ? `${S.notice} ${limits}` : limits);
+  setText($("beyond"), T.beyond(outer));
+  show($("beyond"), S.bent || bentNow);    // on the normal map, further places are shown, uncoloured
   const offered = !!bendOffered();
   show(toggleBtn, offered);
   setText(toggleBtn, S.bent ? T.BEND_LABEL.on : T.BEND_LABEL.off);
@@ -514,7 +609,7 @@ function showTapList(heading, items, note = "") {
   show($("tap-note"), !!note);
   show($("tap-list"), true);
 }
-function hideTapList() { show($("tap-list"), false); S.tapMark = null; dirty = true; }
+function hideTapList() { show($("tap-list"), false); S.tapMark = null; S.tapSeq++; dirty = true; }
 
 function querySheets(key, lx, ly, r) {
   const id = ++sheetsSeq;
@@ -535,27 +630,35 @@ function nameOf(m, x, y) {
 }
 
 async function tapAt(px, py) {
+  if (S.anim || (S.u > 0.01 && S.u < 0.99)) return [];    // mid-morph: nothing to point at yet
+  const seq = ++S.tapSeq;
   S.tapMark = { x: px, y: py };
   dirty = true;
   if (S.u > 0.99 && S.mesh) {
     const m = S.mesh;
     const cam = camera(m);
+    const tap = S.tap;
     const lx = (px - cam.pin[0]) / cam.k, ly = (py - cam.pin[1]) / cam.k;
     const sheets = await querySheets(m.key, lx, ly, TAP_PX / cam.k);
+    // Dismissed, tapped again or replaced meanwhile: this answer is for nothing on screen.
+    if (seq !== S.tapSeq || S.mesh !== m || S.u <= 0.99) return [];
     const seen = new Set();
     const items = [];
     for (const s of sheets) {
-      const name = nameOf(m, s.x, s.y);
+      // Distinct places keep distinct lines: a second sheet named after the same station is
+      // said by where it is instead.
+      let name = nameOf(m, s.x, s.y);
+      if (seen.has(name)) name = T.unnamedPlace(s.x, s.y);
       if (seen.has(name)) continue;
       seen.add(name);
       items.push(`${name}: ${T.minutesText(s.minutes)}`);
     }
     // Every label candidate under the finger too, placed or not.
-    if (S.tap) {
-      for (const l of S.tap.index.query(px, py, TAP_PX)) {
+    if (tap) {
+      for (const l of tap.index.query(px, py, TAP_PX)) {
         if (seen.has(l.text)) continue;
-        const t = sampleField(m.entry.field, l.x, l.y);
-        if (!(t >= 0) || t > S.outer) continue;
+        const t = knownMinutes(m.entry.field, l.x, l.y);
+        if (!(t >= 0) || t > m.outer) continue;
         seen.add(l.text);
         items.push(`${l.text}: ${T.minutesText(t)}`);
       }
@@ -574,6 +677,7 @@ async function tapAt(px, py) {
 // ── Origin, pin, search, location ────────────────────────────────────
 function setOrigin(lon, lat, label) {
   S.origin = { lon, lat, label, example: false };
+  S.notice = "";
   pinEl.setAttribute("aria-label", `Starting point: ${label}. Drag it, or use the arrow keys, to move it.`);
   hideTapList();
   checkTransitCoverage();
@@ -609,7 +713,7 @@ function initPin() {
       // Straight to the normal map: the drop is read there, and the old picture must not
       // be drawn around the moving pin.
       S.dragging = true;
-      S.u = 0; S.fade = 0; S.anim = null;
+      flatNow();
       pinEl.classList.add("dragging");
       supersedeLookups();
       clearTimeout(requestTimer);
@@ -646,7 +750,7 @@ function initPin() {
     const x = p.x + d[0] * step, y = p.y + d[1] * step;
     const ll = map.unproject([x, y]);
     supersedeLookups();
-    if (S.u > 0 || S.fade > 0) { S.u = 0; S.fade = 0; S.anim = null; }
+    if (S.u > 0 || S.fade > 0) flatNow();
     setOrigin(ll.lng, ll.lat, "the dropped pin");
     const margin = 40;
     if (x < margin || x > box.w - margin || y < box.top + margin || y > box.bottom - margin) {
@@ -732,7 +836,7 @@ function setOuter(m) {
   S.outer = m;
   updateBands();
   frameView();
-  if (S.bent || S.bentOnce) prepareMesh();
+  if (S.bent) prepareMesh();
   dirty = true;
 }
 
@@ -742,9 +846,10 @@ function initControls() {
       if (!radio.checked) return;
       S.mode = radio.value;
       S.outer = V.MODES[S.mode].defaultOuter;
+      S.notice = "";
       buildOuterChips();
       hideTapList();
-      if (!bendOffered() && S.bent) { S.bent = false; S.u = 0; S.fade = 0; S.anim = null; }
+      if (!bendOffered() && S.bent) { S.bent = false; S.pendingMesh = null; flatNow(); }
       requestField({ frame: true });
     });
   }
@@ -755,7 +860,9 @@ function initControls() {
       prepareMesh();
     });
   }
-  $("window-select").addEventListener("change", (e) => { S.window = e.target.value; requestField(); });
+  $("window-select").addEventListener("change", (e) => { S.window = e.target.value; S.notice = ""; requestField(); });
+  // A tab left open: check the tables again when it comes back (they may have expired).
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) loadTransitStatus(); });
   toggleBtn.addEventListener("click", () => setBent(!S.bent));
   $("tap-close").addEventListener("click", hideTapList);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("tap-list").hidden) hideTapList(); });
@@ -774,14 +881,21 @@ async function loadTransitStatus() {
     S.transit = await resp.json();
   } catch { return; }
   if (S.transit.loading) { setTimeout(loadTransitStatus, 3000); return; }
-  if (!S.transit.available) return;
+  if (!S.transit.available || V.expired(S.transit.valid_until)) {
+    show($("transit-chip"), false);
+    for (const k of [...fields.keys()]) if (k.includes(",transit,")) fields.delete(k);
+    if (S.mode === "transit") toWalking(S.transit.reason === "expired" ? T.EXPIRED : T.NO_TRANSIT);
+    return;
+  }
   show($("transit-chip"), true);
   const sel = $("window-select");
   sel.replaceChildren(...S.transit.windows.map((w) => new Option(w.label[0].toUpperCase() + w.label.slice(1), w.id)));
-  if (V.WINDOWS.includes(Q.get("window"))) S.window = Q.get("window");
+  if (!S.statusSeen && V.WINDOWS.includes(Q.get("window"))) S.window = Q.get("window");
   sel.value = S.window;
   checkTransitCoverage();
-  if (Q.get("mode") === "transit" && !transitInput().disabled) {
+  const first = !S.statusSeen;
+  S.statusSeen = true;
+  if (first && Q.get("mode") === "transit" && !transitInput().disabled) {
     S.mode = "transit";
     checkRadio("mode", "transit");
     S.outer = V.MODES.transit.defaultOuter;
@@ -867,7 +981,7 @@ if (typeof ResizeObserver === "function") {
 function initRenderer() {
   const r = createMeshRenderer(meshCanvas, {
     backend: Q.get("backend") === "c" ? "cpu" : "gpu", force: Q.get("caps") || "",
-    onLost: () => { S.u = 0; S.fade = 0; S.anim = null; S.bent = false; setStatus(T.NO_BEND, "error"); dirty = true; },
+    onLost: () => { flatNow(); S.bent = false; S.pendingMesh = null; setStatus(T.NO_BEND, "error"); dirty = true; },
     onRestored: () => { S.mesh = null; S.pendingMesh = null; setStatus(""); dirty = true; },
   });
   S.renderer = r;
@@ -902,7 +1016,11 @@ async function boot() {
   if (ex) {
     S.origin = { lon: ex.origin.lon, lat: ex.origin.lat, label: ex.origin.label || FALLBACK_ORIGIN.label, example: true };
     S.mode = ex.mode;
-    S.outer = V.MODES[ex.mode].defaultOuter;
+    // Open at the largest ring the saved field reaches (the converted example stops at 25).
+    let reach = 0;
+    for (const v of decodeField(ex).minutes) if (v >= 0 && v < 1e4 && v > reach) reach = v;
+    const choices = V.MODES[ex.mode].outer;
+    S.outer = [...choices].reverse().find((m) => m <= reach) || choices[0];
   }
   checkRadio("mode", S.mode);
   pinEl.setAttribute("aria-label", `Starting point: ${S.origin.label}. Drag it, or use the arrow keys, to move it.`);
@@ -952,5 +1070,6 @@ const testHook = {
   tapAt,
   get requests() { return S.requests; },
 };
-window.__warp = testHook;
+// Only on request (?test=1): the headless checks drive the page through it.
+if (Q.get("test") === "1") window.__warp = testHook;
 testHook.ready = boot();

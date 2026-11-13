@@ -9,7 +9,7 @@
 import { tileCover } from "../../shared/mesh/cover.js";
 import { fitFor, reachBox } from "../../shared/mesh/fit.js";
 import { cameraFromMap, localFrame, WORLD_PX } from "../../shared/mesh/frame.js";
-import { decodeField, sampleField } from "../../shared/mesh/field.js";
+import { decodeField, knownMinutes, sampleField } from "../../shared/mesh/field.js";
 import { directionFour, ringRadius } from "../../shared/mesh/diagnostics.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "../../shared/mesh/labels.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "../../shared/mesh/pipeline.js";
@@ -160,7 +160,7 @@ function onWorker(e) {
   const upload = S.deck ? S.deck.setScene(msg.scene) : S.renderer.setScene ? S.renderer.setScene(msg.scene) : 0;
   S.scene = msg.scene;
   S.sceneInfo = { ...msg.scene.stats, uploadMs: upload + warpMs, roundTripMs: t0 - S.requestedAt };
-  S.labels = sortCandidates(msg.scene.labels, S.spec.kind === "polar" ? (x, y) => sampleField(S.spec.field, x, y) : null);
+  S.labels = sortCandidates(msg.scene.labels, S.spec.kind === "polar" ? (x, y) => knownMinutes(S.spec.field, x, y) : null);
   S.dirty = true;
   if (OPT.folds) buildFoldLayer();
   if (!msg.partial) {
@@ -260,7 +260,7 @@ function placeLabelsNow(cam) {
   S.placed = placeLabels(S.labels, {
     screenOf, measure,
     jacobianOf: (x, y) => S.warp.screenJacobian(x, y, cam, u),
-    minutesOf: S.spec.kind === "polar" ? (x, y) => sampleField(S.spec.field, x, y) : null,
+    minutesOf: S.spec.kind === "polar" ? (x, y) => knownMinutes(S.spec.field, x, y) : null,
     width: cam.width, height: cam.height, cap: phone ? LABEL_CAP.phone : LABEL_CAP.desktop,
     obstacles: [[cam.pin[0] - PIN_R, cam.pin[1] - PIN_R, cam.pin[0] + PIN_R, cam.pin[1] + PIN_R]],
   });
@@ -613,7 +613,9 @@ async function directionChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spr
         const json = await fetchField(o, { mode, window: w, smooth: sm });
         const field = decodeField(json);
         const frame = localFrame(o);
-        if (sm) seams.push({ origin: o.id, window: w, sources: json.sources, ...nearFieldSeam(field) });
+        // With sources "tables" (no walking near field) this is the field's own slope across
+        // 100 m at 2 km, not the near-field seam.
+        if (sm) seams.push({ origin: o.id, window: w, sources: json.sources, measures: json.sources === "tables" ? "slope (no near field)" : "near-field seam", ...nearFieldSeam(field) });
         if (o.id === "baker-street" && sm) {
           // At the station itself (the timetable's position), not the toy network's.
           const st = (json.stations || []).find((s) => s.name === "Wembley Park");
@@ -624,12 +626,13 @@ async function directionChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spr
           const spec = { kind: "polar", field, maxMinutes: ring };
           if (sp > 0) spec.angles = angularSpread(field, ring, { spread: sp });
           const d = directionFour(spec);
-          const rr = ringRadius(spec, { n: 1000 });
+          const rr = ringRadius(spec, { n: 1000 });     // an identity check of the JS warp, not G3
           const r3 = (v) => (v === null ? null : Math.round(v * 1000) / 1000);
           results.push({
             origin: o.id, window: w, smooth: sm, spread: sp, sources: json.sources, notes: json.notes,
             foldedShare: r3(d.at200.foldedShare), stackedShare: r3(d.at200.foldedSheets), medianStretch: r3(d.at200.medianStretch),
             foldedShare800: r3(d.at800.foldedShare), medianStretch800: r3(d.at800.medianStretch),
+            foldedShareOutside2km: r3(d.outside2km.foldedShare), medianStretchOutside2km: r3(d.outside2km.medianStretch),
             cellsSkipped: d.at200.skipped, cells: d.at200.cells,
             passFolded: d.passFolded, passStretch: d.passStretch, radiusMaxErrMinutes: rr.maxError, radiusSamples: rr.n,
           });

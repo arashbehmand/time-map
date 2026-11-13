@@ -3,9 +3,14 @@
 //
 //   node (i, j) sits at (x0 + i·cell, y0 + j·cell); minutes[j·nx + i]
 //   NO_DATA (−1) means unknown. GLSL ES doesn't guarantee NaN, so no NaN anywhere.
-//   A bilinear sample that touches a NO_DATA corner, or falls outside the grid, is NO_DATA.
+//   A bilinear sample that touches a NO_DATA corner, or falls outside the grid, is NO_DATA;
+//   one that touches a BEYOND corner (no time within the tables' limit) is BEYOND. Neither is
+//   ever blended into a time.
 
 export const NO_DATA = -1;
+// No time within the tables' limit (the server's 0xFFFE): past every outer ring, it fades onto
+// it like no data.
+export const BEYOND = 1e4;
 // A grid node with no target: its x is this (GLSL ES has no NaN either).
 export const GRID_NO_DATA = -1e30;
 
@@ -24,8 +29,16 @@ export function sampleField(f, x, y) {
   const m = f.minutes, k = j * f.nx + i;
   const c00 = m[k], c10 = m[k + 1], c01 = m[k + f.nx], c11 = m[k + f.nx + 1];
   if (c00 < 0 || c10 < 0 || c01 < 0 || c11 < 0) return NO_DATA;
+  if (c00 >= BEYOND || c10 >= BEYOND || c01 >= BEYOND || c11 >= BEYOND) return BEYOND;
   const top = c00 + (c10 - c00) * a, bottom = c01 + (c11 - c01) * a;
   return top + (bottom - top) * b;
+}
+
+// Minutes at local (x, y), or NO_DATA where there is no time to show (unknown or beyond):
+// for labels and taps, which must never print a sentinel.
+export function knownMinutes(f, x, y) {
+  const t = sampleField(f, x, y);
+  return t >= 0 && t < BEYOND ? t : NO_DATA;
 }
 
 // Fill a field from a function of local metres (the lab's synthetic fields use this).
@@ -87,7 +100,6 @@ export function sampleGrid(g, x, y) {
 // minutes_b64: uint16 little-endian, tenths of a minute; 0xFFFF no data, 0xFFFE beyond (no
 // time within the tables' limit), bit 15 set on a node filled in from its neighbours (water,
 // parkland: drawn, but nowhere anyone was routed to). See server/warp/field.py.
-export const BEYOND = 1e4;            // past every outer ring: fades onto it, like no data
 const WIRE_NO_DATA = 0xffff, WIRE_BEYOND = 0xfffe;
 
 function base64Bytes(b64) {

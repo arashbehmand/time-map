@@ -4,7 +4,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fieldFromFunction, sampleField } from "../../static/shared/mesh/field.js";
-import { closestBary, sheetIndex } from "../../static/shared/mesh/hit.js";
+import { closestBary, meshSheetIndex, sheetIndex } from "../../static/shared/mesh/hit.js";
+import { bandMesh } from "../../static/shared/mesh/contours.js";
+import { makeEdgeTest, refineFills } from "../../static/shared/mesh/refine.js";
 import { angularSpread, createWarp } from "../../static/shared/mesh/warp.js";
 import { transitField } from "../../static/warp/lab/fields.js";
 
@@ -58,4 +60,30 @@ test("hits merge into sheets by distance between their sources", () => {
     assert.ok(Math.hypot(sheets[i].x - sheets[j].x, sheets[i].y - sheets[j].y) > 300);
   }
   for (const s of sheets) assert.ok(Math.abs(Math.hypot(...createWarp(spec).target(s.x, s.y)) - s.minutes) < 2);
+});
+
+test("the index reads any mesh: the band layer, refined, against a brute force", () => {
+  const spec = { kind: "polar", field, maxMinutes: 45 };
+  const warp = createWarp(spec);
+  const bands = bandMesh(field);
+  const n = bands.pos.length / 2;
+  const r = refineFills({ pos: bands.pos, index: bands.index, style: new Float32Array(n), zoom: new Uint8Array(n) },
+    makeEdgeTest(field, 45, 0.05), { maxDepth: 2 });
+  assert.ok(r.added > 0);
+  const minutes = new Float32Array(r.pos.length / 2);
+  for (let v = 0; v < minutes.length; v++) minutes[v] = sampleField(field, r.pos[2 * v], r.pos[2 * v + 1]);
+  const index = meshSheetIndex({ pos: r.pos, minutes, index: r.index }, warp, { merge: 0 });
+  const T = [];
+  for (let i = 0; i < r.index.length; i += 3) {
+    const p = [r.index[i], r.index[i + 1], r.index[i + 2]].map((v) => warp.target(r.pos[2 * v], r.pos[2 * v + 1]));
+    if (p.every(Boolean)) T.push(p);
+  }
+  assert.equal(index.triangles, T.length);
+  const rand = rng(11);
+  for (let k = 0; k < 200; k++) {
+    const rr = 45 * Math.sqrt(rand()), a = 2 * Math.PI * rand();
+    const lx = rr * Math.cos(a), ly = rr * Math.sin(a);
+    const want = T.filter(([p, q, t]) => closestBary(lx, ly, p[0], p[1], q[0], q[1], t[0], t[1]).d === 0).length;
+    assert.equal(index.query(lx, ly, 0).length, want);
+  }
 });

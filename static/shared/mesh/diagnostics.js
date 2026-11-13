@@ -3,7 +3,10 @@
 //                    ring (a rasterised union), stacked share, median local stretch
 //   directionFour    the two numeric checks at 200 m sampling (and 800 m to show how much
 //                    of the stretch is whole-minute noise), against 10% and 3:1
-//   ringRadius       |target| = minutes at random known nodes (the field side of G3)
+//   ringRadius       |target| = minutes at random known nodes: an identity check of the JS
+//                    warp (a polar target is a unit direction times minutes, so it holds by
+//                    construction). It is not evidence for the drawn radius: that is G3, which
+//                    reads dots back from pixels
 import { createWarp } from "./warp.js";
 
 export const LIMITS = { folded: 0.10, stretch: 3 };
@@ -17,7 +20,9 @@ export const LIMITS = { folded: 0.10, stretch: 3 };
 //   medianStretch  the median over field cells inside the ring (folded ones included) of the
 //                  largest local scale over the smallest, sampled per source cell, unweighted
 //   skipped        cells left out: a corner unknown, past the ring, or filled in (water)
-export function foldDiagnostics(spec, { step = 2, raster = 600, skipFilled = true } = {}) {
+//   excludeWithin    metres: leave out cells whose centre is this close to the pin (to show how
+//                   much of the folding sits in the walking near field)
+export function foldDiagnostics(spec, { step = 2, raster = 600, skipFilled = true, excludeWithin = 0 } = {}) {
   if (spec.kind !== "polar") return null;
   const f = spec.field, max = spec.maxMinutes ?? 45;
   const filled = skipFilled && f.filled ? f.filled : null;
@@ -48,6 +53,7 @@ export function foldDiagnostics(spec, { step = 2, raster = 600, skipFilled = tru
     for (let i = 0; i + step < f.nx; i += step) {
       const x = f.x0 + i * f.cell, y = f.y0 + j * f.cell;
       const q = [warp.target(x, y), warp.target(x + h, y), warp.target(x + h, y + h), warp.target(x, y + h)];
+      if (excludeWithin > 0 && Math.hypot(x + h / 2, y + h / 2) < excludeWithin) continue;
       cells++;
       if (q.some((t) => !t) || (filled && (filled[j * f.nx + i] || filled[j * f.nx + i + step] ||
           filled[(j + step) * f.nx + i] || filled[(j + step) * f.nx + i + step]))) { skipped++; continue; }
@@ -80,8 +86,9 @@ export function directionFour(spec, { raster = 600 } = {}) {
   const cell = spec.field.cell;
   const at200 = foldDiagnostics(spec, { step: Math.max(1, Math.round(200 / cell)), raster });
   const at800 = foldDiagnostics(spec, { step: Math.max(1, Math.round(800 / cell)), raster });
+  const outside2km = foldDiagnostics(spec, { step: Math.max(1, Math.round(200 / cell)), raster, excludeWithin: 2000 });
   return {
-    ring: spec.maxMinutes, at200, at800,
+    ring: spec.maxMinutes, at200, at800, outside2km,
     passFolded: at200.foldedShare <= LIMITS.folded,
     passStretch: at200.medianStretch !== null && at200.medianStretch <= LIMITS.stretch,
   };

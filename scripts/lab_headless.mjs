@@ -13,7 +13,8 @@
 //                        for cold tile loads start Chrome with a fresh --user-data-dir instead)
 //
 // It drives the warp page itself the same way when the URL is /warp/ (it waits for __warp
-// instead of __lab), for the pan, new-pin and request checks of #5 (W-02):
+// instead of __lab; the page exposes it only with ?test=1), for the pan, new-pin and request
+// checks of #5 (W-02), e.g. --url "http://127.0.0.1:8765/warp/?test=1":
 //   __warp.panBy(200, 0)                        one camera pan → {ms to the next drawn frame}
 //   __warp.bend(true)                           bend the map (resolves when the morph is done)
 // --out FILE also writes the result JSON to FILE.

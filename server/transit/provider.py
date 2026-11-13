@@ -64,7 +64,8 @@ def window_label(spec: dict) -> str:
     """'a weekday, 08:00–09:00' from {'day': 'weekday', 'start': '08:00', 'minutes': 60}."""
     h, m = map(int, spec["start"].split(":"))
     end = h * 60 + m + int(spec.get("minutes", 60))
-    return f"a {spec['day']}, {spec['start']}–{end // 60 % 24:02d}:{end % 60:02d}"
+    day = spec["day"] if spec["day"] == "weekday" else spec["day"].capitalize()
+    return f"a {day}, {spec['start']}–{end // 60 % 24:02d}:{end % 60:02d}"
 
 
 _SUFFIXES = (" Underground Station", " DLR Station", " Tram Stop", " Underground", " Und",

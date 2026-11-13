@@ -165,7 +165,14 @@ export function bandMesh(f, box = null, { skipFilled = true } = {}) {
     i0 = Math.max(0, Math.floor((box[0] - x0) / cell)); j0 = Math.max(0, Math.floor((box[1] - y0) / cell));
     i1 = Math.min(nx - 1, Math.ceil((box[2] - x0) / cell)); j1 = Math.min(ny - 1, Math.ceil((box[3] - y0) / cell));
   }
-  const ok = (k) => known(minutes[k]) && !(filled && filled[k]);
+  // A node the warp places: the warp samples the cell to its lower right (field.js), and a
+  // cell with an unknown corner sends the node onto the outer ring as it fades, which would
+  // streak the band. So the node and that cell's other three corners must all hold a time.
+  const hasTime = (k) => known(minutes[k]) && !(filled && filled[k]);
+  const ok = (k) => {
+    const i = k % nx, j = Math.floor(k / nx);
+    return i + 1 < nx && j + 1 < ny && hasTime(k) && hasTime(k + 1) && hasTime(k + nx) && hasTime(k + nx + 1);
+  };
   const id = new Int32Array(nx * ny).fill(-1);
   const pos = [], mins = [], index = [];
   const vert = (k) => {

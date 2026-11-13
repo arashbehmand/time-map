@@ -107,9 +107,12 @@ def test_warp_has_choices_not_parameters():
     assert 'id="times"' not in html and 'type="range"' not in html
     assert 'id="loading"' not in html
     js = (ROOT / "warp/app.js").read_text()
-    assert "getExtension" not in js           # never relies on float-texture filtering
-    assert "texelFetch" in js
+    assert "getExtension" not in js
     assert "alert(" not in js
+    # The page bends through the shared mesh renderer, which reads its float textures with
+    # texelFetch and never asks for float-texture filtering.
+    assert '"/shared/mesh/renderer.js"' in js
+    assert "texelFetch" in (ROOT / "shared/mesh/warp.js").read_text()
 
 
 # Words a first-time visitor shouldn't have to know.

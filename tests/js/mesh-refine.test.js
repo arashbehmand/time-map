@@ -102,9 +102,16 @@ test("refinement stays inside the room it is given", () => {
   assert.equal(lines.added, 1);
 });
 
-test("the band mesh takes only cells with four known corners", () => {
+test("the band mesh takes only cells whose corners the warp can place", () => {
   const m = bandMesh(field, [-500, -500, 500, 500]);
   assert.equal(m.index.length / 6, 10 * 10);
   assert.equal(m.pos.length / 2, 11 * 11);
   assert.equal(m.minutes.length, 11 * 11);
+  // Next to a node with no time, the cell up and to the left of it goes too: its far corner
+  // samples the unknown node.
+  const holed = { ...field, minutes: Float32Array.from(field.minutes) };
+  const k = Math.round((0 - field.y0) / field.cell) * field.nx + Math.round((0 - field.x0) / field.cell);
+  holed.minutes[k] = -1;
+  const h = bandMesh(holed, [-500, -500, 500, 500]);
+  assert.equal(h.index.length / 6, 10 * 10 - 9);
 });

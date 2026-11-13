@@ -14,7 +14,7 @@
 </head>
 <body>
   <div id="map-container"></div>
-  <canvas id="warp-canvas" aria-hidden="true"></canvas>
+  <canvas id="mesh-canvas" aria-hidden="true"></canvas>
   <canvas id="overlay-canvas" aria-hidden="true"></canvas>
   <button id="origin-pin" type="button" aria-label="Starting point. Drag it, or use the arrow keys, to move it."></button>
 
@@ -42,20 +42,49 @@
 
   <button id="back-to-pin" class="btn" type="button" hidden>Back to the pin</button>
 
+  <section id="tap-list" class="card" aria-live="polite" hidden>
+    <div class="row tap-head">
+      <p id="tap-heading"></p>
+      <button class="btn" type="button" id="tap-close" aria-label="Close the list">Close</button>
+    </div>
+    <ul id="tap-items"></ul>
+    <p id="tap-note" class="note" hidden></p>
+  </section>
+
   <section id="legend" class="card" aria-label="What the map shows">
     <fieldset class="chips" id="mode-chips">
       <legend class="label">How are you travelling?</legend>
       <label class="chip"><input type="radio" name="mode" value="walking" checked /><span>Walk</span></label>
       <label class="chip"><input type="radio" name="mode" value="cycling" /><span>Cycle</span></label>
       <label class="chip"><input type="radio" name="mode" value="driving" /><span>Drive</span></label>
+      <label class="chip" id="transit-chip" hidden><input type="radio" name="mode" value="transit" /><span>Public transport</span></label>
+    </fieldset>
+    <fieldset class="chips" id="outer-chips">
+      <legend class="label">How far?</legend>
     </fieldset>
     <p id="from"></p>
     <p id="sentence" aria-live="polite"></p>
-    <p id="limits">No public transport yet. <span id="zoom-hint" hidden>Zoom out to see every ring.</span></p>
+    <div id="band-legend" aria-hidden="true"></div>
+    <p id="limits"></p>
+    <p id="beyond" class="note"></p>
+    <fieldset class="chips" id="direction-chips" hidden>
+      <legend class="label">Directions on the bent map</legend>
+      <label class="chip"><input type="radio" name="directions" value="reach" checked /><span>By reach</span></label>
+      <label class="chip"><input type="radio" name="directions" value="compass" /><span>True compass</span></label>
+    </fieldset>
+    <p id="direction-note" class="note" hidden></p>
+    <p id="overlap-note" class="note" hidden></p>
+    <details id="more-options" hidden>
+      <summary>More options</summary>
+      <label for="window-select">When</label>
+      <select id="window-select"></select>
+    </details>
     <div class="row">
-      <button id="view-toggle" class="btn primary" type="button" aria-pressed="false">Show time map</button>
-      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <button id="view-toggle" class="btn primary" type="button" aria-pressed="false">Bend the map (experimental)</button>
+      <button id="centre-list" class="btn" type="button">What's at the map centre?</button>
     </div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <p id="dev-note" class="note" hidden></p>
   </section>
 
   <a id="mapbox-logo" href="https://www.mapbox.com/" target="_blank" rel="noopener" aria-label="Mapbox"><img
@@ -64,6 +93,7 @@
     <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener">© Mapbox</a>
     <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>
     <strong><a href="https://apps.mapbox.com/feedback/" target="_blank" rel="noopener">Improve this map</a></strong>
+    <span id="transit-credits" hidden></span>
   </div>
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"
           integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>

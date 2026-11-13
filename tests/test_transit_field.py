@@ -149,7 +149,7 @@ def test_names_read_like_names():
     assert display_name("Abbey Wood (London)") == "Abbey Wood"
     assert display_name("Canary Wharf DLR Station") == "Canary Wharf"
     assert display_name("Bond Street (Elizabeth line)") == "Bond Street (Elizabeth line)"
-    assert window_label({"day": "saturday", "start": "13:00", "minutes": 60}) == "a saturday, 13:00–14:00"
+    assert window_label({"day": "saturday", "start": "13:00", "minutes": 60}) == "a Saturday, 13:00–14:00"
 
 
 def test_station_names_in_the_build(data):

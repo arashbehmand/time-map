@@ -245,11 +245,11 @@ def create_app(
                 await asyncio.to_thread(load)
             else:
                 state.transit_task = asyncio.create_task(asyncio.to_thread(load))
-        # The field's own isochrone client: walking contours (denoise=0) are larger than the
-        # meetup's, so a smaller cache; walk and transit at one pin still share an entry.
+        # The field's own isochrone client: it keeps walking replies only (walk and transit at
+        # one pin share them); the field cache keeps every built field.
         state.field_isochrones = MapboxClient(
             state.http_client, state.guard, MAPBOX_ROUTING_TOKEN,
-            BoundedTTLCache(maxsize=16, ttl=300, clock=clock.monotonic),
+            BoundedTTLCache(maxsize=16, ttl=300, clock=clock.monotonic), cache_profiles=("walking",),
         )
         state.fields = TravelFieldService(
             state.field_isochrones, state.transit, asyncio.Semaphore(settings.max_concurrent_fields),

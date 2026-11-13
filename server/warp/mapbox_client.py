@@ -35,11 +35,16 @@ class MapboxClient:
         guard: UpstreamGuard,
         token: str,
         cache: BoundedTTLCache | None = None,
+        cache_profiles: Sequence[str] | None = None,
     ):
         self.client = client
         self.guard = guard
         self.token = token
         self.cache = cache if cache is not None else BoundedTTLCache(maxsize=256, ttl=300)
+        # Profiles whose replies are kept (None: all). The field keeps walking only: walk and
+        # transit at one pin share it, while a cycling reply (up to about 4 MB parsed) is only
+        # ever used once, by the field that the field cache then keeps.
+        self.cache_profiles = None if cache_profiles is None else frozenset(cache_profiles)
         # Identical requests in flight share one call (a walk and a transit field asked for at
         # once at one pin, say), so a new origin never costs more than its two requests.
         self._inflight: dict[tuple, asyncio.Task] = {}
@@ -100,5 +105,6 @@ class MapboxClient:
             log.warning("upstream bad payload api=isochrone profile=%s", profile)
             raise UpstreamError() from None
         result = {"type": "FeatureCollection", "features": features}
-        self.cache.set(cache_key, result)
+        if self.cache_profiles is None or profile in self.cache_profiles:
+            self.cache.set(cache_key, result)
         return result

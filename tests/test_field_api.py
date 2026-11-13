@@ -239,3 +239,13 @@ def test_whole_minutes_are_for_development_builds_only(transit_client, dev_app):
     m, _ = _decode(raw)
     far = m[np.isfinite(m)]
     assert far.size and np.allclose(far[far > 31], np.round(far[far > 31]))   # beyond 2 km: whole minutes
+
+
+def test_only_walking_replies_are_kept_raw(mapbox, client):
+    """A cycling reply can be megabytes parsed; the field cache keeps the field it built."""
+    for mode in ("cycling", "walking"):
+        assert client.post(FIELD, json={"longitude": -0.1, "latitude": 51.5, "mode": mode}).status_code == 200
+    kept = {key[2] for key in client.app.state.field_isochrones.cache._data}
+    assert kept == {"walking"}
+    assert client.post(FIELD, json={"longitude": -0.1, "latitude": 51.5, "mode": "cycling"}).status_code == 200
+    assert mapbox.count("isochrone") == 4                   # the cycling field itself was cached

@@ -372,7 +372,12 @@ function bendOffered() { return S.renderer && S.renderer.supported && V.bendOffe
 
 function setBent(on) {
   S.bent = !!(on && bendOffered());
-  if (S.bent) { prepareMesh(); maybeStartBend(); } else { S.pendingMesh = null; animateTo(0); }
+  if (S.bent) {
+    // Pressing Bend again on a view still missing tiles asks for them again.
+    const holes = S.mesh && S.mesh.key === desiredMeshKey() && ((S.mesh.scene.stats || {}).missing || 0) > 0;
+    prepareMesh({ retry: holes });
+    maybeStartBend();
+  } else { S.pendingMesh = null; animateTo(0); }
   updateLegend();
 }
 

@@ -11,7 +11,7 @@ from server.warp import field as F
 ORIGIN = F.LocalFrame(-0.1233, 51.5308)
 
 
-# The vector tests/js/mesh-frame-twin.test.js checks against frame.js.
+# The vector tests/js/mesh-decode.test.js checks against frame.js.
 FRAME_VECTOR = {"origin": (-0.1233, 51.5308), "point": (-0.0195, 51.5035),
                 "local": (7188.271472, 3038.111369)}
 

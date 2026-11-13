@@ -82,3 +82,44 @@ export function sampleGrid(g, x, y) {
   }
   return out;
 }
+
+// ── The server's travel-time field (POST /api/travel-time-field) ─────
+// minutes_b64: uint16 little-endian, tenths of a minute; 0xFFFF no data, 0xFFFE beyond (no
+// time within the tables' limit), bit 15 set on a node filled in from its neighbours (water,
+// parkland: drawn, but nowhere anyone was routed to). See server/warp/field.py.
+export const BEYOND = 1e4;            // past every outer ring: fades onto it, like no data
+const WIRE_NO_DATA = 0xffff, WIRE_BEYOND = 0xfffe;
+
+function base64Bytes(b64) {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+// → a field (createField) with `filled` (Uint8Array, 1 = filled in) and `beyond` counted.
+export function decodeField(json) {
+  const n = json.nx * json.ny;
+  const bytes = base64Bytes(json.minutes_b64);
+  if (bytes.length !== 2 * n) throw new Error("field: bad payload");
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const minutes = new Float32Array(n), filled = new Uint8Array(n);
+  for (let k = 0; k < n; k++) {
+    const v = dv.getUint16(2 * k, true);
+    if (v === WIRE_NO_DATA) minutes[k] = NO_DATA;
+    else if (v === WIRE_BEYOND) minutes[k] = BEYOND;
+    else { minutes[k] = (v & 0x7fff) / 10; filled[k] = v >> 15; }
+  }
+  const f = createField({ origin: json.origin, cell: json.cell, nx: json.nx, ny: json.ny, x0: json.x0, y0: json.y0, minutes });
+  f.filled = filled;
+  return f;
+}
+
+// Nearest-node lookup: {minutes, filled} at local (x, y), or null outside the grid. For taps
+// on the ordinary map, where "this is water" matters more than a bilinear blend.
+export function nodeAt(f, x, y) {
+  const i = Math.round((x - f.x0) / f.cell), j = Math.round((y - f.y0) / f.cell);
+  if (i < 0 || j < 0 || i >= f.nx || j >= f.ny) return null;
+  const k = j * f.nx + i;
+  return { minutes: f.minutes[k], filled: !!(f.filled && f.filled[k]) };
+}

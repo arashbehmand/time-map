@@ -4,6 +4,7 @@
 // budget), spacing, max, caps=no-vtf|no-r32f|no-webgl2, folds=1, census=1, selftest=1, bench=1,
 // spread=0..1 (directions by reach, default 0.5), style=plain, network=0, budget.
 import { tileCover } from "../../shared/mesh/cover.js";
+import { fitFor, reachBox } from "../../shared/mesh/fit.js";
 import { cameraFromMap, WORLD_PX } from "../../shared/mesh/frame.js";
 import { sampleField } from "../../shared/mesh/field.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "../../shared/mesh/labels.js";
@@ -11,7 +12,7 @@ import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "../../shared/mesh/pipeline.
 import { createMeshRenderer } from "../../shared/mesh/renderer.js";
 import { maplibreStyle } from "../../shared/mesh/schema-streets-v8.js";
 import { angularSpread, createWarp, dotScale, targetsFor } from "../../shared/mesh/warp.js";
-import { FIELD_HALF, GRID_FIELDS, makeWarpSpec, POLAR_FIELDS } from "./fields.js";
+import { GRID_FIELDS, makeWarpSpec, POLAR_FIELDS } from "./fields.js";
 
 const Q = new URLSearchParams(location.search);
 const OPT = {
@@ -37,7 +38,6 @@ const OPT = {
 };
 const MORPH_MS = 1800;
 const RING_FROM_U = 0.9;          // the time rings fade in over the last tenth of the morph
-const REACH_MARGIN_M = 1000;      // tiles beyond the outer minute, for the fade-out
 const MISSING_RETRY_MS = 5000;
 const RESULTS_KEY = "timemap-mesh-lab-results";
 const $ = (id) => document.getElementById(id);
@@ -82,38 +82,8 @@ function camera() {
   return cam;
 }
 
-function reachable(spec, maxMinutes, fn) {
-  const f = spec.field;
-  for (let j = 0; j < f.ny; j += 2) for (let i = 0; i < f.nx; i += 2) {
-    const t = f.minutes[j * f.nx + i];
-    if (t >= 0 && t <= maxMinutes) fn(f.x0 + i * f.cell, f.y0 + j * f.cell);
-  }
-}
-
-// The zoom that puts most of the reachable area (90th percentile distance) on screen.
-export function fitFor(spec, frame, width, height, maxMinutes) {
-  let R = 12000;
-  if (spec.kind === "polar") {
-    const d = [];
-    reachable(spec, maxMinutes, (x, y) => d.push(Math.hypot(x, y)));
-    d.sort((a, b) => a - b);
-    if (d.length) R = Math.max(500, d[Math.floor(d.length * 0.9)]);
-  }
-  const short = Math.min(width, height);
-  const ppm = (0.45 * short) / R;
-  const zoom = Math.log2((ppm * frame.m) / WORLD_PX);
-  return { zoom, k: (0.42 * short) / maxMinutes };
-}
-
-// The tiles only need to cover what is reachable (plus a margin for the fade-out), not the
-// whole field: a 45-minute walk needs a few kilometres, not ±25 km.
-export function reachBox(spec, maxMinutes) {
-  if (spec.kind !== "polar") return [-FIELD_HALF, -FIELD_HALF, FIELD_HALF, FIELD_HALF];
-  let x0 = 0, y0 = 0, x1 = 0, y1 = 0;
-  reachable(spec, maxMinutes, (x, y) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); });
-  const m = REACH_MARGIN_M;
-  return [Math.max(-FIELD_HALF, x0 - m), Math.max(-FIELD_HALF, y0 - m), Math.min(FIELD_HALF, x1 + m), Math.min(FIELD_HALF, y1 + m)];
-}
+// fitFor and reachBox live in the shared mesh now (the warp page frames its views with them).
+export { fitFor, reachBox };
 
 // ── Scene requests ───────────────────────────────────────────────────
 function needsCpuTargets() {

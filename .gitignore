@@ -32,6 +32,9 @@ transit/.venv/
 *.cif
 *.CIF
 RJTT*
+# TransXChange timetables: TfL's are tfl_*.xml; nothing under transit/ is XML we keep
+tfl_*.xml
+transit/**/*.xml
 agency.txt
 calendar*.txt
 feed_info.txt

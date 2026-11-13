@@ -10,7 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ("*.zip", "*.npy", "*.npz", "*.pbf", "*.osm", "*.parquet", "*.sqlite3", "*.mca", "*.cif",
-        "rjtt*", "agency.txt", "calendar*.txt", "feed_info.txt", "frequencies.txt", "routes.txt",
+        "rjtt*", "tfl_*.xml", "agency.txt", "calendar*.txt", "feed_info.txt", "frequencies.txt", "routes.txt",
         "shapes.txt", "stop_times.txt", "stops.txt", "transfers.txt", "trips.txt")
 MAX_BYTES = 1_000_000
 LARGE_OK = {"transit/london_region.geojson"}
@@ -32,7 +32,8 @@ def _tracked() -> list[str]:
 
 def test_no_data_or_large_file_is_tracked():
     files = _tracked()
-    data = [p for p in files if any(fnmatch.fnmatch(Path(p).name.lower(), d) for d in DATA)]
+    data = [p for p in files if any(fnmatch.fnmatch(Path(p).name.lower(), d) for d in DATA)
+            or (p.startswith("transit/") and p.lower().endswith(".xml"))]   # TransXChange
     assert not data, f"timetable or table files tracked by git: {data}"
     big = [p for p in files if p not in LARGE_OK and (ROOT / p).is_file()
            and (ROOT / p).stat().st_size > MAX_BYTES]
@@ -41,7 +42,8 @@ def test_no_data_or_large_file_is_tracked():
 
 @pytest.mark.parametrize("path", ["some/dir/feed.zip", "x/RJTTF999.MCA", "x/tt_wd08.npy",
                                   "x/walksheds.npz", "x/london.osm.pbf", "gtfs/stop_times.txt",
-                                  "gtfs/calendar_dates.txt", "x/tfl.sqlite3"])
+                                  "gtfs/calendar_dates.txt", "x/tfl.sqlite3",
+                                  "x/tfl_1-BAK-_-y05-2116201.xml", "transit/scratch/route.xml"])
 def test_data_files_are_ignored_anywhere(path):
     if _git("rev-parse", "--git-dir").returncode:
         pytest.skip("not a git checkout")

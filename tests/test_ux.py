@@ -58,7 +58,7 @@ def test_warp_example_is_drawable():
     j, i = round(-ex["y0"] / ex["cell"]), round(-ex["x0"] / ex["cell"])
     assert minutes[j, i] == 0                          # the pin
     known = minutes[np.isfinite(minutes)]
-    assert known.size > 100 and 10 < known.max() <= 60
+    assert known.size > 100 and 30 <= known.max() <= 60      # the page opens at 30
     assert not filled.any()
 
 

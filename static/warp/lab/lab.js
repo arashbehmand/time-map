@@ -13,6 +13,7 @@ import { decodeField, knownMinutes, sampleField } from "../../shared/mesh/field.
 import { directionFour, ringRadius } from "../../shared/mesh/diagnostics.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "../../shared/mesh/labels.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "../../shared/mesh/pipeline.js";
+import { MAX_DEPTH } from "../../shared/mesh/refine.js";
 import { createMeshRenderer } from "../../shared/mesh/renderer.js";
 import { maplibreStyle } from "../../shared/mesh/schema-streets-v8.js";
 import { angularSpread, createWarp, dotScale, targetsFor } from "../../shared/mesh/warp.js";
@@ -44,7 +45,7 @@ const OPT = {
   smooth: Q.get("smooth") !== "0",
   // Refine the mesh where the field bends it (refine.js), as the warp page does; ?refine=0 off.
   refine: Q.get("refine") !== "0",
-  refineDepth: Number(Q.get("refineDepth")) || 3,
+  refineDepth: Number(Q.get("refineDepth")) || MAX_DEPTH,
 };
 const MORPH_MS = 1800;
 const RING_FROM_U = 0.9;          // the time rings fade in over the last tenth of the morph

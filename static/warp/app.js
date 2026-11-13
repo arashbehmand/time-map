@@ -1016,11 +1016,7 @@ async function boot() {
   if (ex) {
     S.origin = { lon: ex.origin.lon, lat: ex.origin.lat, label: ex.origin.label || FALLBACK_ORIGIN.label, example: true };
     S.mode = ex.mode;
-    // Open at the largest ring the saved field reaches (the converted example stops at 25).
-    let reach = 0;
-    for (const v of decodeField(ex).minutes) if (v >= 0 && v < 1e4 && v > reach) reach = v;
-    const choices = V.MODES[ex.mode].outer;
-    S.outer = [...choices].reverse().find((m) => m <= reach) || choices[0];
+    S.outer = V.MODES[ex.mode].defaultOuter;
   }
   checkRadio("mode", S.mode);
   pinEl.setAttribute("aria-label", `Starting point: ${S.origin.label}. Drag it, or use the arrow keys, to move it.`);

@@ -4,7 +4,7 @@ import { PbfReader } from "../vendor/pbf/index.js";
 import { VectorTile, classifyRings } from "../vendor/vector-tile/index.js";
 import { tilePlacement } from "./frame.js";
 import { classify, NEAR_FIELD_M, PASSES } from "./schema-streets-v8.js";
-import { makeEdgeTest, refineFills, refineLines } from "./refine.js";
+import { makeEdgeTest, MAX_DEPTH, refineFills, refineLines } from "./refine.js";
 import { enforceBudget, gridFill, lineSegments } from "./tessellate.js";
 import { jacobiansFor, targetsFor } from "./warp.js";
 
@@ -76,8 +76,10 @@ export function tessellateTile(features, { z, x, y, spacingDiv = DEFAULT_SPACING
 // vertices shaded: one per fill vertex, six per line segment (one instanced quad) for every pass
 // that draws it (roads twice: casing, then fill).
 // With `refine` ({field, maxMinutes, eps}), splits edges the field bends (refine.js), inside
-// what is left of the budget.
+// what is left of the budget. A tenth of the budget is kept for that: where the tiles alone
+// would fill it (central London), the farthest geometry goes first, not the refinement.
 export const LINE_VERTS = 6;
+export const REFINE_SHARE = 0.1;
 const DRAWS = (buffer) => PASSES.filter((p) => (p.buffer || p.name) === buffer).length;
 
 export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null, refine = null } = {}) {
@@ -117,7 +119,7 @@ export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null,
       items.push({ m, p, f, segs, kind: "line", cat: f.cat, count: LINE_VERTS * DRAWS(f.pass) * (segs.length / 4), area: 0, dist });
     }
   }
-  const b = enforceBudget(items, budget);
+  const b = enforceBudget(items, refine ? Math.floor(budget * (1 - REFINE_SHARE)) : budget);
   let room = budget;
   for (let i = 0; i < items.length; i++) if (b.keep[i]) room -= items[i].count;
   room = Math.max(0, room);
@@ -152,7 +154,7 @@ export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null,
     }
     passes[name] = { kind: "fill", pos, style, index, zoom, count: ni };
     if (edgeTest && ni) {
-      const r = refineFills(passes[name], edgeTest, { room, maxDepth: refine.maxDepth ?? 3 });
+      const r = refineFills(passes[name], edgeTest, { room, maxDepth: refine.maxDepth ?? MAX_DEPTH });
       room -= r.added; refined += r.added; refineSkipped += r.skipped;
       passes[name] = { kind: "fill", pos: r.pos, style: r.style, index: r.index, zoom: r.zoom, count: r.index.length };
     }
@@ -177,7 +179,7 @@ export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null,
     passes[name] = { kind: "line", seg, style, zoom, count: ns };
     if (edgeTest && ns) {
       const segCost = LINE_VERTS * DRAWS(name);
-      const r = refineLines(passes[name], edgeTest, { room, segCost, maxDepth: refine.maxDepth ?? 3 });
+      const r = refineLines(passes[name], edgeTest, { room, segCost, maxDepth: refine.maxDepth ?? MAX_DEPTH });
       room -= r.added * segCost; refined += r.added; refineSkipped += r.skipped;
       passes[name] = { kind: "line", seg: r.seg, style: r.style, zoom: r.zoom, count: r.count };
     }

@@ -9,7 +9,9 @@
 //              which fades onto it) are left alone.
 //   no cracks  the test reads only the edge's two end positions, so the two triangles that
 //              share an edge always agree; midpoints are shared through one map per pass.
-//              Fills split by the 1-, 2- and 3-edge patterns, recursively, up to `maxDepth`.
+//              Fills split by the 1-, 2- and 3-edge patterns, recursively, up to `maxDepth`
+//              (MAX_DEPTH: 4, so an edge becomes at most 16; 3 left 1.6% of Heathrow's edges
+//              over 1 px on real tiles).
 //   budget     each new fill vertex counts one shaded vertex, each new segment `segCost`.
 //              Fills are all or nothing: if a pass would need more room than it has, it is
 //              left unrefined (and counted as skipped). Splitting only some edges of a pass
@@ -23,6 +25,8 @@
 // bearings sharply where reach is concentrated, so the test reads the whole bent position.
 import { BEYOND, sampleField } from "./field.js";
 import { polarDirection } from "./warp.js";
+
+export const MAX_DEPTH = 4;
 
 export function makeEdgeTest(field, maxMinutes, eps, angles = null) {
   const t = (x, y) => {
@@ -45,7 +49,7 @@ export function makeEdgeTest(field, maxMinutes, eps, angles = null) {
 }
 
 // pos (x, y per vertex), index (triangles), per-vertex `style` and `zoom` → new arrays.
-export function refineFills({ pos, index, style, zoom }, test, { maxDepth = 3, room = Infinity } = {}) {
+export function refineFills({ pos, index, style, zoom }, test, { maxDepth = MAX_DEPTH, room = Infinity } = {}) {
   const n0 = pos.length / 2;
   const px = [], py = [], pt = [], pstyle = [], pzoom = [];
   const tv = new Float64Array(n0).fill(-2);           // −2: not computed yet
@@ -111,7 +115,7 @@ export function refineFills({ pos, index, style, zoom }, test, { maxDepth = 3, r
 }
 
 // seg (ax, ay, bx, by per segment), per-segment `style` and `zoom` → new arrays.
-export function refineLines({ seg, style, zoom }, test, { maxDepth = 3, room = Infinity, segCost = 6 } = {}) {
+export function refineLines({ seg, style, zoom }, test, { maxDepth = MAX_DEPTH, room = Infinity, segCost = 6 } = {}) {
   const outSeg = [], outStyle = [], outZoom = [];
   let added = 0, skipped = 0, spent = 0;
   function piece(ax, ay, ta, bx, by, tb, s, z, depth) {

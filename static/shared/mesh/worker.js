@@ -8,7 +8,7 @@ import { createField, createTargetGrid, sampleField } from "./field.js";
 import { censusTile, LINE_VERTS, packScene, spacingForZoom, tessellateTile, vectorTileFeatures } from "./pipeline.js";
 import { TILE_URL } from "./schema-streets-v8.js";
 import { meshSheetIndex } from "./hit.js";
-import { makeEdgeTest, refineFills } from "./refine.js";
+import { makeEdgeTest, MAX_DEPTH, refineFills } from "./refine.js";
 import { createWarp, targetsFor } from "./warp.js";
 
 // The server's tile limit (16 at once, server/settings.py) is per process, shared by every
@@ -257,7 +257,7 @@ function fieldMessage(msg) {
     const m = bandMesh(f, msg.box);
     const n = m.pos.length / 2;
     const r = refineFills({ pos: m.pos, index: m.index, style: new Float32Array(n), zoom: new Uint8Array(n) },
-      makeEdgeTest(f, msg.maxMinutes, msg.eps, msg.angles || null), { maxDepth: 3 });
+      makeEdgeTest(f, msg.maxMinutes, msg.eps, msg.angles || null), { maxDepth: MAX_DEPTH });
     const minutes = new Float32Array(r.pos.length / 2);
     minutes.set(m.minutes);
     for (let v = n; v < minutes.length; v++) minutes[v] = sampleField(f, r.pos[2 * v], r.pos[2 * v + 1]);

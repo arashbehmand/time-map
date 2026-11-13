@@ -10,11 +10,6 @@ It makes two Isochrone requests (the walking field) and one solve (a few hundred
 elements), then writes static/warp/example-field.json and static/meetup/example.json. Re-run
 it whenever the field or the response shapes change. --out-dir writes somewhere else.
 
---from-saved FILE writes the warp example without any request, from the radial example the
-old warp page used (`git show eab881a:static/warp/example.json > old.json`; the file left the
-tree with the radial table): a real Mapbox walking answer for King's Cross, 5/10/15/20 minutes
-at Mapbox's 5.1 km/h, relabelled to the page's 4 km/h. It reaches 25.5 minutes and lacks the
-islands and holes a live answer has, so regenerate from a server when a token is at hand.
 """
 from __future__ import annotations
 
@@ -33,8 +28,6 @@ from server.meetup.models import SolveResponse  # noqa: E402
 
 # The warp example: King's Cross, walking.
 WARP = {"origin": {"lon": -0.1233, "lat": 51.5308, "label": "King's Cross"}, "mode": "walking"}
-MAPBOX_WALK_KMH = 5.1           # Mapbox's default walking speed
-PAGE_WALK_KMH = 4.0             # the page's (and the London tables') walking speed
 
 # The meetup example: three friends at well-known places (not anybody's home), spread
 # around the centre so the fairest place sits visibly between them.
@@ -54,7 +47,8 @@ def check_warp(ex: dict) -> None:
     minutes, _ = decode(ex["minutes_b64"], (ex["ny"], ex["nx"]))
     j, i = round(-ex["y0"] / ex["cell"]), round(-ex["x0"] / ex["cell"])
     assert minutes[j, i] == 0, "the pin is not at 0 minutes"
-    assert np.nanmax(minutes[np.isfinite(minutes)]) > 10
+    # The page opens on it at the walking default (30 minutes): it must reach that far.
+    assert np.nanmax(minutes[np.isfinite(minutes)]) >= 30
 
 
 def make_warp(client: httpx.Client) -> dict:
@@ -63,41 +57,6 @@ def make_warp(client: httpx.Client) -> dict:
     resp.raise_for_status()
     ex = resp.json()
     ex["origin"] = {**ex["origin"], "label": o["label"]}
-    check_warp(ex)
-    return ex
-
-
-def warp_from_saved(path: Path) -> dict:
-    """The old radial example (radii in px at ref_zoom per angle bin, one row per contour) as
-    a field: minutes interpolated along each ray between contours, past the last no data."""
-    from server.warp import field as F
-    old = json.loads(path.read_text())
-    o = old["origin"]
-    m_per_px = F.metres_per_unit(o["lat"]) / (512 * 2 ** old["ref_zoom"])
-    rows = np.array(old["source_radii"], dtype=np.float64) * m_per_px
-    mins = np.array(old["contour_minutes"], dtype=np.float64) * MAPBOX_WALK_KMH / PAGE_WALK_KMH
-    n = rows.shape[1]
-    grid = F.Grid.covering(100.0, -rows.max() - 1000, -rows.max() - 1000, rows.max() + 1000, rows.max() + 1000)
-    X, Y = grid.mesh()
-    r, th = np.hypot(X, Y), np.arctan2(Y, X)
-    f = (th + np.pi) / (2 * np.pi) * n - 0.5
-    i0 = np.floor(f).astype(int) % n
-    a = f - np.floor(f)
-    radius = rows[:, i0] * (1 - a) + rows[:, (i0 + 1) % n] * a          # (contours, ny, nx)
-    t = np.full(X.shape, np.nan)
-    r0, m0 = np.zeros(X.shape), np.zeros(X.shape)
-    for k in range(len(mins)):
-        inside = np.isnan(t) & (r <= radius[k])
-        t[inside] = (m0 + (mins[k] - m0) * (r - r0) / np.maximum(radius[k] - r0, 1e-6))[inside]
-        r0, m0 = radius[k], np.full(X.shape, mins[k])
-    minutes, filled, grid = F.crop(t, np.zeros(t.shape, bool), grid, 1000)
-    oj, oi = grid.origin_index()
-    minutes[oj, oi] = 0.0
-    ex = {"origin": {"lon": o["lon"], "lat": o["lat"], "label": o["label"]}, "mode": "walking",
-          "window": None, "window_label": None, **grid.header(), "minutes_b64": F.encode(minutes, filled),
-          "sources": "mapbox", "limit_minutes": int(np.nanmax(np.where(np.isfinite(minutes), minutes, np.nan))),
-          "approximate": True, "valid_until": None,
-          "notes": ["saved_example"], "credits": [], "development_only": False}
     check_warp(ex)
     return ex
 
@@ -122,14 +81,11 @@ def main() -> None:
     parser.add_argument("base_url", nargs="?")
     parser.add_argument("--out-dir", type=Path, default=ROOT / "static")
     parser.add_argument("--only", choices=["warp", "meetup"], help="make just one of the two")
-    parser.add_argument("--from-saved", type=Path, help="write the warp example from the old radial example, offline")
     args = parser.parse_args()
 
     made = {}
-    if args.from_saved:
-        made["warp"] = warp_from_saved(args.from_saved)
-    elif not args.base_url:
-        parser.error("give a server URL, or --from-saved")
+    if not args.base_url:
+        parser.error("give a server URL")
     else:
         with httpx.Client(base_url=args.base_url, timeout=120) as client:
             if args.only in (None, "warp"):

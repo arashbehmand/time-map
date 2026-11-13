@@ -105,6 +105,7 @@ static/                          # Frontend assets (vanilla JS modules, no build
 ├── manifest.json                # PWA manifest
 ├── sw.js                        # Service worker (versioned per deploy, network first)
 └── icons/                       # PWA icons
+transit/                         # London public-transport tables (offline build, not imported by the app)
 scripts/make_examples.py         # Regenerates the two saved examples
 scripts/try_solves.py            # Runs fixed meetup groups against a server (timings, diagnostics)
 tests/js/                        # node --test: warp maths, latest-answer helper, meetup sentences
@@ -128,6 +129,15 @@ To time real solves, run a server and `python scripts/try_solves.py http://local
 (`MATRIX_DAILY_BUDGET=8000`, `CLIENT_DAILY_SHARE=1` so the one client running the script may
 use all of it, and a scratch `USAGE_DB_PATH`). The p95 it prints counts only solves that
 answered 200, and it says so when some didn't.
+
+## London transit tables
+
+Mapbox has no public transport. `transit/` builds London travel-time tables offline from open
+timetables with R5 (r5py), plus station walksheds and a manifest, and checks them against TfL
+Journey Planner (issue #1). It has its own Python environment and needs Java; the app and CI
+don't. How to build, the one key it needs and what it writes: [transit/README.md](transit/README.md).
+Sources and licences: [docs/transit-sources.md](docs/transit-sources.md); results so far:
+[docs/transit-spike.md](docs/transit-spike.md).
 
 ## Opening examples
 

@@ -13,3 +13,7 @@ build/
 CLAUDE.md
 .claude/
 usage.sqlite3*
+# Transit build (sources, networks, tables and caches never go in git)
+transit/data/
+transit/out/
+transit/.venv/

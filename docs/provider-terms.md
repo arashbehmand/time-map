@@ -114,7 +114,9 @@ fixed elements above the canvases, because its MapLibre map is hidden. The logo 
 "Improve this map" link *should* carry the map's coordinates; ours does not.
 
 OpenStreetMap credit (<https://www.openstreetmap.org/copyright>) is covered by the
-"© OpenStreetMap" link. Add the TfL and rail credits when those sources are added (see #1).
+"© OpenStreetMap" link. The transit tables (#1) bring their own sources and credits
+("Powered by TfL Open Data", rail, BODS, ONS): see [transit-sources.md](transit-sources.md).
+The pages must show those credits when they start using the tables.
 
 ## Nominatim (place search)
 

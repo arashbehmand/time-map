@@ -6,7 +6,7 @@ record. How to rerun everything: [transit/README.md](../transit/README.md). Sour
 licences: [transit-sources.md](transit-sources.md).
 
 The tables of record are **plain R5**: no added station access time, no cost per ride. A
-calibrated version was tried and dropped after review; see "Calibration experiment".
+calibrated version was tried and dropped; see "Calibration experiment".
 
 ## Done-when, and where each stands
 
@@ -195,7 +195,7 @@ Checks on the rebuilt tables:
 - **Triangle check:** T[i,k] > T[i,j] + T[j,k] + 5 min in 0.01% of 200,000 random triples.
   Window medians need not obey the rule (T[j,k] is measured from the window's start, not from
   when you reach j). An earlier record gave 0.6-0.9%; that could not be reproduced.
-- **Against the plain tables built before the review:** 99.94-99.95% of usable cells are
+- **Against the first plain tables (2026-11-12):** 99.94-99.95% of usable cells are
   identical. The rest are mostly faster now (median 3-6 min). The likely cause is that prep now
   keeps the newer version of a doubled bus trip.
 
@@ -214,7 +214,7 @@ the results, so TfL is asked only about contenders, and the error bands use one 
 
 A 20-min margin would have meant 134 contenders per group and 115,000 calls.
 
-**How it samples and rates (after the review):**
+**How it samples and rates:**
 
 - **Error bands:** pairs are drawn by distance for each band and banded by TfL's time. A pair
   the table cannot route but TfL can is an infinite error, so a missing connection counts.
@@ -234,7 +234,7 @@ A 20-min margin would have meant 134 contenders per group and 115,000 calls.
 The TfL API portal sent no confirmation email, so there is no key yet. This is a known
 Microsoft-side fault, per TfL staff on
 <https://techforum.tfl.gov.uk/t/cant-register-on-the-tfl-api-portal/6248>. A one-hour quick
-look ran instead, on the plain tables as they were before the review.
+look ran instead, on the first plain tables (2026-11-12).
 
 - **Settings:** `--provisional`, sample A, 35 requests a minute without a key.
 - **Sample:** 30 pairs per band, departures at 0, 20 and 40 min into each window, 12 ranking
@@ -261,7 +261,7 @@ lines median / p90 in the header:
 | Wed 19-20 | 1.5 / 3.0 pass (+1) | 4.5 / 12.0 (−4) | 5.0 / 11.0 (−5) |
 | Sat 13-14 | 1.0 / 4.0 pass (+1) | 5.0 / 10.0 (−4.5) | 5.5 / 13.0 (−5) |
 
-On the issue's lines 3 of 12 cells pass (before the review the same pairs gave the same 3);
+On the issue's lines 3 of 12 cells pass (the first plain tables gave the same 3);
 on the accepted lines all 12 do. 30-46 pairs per cell.
 
 **By kind of pair** (all windows; median / p90):
@@ -275,9 +275,10 @@ on the accepted lines all 12 do. 30-46 pairs per cell.
 
 **Ranking:** on the issue's lines 5 of 12 groups pass, 11 needed; on the accepted lines it
 passes. 9 groups are complete and 5 of them pass; regret in the other 4 is 4-10 min. 1 group
-is incomplete and 2 are not tested. Before the review the quick look counted 7 passes: two of
-them came from groups of 2 and 4 contenders, which now have to include the table's best 5 and
-lack TfL times for some. TfL's best sat near the margin's edge in 1 group.
+is incomplete and 2 are not tested. On the first tables, under the old rules, the quick look
+counted 7 passes: two of them came from groups of 2 and 4 contenders, which now have to include
+the table's best 5 and lack TfL times for some. TfL's best sat near the margin's edge in 1
+group.
 
 **Hand-picked cases:** 11 pass, 2 fail, and the 22:30 case is reported only.
 
@@ -322,7 +323,7 @@ quick look's 441 pairs under two extra costs and scored them against the cached 
    per-minute minimum.
 
 300 m and +1 min a ride scored 10 of 12 cells on R5 run directly, and the tables were rebuilt
-with it. Review then found three things, and the tables of record went back to plain R5:
+with it. A closer look then found three things, and the tables of record went back to plain R5:
 
 - **It fitted Journey Planner's habit, not station access.** Split by kind of pair, the plain
   tables were already unbiased street to street; the calibration made those pairs worse
@@ -344,7 +345,7 @@ refuses any R5 but 7.5.1 and checks its own effect.
 
 ## Review and revision (2026-11-13)
 
-Seven reviews found, besides the calibration:
+Checking the first build against its own outputs found, besides the calibration:
 
 - **Rebuilds could keep stale tables.** A changed setting, point list or feed left the old
   rows in place, `--force` did not restart them, and the manifest recorded the live settings.

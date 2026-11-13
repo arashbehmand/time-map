@@ -403,7 +403,7 @@ def test_pure_calibrate_module_does_not_start_java():
     assert out.stdout.strip() == "False"
 
 
-# ── review fixes ────────────────────────────────────────────────────
+# ── dates, masks, ranking evidence, provenance ──────────────────────
 def test_next_timetable_change():
     from transit.tables import next_change
 
@@ -588,7 +588,7 @@ def test_journeys_pass_needs_every_journey_within_and_on_its_mode():
     assert not journeys_pass([], 8.0)
 
 
-# ── wrap-up review fixes ────────────────────────────────────────────
+# ── stale checkpoints, packages and rescores ────────────────────────
 def test_a_new_table_drops_a_leftover_checkpoint(tmp_path, monkeypatch):
     r5, calls = _stub_routing(monkeypatch)
     pts = pd.DataFrame({"idx": [0, 1, 2], "snap_lon": [0.0, 1.0, 2.0], "snap_lat": [0.0, 0.0, 0.0]})

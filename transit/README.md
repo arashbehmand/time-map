@@ -115,7 +115,7 @@ on a gate sample's cached replies):
     1-5 and 8.
   - It makes the table build about 7× slower.
 
-The review found that a 300 m / +1 min fit matched Journey Planner's habit of walking from
+A 300 m / +1 min fit turned out to match Journey Planner's habit of walking from
 the nearest street address, not real station access (`docs/transit-spike.md`).
 
 `transit/settings.py` uses `JAVA_HOME` when it is set, and otherwise the JDK under

@@ -6,6 +6,7 @@ import { localFrame } from "./frame.js";
 import { createField, createTargetGrid } from "./field.js";
 import { censusTile, LINE_VERTS, packScene, spacingForZoom, tessellateTile, vectorTileFeatures } from "./pipeline.js";
 import { TILE_URL } from "./schema-streets-v8.js";
+import { sheetIndex } from "./hit.js";
 import { createWarp } from "./warp.js";
 
 // The server's tile limit (16 at once, server/settings.py) is per process, shared by every
@@ -122,6 +123,12 @@ function warpFrom(spec) {
   return null;
 }
 
+// The field the mesh is refined against (refine.js): sent with every scene, back-end B too.
+function refineFrom(spec) {
+  if (!spec) return null;
+  return { field: createField(spec.field), maxMinutes: spec.maxMinutes, eps: spec.eps, maxDepth: spec.maxDepth };
+}
+
 function post(gen, scene, extra) {
   const transfer = [];
   for (const p of Object.values(scene.passes)) {
@@ -143,6 +150,7 @@ async function buildScene(msg) {
   const t0 = now();
   const frame = localFrame(origin);
   const warp = warpFrom(msg.warp);
+  const refine = refineFrom(msg.refine);
   const opts = { source, spacingDiv };
   const counters = { requests: 0, attempts: 0, shared: 0, cacheHits: 0, tileBytes: 0, tessMs: 0 };
   const loaded = new Array(tiles.length).fill(null);
@@ -152,7 +160,7 @@ async function buildScene(msg) {
   const pack = (partial) => {
     const meshes = loaded.filter(Boolean);
     const missingTiles = tiles.filter((t, i) => settled[i] && !loaded[i]).map(tileId);
-    const scene = packScene(meshes, frame, { budget, warp });
+    const scene = packScene(meshes, frame, { budget, warp, refine });
     scene.stats = { ...scene.stats, ...counters, cover: tiles.length, loaded: meshes.length,
                     missing: missingTiles.length, missingTiles, partial, totalMs: now() - t0,
                     resident, peakResident, backend: warp ? "cpu" : "gpu" };
@@ -216,8 +224,25 @@ async function census(msg) {
   self.postMessage({ type: "census", gen: msg.gen, tiles: out });
 }
 
+// What is under a finger on the bent map (hit.js), built here so the page never stalls on
+// half a million triangles: "sheets" builds the index for a warp, "sheets-query" asks it.
+let sheets = null;
+function sheetsMessage(msg) {
+  if (msg.type === "sheets") {
+    const field = createField(msg.spec.field);
+    if (msg.spec.field.filled) field.filled = msg.spec.field.filled;
+    const warp = createWarp({ kind: "polar", field, maxMinutes: msg.spec.maxMinutes, angles: msg.spec.angles || null });
+    sheets = { key: msg.key, index: sheetIndex(field, warp, { maxMinutes: msg.spec.maxMinutes }) };
+    self.postMessage({ type: "sheets-ready", key: msg.key, triangles: sheets.index.triangles });
+  } else {
+    const hits = sheets && sheets.key === msg.key ? sheets.index.query(msg.lx, msg.ly, msg.r) : null;
+    self.postMessage({ type: "sheets-result", id: msg.id, key: msg.key, hits });
+  }
+}
+
 self.onmessage = (e) => {
   const msg = e.data;
+  if (msg.type === "sheets" || msg.type === "sheets-query") { sheetsMessage(msg); return; }
   if (msg.type === "scene") buildScene(msg).catch((err) => self.postMessage({ type: "error", gen: msg.gen, message: String(err && err.message || err) }));
   else if (msg.type === "clear") { cache.clear(); resident = 0; peakResident = 0; self.postMessage({ type: "cleared", gen: msg.gen }); }
   else if (msg.type === "census") census(msg).catch((err) => self.postMessage({ type: "error", gen: msg.gen, message: String(err && err.message || err) }));

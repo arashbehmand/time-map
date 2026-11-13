@@ -153,3 +153,36 @@ export function bandPolygons(f, frame, levels, opts = {}) {
   });
   return { type: "FeatureCollection", features };
 }
+
+// The band layer for the bent map (renderer.setBandMesh): the field's own cells inside `box`
+// (local metres [x0, y0, x1, y1]) whose four corners hold a time (not beyond, not filled in),
+// as triangles over the nodes, with each node's minutes. The renderer colours them by band.
+export function bandMesh(f, box = null, { skipFilled = true } = {}) {
+  const { nx, ny, x0, y0, cell, minutes } = f;
+  const filled = skipFilled && f.filled ? f.filled : null;
+  let i0 = 0, j0 = 0, i1 = nx - 1, j1 = ny - 1;
+  if (box) {
+    i0 = Math.max(0, Math.floor((box[0] - x0) / cell)); j0 = Math.max(0, Math.floor((box[1] - y0) / cell));
+    i1 = Math.min(nx - 1, Math.ceil((box[2] - x0) / cell)); j1 = Math.min(ny - 1, Math.ceil((box[3] - y0) / cell));
+  }
+  const ok = (k) => known(minutes[k]) && !(filled && filled[k]);
+  const id = new Int32Array(nx * ny).fill(-1);
+  const pos = [], mins = [], index = [];
+  const vert = (k) => {
+    if (id[k] < 0) {
+      id[k] = mins.length;
+      pos.push(x0 + (k % nx) * cell, y0 + Math.floor(k / nx) * cell);
+      mins.push(minutes[k]);
+    }
+    return id[k];
+  };
+  for (let j = j0; j < j1; j++) {
+    for (let i = i0; i < i1; i++) {
+      const a = j * nx + i, b = a + 1, c = a + nx + 1, d = a + nx;
+      if (!(ok(a) && ok(b) && ok(c) && ok(d))) continue;
+      const va = vert(a), vb = vert(b), vc = vert(c), vd = vert(d);
+      index.push(va, vb, vc, va, vc, vd);
+    }
+  }
+  return { pos: Float32Array.from(pos), minutes: Float32Array.from(mins), index: Uint32Array.from(index) };
+}

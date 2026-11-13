@@ -129,7 +129,53 @@ void main() {
   o = v_color * cov * alpha;
 }`;
 
+// Travel-time bands on the bent map (#5, W-02): the field's own cells, coloured by band from
+// their minutes, with a 1 px line at each ring. They move with the map, so on the bent map the
+// bands turn into the rings. Drawn over water and parks, under the fold tint and the lines.
+export const MAX_LEVELS = 16;
+const BAND_VS = (d) => `${COMMON(d)}
+in vec2 a_pos;
+in float a_min;
+#ifdef CPU_TARGETS
+in vec3 a_t;
+#endif
+out float v_min;
+out float v_alpha;
+void main() {
+  vec3 s = warpScreen(a_pos, TARGET(a_pos, a_t));
+  v_min = a_min;
+  v_alpha = s.z;
+  gl_Position = clipOf(s.xy);
+}`;
+
+const BAND_FS = `#version 300 es
+precision highp float;
+#define MAX_LEVELS ${MAX_LEVELS}
+in float v_min;
+in float v_alpha;
+uniform float u_levels[MAX_LEVELS];
+uniform vec3  u_bandColor[MAX_LEVELS];
+uniform int   u_nLevels;
+uniform float u_bandOpacity;
+out vec4 o;
+void main() {
+  if (u_nLevels < 1 || v_min < 0.0 || v_min > u_levels[u_nLevels - 1]) discard;
+  int k = 0;
+  for (int i = 0; i < MAX_LEVELS; i++) {
+    if (i >= u_nLevels - 1) break;
+    if (v_min > u_levels[i]) k = i + 1;
+  }
+  float lo = k > 0 ? u_levels[k - 1] : -1e9;
+  float hi = u_levels[k];
+  float w = max(fwidth(v_min), 1e-6);
+  float edge = 1.0 - clamp(min(v_min - lo, hi - v_min) / w - 0.5, 0.0, 1.0);
+  vec3 c = mix(u_bandColor[k], u_bandColor[k] * 0.55, edge);
+  float a = u_bandOpacity * v_alpha;
+  o = vec4(c * a, a);
+}`;
+
 const FILL_ATTRIBS = ["a_pos", "a_style", "a_t"];
+const BAND_ATTRIBS = ["a_pos", "a_min", "a_t"];
 const LINE_ATTRIBS = ["a_corner", "a_a", "a_b", "a_style", "a_ta", "a_tb", "a_jac"];
 const BENT = new Float32Array(STYLES.map((s) => s.bent ?? 1));
 
@@ -144,7 +190,8 @@ function setAngleUniforms(gl, L, angles) {
   if (angles) { gl.uniform4fv(L.u_angles, angles.v); gl.uniform1f(L.u_angleTMax, angles.tMax); }
 }
 const UNIFORMS = ["u_cam", "u_ppm", "u_view", "u_pin", "u_k", "u_u", "u_dpr", "u_color", "u_width",
-  "u_showFolds", "u_foldOnly", "u_warpTex", "u_warpGrid", "u_warpSize", "u_adaptive", "u_bent", "u_angleOn", "u_angles", "u_angleTMax"];
+  "u_showFolds", "u_foldOnly", "u_warpTex", "u_warpGrid", "u_warpSize", "u_adaptive", "u_bent", "u_angleOn", "u_angles", "u_angleTMax",
+  "u_levels", "u_bandColor", "u_nLevels", "u_bandOpacity"];
 const KINDS = ["none", "polar", "grid"];
 
 export function sameOrigin(a, b) {
@@ -163,6 +210,7 @@ export function createMeshRenderer(canvas, opts = {}) {
   let programs = new Map();
   let passes = {};          // name → {vao, count, kind, buffers}
   let fold = null;          // the fold layer: {vao, count, buffers}
+  let band = null;          // the band layer: {vao, count, buffers}
   let warpTex = null;       // {texture, kind, x0, y0, cell, nx, ny, maxMinutes, angles}
   let warpKind = "none";
   let warpOrigin = null, sceneOrigin = null;
@@ -175,7 +223,9 @@ export function createMeshRenderer(canvas, opts = {}) {
     const d = warpDefines(wk, cpu);
     const p = kind === "fill"
       ? link(gl, FILL_VS(d), FILL_FS, { attribs: FILL_ATTRIBS })
-      : link(gl, LINE_VS(d), LINE_FS, { attribs: LINE_ATTRIBS });
+      : kind === "band"
+        ? link(gl, BAND_VS(d), BAND_FS, { attribs: BAND_ATTRIBS })
+        : link(gl, LINE_VS(d), LINE_FS, { attribs: LINE_ATTRIBS });
     return { p, L: Object.fromEntries(UNIFORMS.map((n) => [n, gl.getUniformLocation(p, n)])) };
   }
 
@@ -184,7 +234,7 @@ export function createMeshRenderer(canvas, opts = {}) {
   function compileAll() {
     const cpu = mode === "cpu";
     const made = new Map();
-    for (const kind of ["fill", "line"]) {
+    for (const kind of ["fill", "line", "band"]) {
       for (const wk of cpu ? ["none", "cpu"] : KINDS) {
         made.set(`${kind}|${wk}`, buildProgram(kind, wk === "cpu" ? "polar" : wk, cpu && wk === "cpu"));
       }
@@ -197,6 +247,7 @@ export function createMeshRenderer(canvas, opts = {}) {
     evaluators = new Map();
     passes = {};
     fold = null;
+    band = null;
     warpTex = null;
     warpOrigin = sceneOrigin = null;
     quad = gl.createBuffer();
@@ -263,6 +314,12 @@ export function createMeshRenderer(canvas, opts = {}) {
     for (const b of fold.buffers) gl.deleteBuffer(b);
     fold = null;
   }
+  function freeBand() {
+    if (!band) return;
+    gl.deleteVertexArray(band.vao);
+    for (const b of band.buffers) gl.deleteBuffer(b);
+    band = null;
+  }
 
   function fillVao(s) {
     const vao = gl.createVertexArray();
@@ -320,6 +377,14 @@ export function createMeshRenderer(canvas, opts = {}) {
     if (mesh && mesh.index.length) fold = fillVao(mesh);
   }
 
+  // The band layer (#5, W-02): the field's own cells with their minutes, {pos, minutes, index,
+  // targets?}. Like the fold layer it belongs to the warp, and goes when the warp changes.
+  function setBandMesh(mesh) {
+    if (lost) return;
+    freeBand();
+    if (mesh && mesh.index.length) band = fillVao({ pos: mesh.pos, style: mesh.minutes, index: mesh.index, targets: mesh.targets });
+  }
+
   // warp: {kind: "polar", field, maxMinutes} | {kind: "grid", grid} | null. In the gpu
   // back-end the field (or grid) becomes a float texture; in cpu the worker has it.
   function setWarp(warp) {
@@ -327,6 +392,7 @@ export function createMeshRenderer(canvas, opts = {}) {
     const t0 = performance.now();
     if (warpTex) { gl.deleteTexture(warpTex.texture); warpTex = null; }
     freeFold();
+    freeBand();
     warpKind = warp ? warp.kind : "none";
     const src = warp ? (warp.kind === "polar" ? warp.field : warp.grid) : null;
     warpOrigin = src ? src.origin : null;
@@ -374,6 +440,20 @@ export function createMeshRenderer(canvas, opts = {}) {
     }
   }
 
+  function setBandUniforms(L, bands) {
+    const n = Math.min(MAX_LEVELS, bands.levels.length);
+    const levels = new Float32Array(MAX_LEVELS), colors = new Float32Array(3 * MAX_LEVELS);
+    for (let i = 0; i < n; i++) {
+      levels[i] = bands.levels[i];
+      const c = bands.colors[i] || [0, 0, 0];
+      colors[3 * i] = c[0] / 255; colors[3 * i + 1] = c[1] / 255; colors[3 * i + 2] = c[2] / 255;
+    }
+    gl.uniform1fv(L.u_levels, levels);
+    gl.uniform3fv(L.u_bandColor, colors);
+    gl.uniform1i(L.u_nLevels, n);
+    gl.uniform1f(L.u_bandOpacity, bands.opacity ?? 0.35);
+  }
+
   function styleSets(zoom) {
     const z = Math.round(zoom * 100) / 100;
     if (styleCache.zoom === z) return styleCache.sets;
@@ -399,7 +479,9 @@ export function createMeshRenderer(canvas, opts = {}) {
   // Draw one frame. cam: frame.js camera; u: morph. Returns stats for this frame, or
   // {skipped} when the frame would be wrong (lost context, or origins that don't match).
   // adaptive: the scale-aware style (line widths and fades follow the bent map's local scale).
-  function draw(cam, u, { showFolds = false, target = null, adaptive = true } = {}) {
+  // bands: {levels: number[] (minutes, increasing, ≤ MAX_LEVELS), colors: [[r, g, b] 0–255],
+  // opacity} draws the band layer, if one is set.
+  function draw(cam, u, { showFolds = false, target = null, adaptive = true, bands = null } = {}) {
     if (lost) return { skipped: "context lost" };
     const why = mismatch(cam);
     if (why) return { skipped: why };
@@ -418,11 +500,20 @@ export function createMeshRenderer(canvas, opts = {}) {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     const sets = styleSets(cam.zoom);
     let drawCalls = 0, instances = 0, fillIndices = 0;
-    let foldDrawn = false;
-    for (const pass of PASSES) {
-      if (pass.kind === "line" && !foldDrawn && fold && showFolds) {
-        // The fold layer goes over the fills and under the lines.
-        foldDrawn = true;
+    // The band layer and the fold layer go over the fills and under the lines.
+    let layersDrawn = false;
+    const drawLayers = () => {
+      layersDrawn = true;
+      if (band && bands && bands.levels.length) {
+        const prog = program("band");
+        gl.useProgram(prog.p);
+        setUniforms(prog.L, cam, u, dpr, sets.fill, false, false, adaptive);
+        setBandUniforms(prog.L, bands);
+        gl.bindVertexArray(band.vao);
+        gl.drawElements(gl.TRIANGLES, band.count, gl.UNSIGNED_INT, 0);
+        drawCalls++;
+      }
+      if (fold && showFolds) {
         const prog = program("fill");
         gl.useProgram(prog.p);
         setUniforms(prog.L, cam, u, dpr, sets.fill, false, true, adaptive);
@@ -430,6 +521,9 @@ export function createMeshRenderer(canvas, opts = {}) {
         gl.drawElements(gl.TRIANGLES, fold.count, gl.UNSIGNED_INT, 0);
         drawCalls++;
       }
+    };
+    for (const pass of PASSES) {
+      if (pass.kind === "line" && !layersDrawn) drawLayers();
       const p = passes[pass.buffer || pass.name];
       if (!p) continue;
       const prog = program(p.kind);
@@ -445,6 +539,7 @@ export function createMeshRenderer(canvas, opts = {}) {
       }
       drawCalls++;
     }
+    if (!layersDrawn) drawLayers();
     gl.bindVertexArray(null);
     lastStats = { drawCalls, instances, fillIndices, dpr };
     return lastStats;
@@ -525,6 +620,7 @@ export function createMeshRenderer(canvas, opts = {}) {
     if (lost) return;
     freePasses();
     freeFold();
+    freeBand();
     for (const p of programs.values()) gl.deleteProgram(p.p);
     for (const e of evaluators.values()) e.dispose();
     if (warpTex) gl.deleteTexture(warpTex.texture);
@@ -534,9 +630,10 @@ export function createMeshRenderer(canvas, opts = {}) {
 
   return {
     supported: true, caps, mode, fellBack, gl,
-    setScene, setWarp, setFoldMesh, draw, evaluate, renderLines, stats, destroy,
+    setScene, setWarp, setFoldMesh, setBandMesh, draw, evaluate, renderLines, stats, destroy,
     get lost() { return lost; },
     get origins() { return { scene: sceneOrigin, warp: warpOrigin }; },
     get hasFoldLayer() { return !!fold; },
+    get hasBandLayer() { return !!band; },
   };
 }

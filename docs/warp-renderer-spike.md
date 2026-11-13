@@ -233,7 +233,7 @@ numbers.
   - `?caps=no-vtf` and `?caps=no-r32f` fall back to C.
   - `?caps=no-webgl2` shows the ordinary MapLibre map.
   - Losing and restoring the WebGL context shows the ordinary map, then the mesh again.
-- **Probe A's size:** deck.gl adds 577 kB gzipped (`dist.min.js` 9.4.1). Our renderer is 29 kB
+- **Probe A's size:** deck.gl adds 577 kB gzipped (`dist.min.js` 9.4.1). Our renderer is 33 kB
   gzipped, plus 21 kB of vendored decoders.
 - **B's GPU time** (≤ 12.1 ms a frame, against C's 5.0) is the price of evaluating the warp in the
   shader: each line vertex samples the field six times (both ends and the local scale), each with
@@ -420,7 +420,8 @@ shed order (which still applies above the budget) with parks and water ahead of 
   probe checks it on every device. `createMeshRenderer(canvas, {backend: "gpu"})` uses C wherever
   B can't run.
 - C costs more:
-  - 24 bytes more per fill vertex and per segment;
+  - 12 bytes more per fill vertex and 40 per segment (its targets, and the local scale for the
+    bent-map style);
   - a full repack and re-upload of the scene whenever the field changes (another mode or
     departure time), where B uploads one texture;
   - a per-origin target pass in the worker (a median 5.8 ms for the 53k points of Baker Street's

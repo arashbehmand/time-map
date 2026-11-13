@@ -4,22 +4,23 @@ Interactive tools for visualising travel time and finding fair meeting points, b
 
 Powered by [Mapbox](https://www.mapbox.com/) — this project relies on several Mapbox APIs for its core functionality:
 
-- **[Mapbox Isochrone API](https://docs.mapbox.com/api/navigation/isochrone/)** — generates travel-time contour polygons used by the warp map
+- **[Mapbox Isochrone API](https://docs.mapbox.com/api/navigation/isochrone/)** — travel-time and walking-distance contours the warp map turns into a travel-time field
 - **[Mapbox Directions Matrix API](https://docs.mapbox.com/api/navigation/matrix/)** — computes real network travel times between participants and candidate meeting points in the meetup tool
 - **[Mapbox Vector Tiles](https://docs.mapbox.com/api/maps/vector-tiles/)** — provides the base map geometry (roads, buildings, labels) rendered via MapLibre GL
 - **[Mapbox Fonts / Glyphs](https://docs.mapbox.com/api/maps/fonts/)** — serves font glyphs for map label rendering
 
 | Tool | Question | What it shows |
 |------|----------|---------------|
-| **Warp map** (`/warp/`) | How far can I get from here? | A pin and the 5/10/15/20-minute travel-time lines around it. "Show time map" bends the map so those lines become circles: distance from the pin means travel time. |
+| **Warp map** (`/warp/`) | How far can I get from here? | A pin and travel-time bands around it on the normal map (walk, cycle, drive, and public transport in London when the tables are installed). "Bend the map" (experimental) bends it so the bands become circles: distance from the pin means travel time. |
 | **Meetup** (`/meetup/`) | Where should we meet? | Where everyone starts, and the place that keeps the longest trip shortest ("Fairest") or the average trip shortest ("Quickest on average"), with each person's minutes. |
 
 Both open on a saved London example, so the first view makes no routing request.
 
 ### Built with
 
-- **Warp map:** isochrones from the Mapbox Isochrone API, turned into a radial lookup table
-  per angle on the server; a WebGL2 GLSL fragment shader bends the MapLibre frame per pixel.
+- **Warp map:** a travel-time field built on the server (Mapbox isochrones near the pin, the
+  London transit tables farther out), drawn as bands on the MapLibre map and bent by a WebGL2
+  mesh renderer that moves the map's own geometry.
 - **Meetup:** candidate points on an H3 hexagonal grid, travel times from the Mapbox
   Directions Matrix API, and a minimax (fairest) or weighted-sum (quickest on average)
   objective. The API also accepts a `hybrid` blend, which the page no longer offers.
@@ -83,13 +84,14 @@ server/                          # FastAPI backend
 ├── middleware.py                # Request body size limit
 ├── cache.py                     # Bounded LRU cache with TTL
 ├── guard/                       # Budget, rate, in-flight and per-IP controls
-├── warp/                        # Isochrone warp module
-│   ├── routes.py                # POST /api/warp-params
-│   ├── pipeline.py              # Orchestrates isochrone → warp LUT
-│   ├── warp.py                  # RadialIsochroneWarp engine
-│   ├── geometry.py              # Viewport, coordinate conversions
-│   ├── models.py                # Request models (travel-time caps)
-│   └── mapbox_client.py         # Mapbox Isochrone fetching, bounded cache
+├── warp/                        # The warp map's travel-time field
+│   ├── routes.py                # POST /api/travel-time-field, GET /api/transit/status, POST /api/isochrones
+│   ├── travel_field.py          # One field per (pin, mode, window): cache, coalescing, the transit merge
+│   ├── field.py                 # Contours → minutes on a grid, frames, the wire format
+│   ├── models.py                # Request models
+│   ├── mapbox_client.py         # Mapbox Isochrone fetching (minutes or metres), bounded cache
+│   └── (warp.py, pipeline.py, geometry.py: the radial lookup table, retired with W-02)
+├── transit/                     # The London tables at runtime: validation, composition, coverage
 └── meetup/                      # Meetup optimizer module
     ├── routes.py                # POST /api/meetup/solve
     ├── models.py                # Pydantic request/response models
@@ -99,20 +101,21 @@ server/                          # FastAPI backend
     └── solver.py                # Scoring, refinement, snapped and named answers
 static/                          # Frontend assets (vanilla JS modules, no build step)
 ├── shared/                      # ui.css, api.js (errors, search), latest.js (latest answer only)
-│   ├── mesh/                    # Mesh renderer spike: warp, tiles → mesh worker, WebGL2 renderer
+│   ├── mesh/                    # Mesh renderer: warp, tiles → mesh worker, WebGL2 renderer, bands, overlaps
 │   └── vendor/                  # pbf, @mapbox/vector-tile, point-geometry, earcut (ES modules)
-├── warp/                        # Warp map — app.js (WebGL2), warpmath.js, example.json
+├── warp/                        # Warp map — app.js, views.js (choices), words.js (sentences), example-field.json
 │   └── lab/                     # /warp/lab/: renderer lab (unlinked, synthetic travel times)
 ├── meetup/                      # Meetup — app.js, words.js (its sentences), example.json
 ├── portfolio/                   # Landing page
 ├── manifest.json                # PWA manifest
 ├── sw.js                        # Service worker (versioned per deploy, network first)
 └── icons/                       # PWA icons
-transit/                         # London public-transport tables (offline build, not imported by the app)
+transit/                         # London public-transport tables (offline build; the app imports only transit/tables.py)
 scripts/make_examples.py         # Regenerates the two saved examples
 scripts/try_solves.py            # Runs fixed meetup groups against a server (timings, diagnostics)
 tests/js/                        # node --test: warp maths, mesh renderer, latest-answer helper, meetup sentences
 docs/warp-renderer-spike.md      # Mesh renderer spike (#5, W-01): what was built, measured and decided
+docs/warp-time-polar.md          # Warp v2 (#5, W-02): the field, the two views, Direction 4 on real fields
 ```
 
 ## Tests
@@ -143,17 +146,27 @@ don't. How to build, the one key it needs and what it writes: [transit/README.md
 Sources and licences: [docs/transit-sources.md](docs/transit-sources.md); results so far:
 [docs/transit-spike.md](docs/transit-spike.md).
 
+The warp map reads a build at runtime when `TRANSIT_DIR` points at one
+(`server/transit/provider.py`, using `transit/tables.py` only). It serves it only if the build is
+complete, unexpired, matches the hashes in its manifest and says `licences_cleared: true`.
+`TRANSIT_ALLOW_UNCLEARED=1` serves an uncleared build for local development; it is refused on
+Railway. Without a usable build, the page offers walk, cycle and drive only.
+
 ## Opening examples
 
-`static/warp/example.json` and `static/meetup/example.json` are real answers for a London
+`static/warp/example-field.json` and `static/meetup/example.json` are real answers for a London
 example (King's Cross, walking; three friends cycling from Angel, Vauxhall and Marble Arch). They are what each page shows before
 anyone changes anything, so opening a page costs no routing request. Regenerate them after
-changing the warp maths or the response shapes:
+changing the field or the response shapes:
 
 ```bash
 uvicorn server.app:app --port 8000            # with a real MAPBOX_ROUTING_TOKEN
 python scripts/make_examples.py http://localhost:8000
 ```
+
+The warp example in the repo was converted from the old page's saved answer
+(`--from-saved`), so it has no islands or holes and stops at 25 minutes; regenerate it when a
+routing token is at hand.
 
 The saved meetup example was made before answers carried street names, so it opens with
 "Meet here" until it is regenerated.
@@ -167,46 +180,44 @@ touches `/api/`, `/tiles/`, `/glyphs/` or any other site, MapLibre's CDN include
 
 ## How the Warp Works
 
-The `RadialIsochroneWarp` samples each isochrone boundary at 2048 angular bins, records the max radius per bin, fills gaps via circular interpolation, then smooths with a circular moving average.
+The server answers, once per (pin, mode, window), with a **travel-time field**: minutes on a
+regular grid in metres around the pin (`POST /api/travel-time-field`, `server/warp/`).
 
-**Transform regions (center outward):**
+- **Walking:** two Mapbox distance isochrones (8 contours, every piece, hole and island kept),
+  read at 4 km/h, the London tables' walking speed. Between two contours a place's time follows
+  its distance to each boundary, so nothing assumes one reach per direction.
+- **Cycling and driving:** two Mapbox time isochrones, 5–60 minutes.
+- **Public transport (London, when the tables are installed):** within 2 km of the pin, the
+  faster of walking and the tables; beyond, the tables: walk to a nearby station or table cell,
+  ride, walk on (#1's formula). No Matrix call. Up to 180 minutes.
 
-1. **Center → first contour** — linear scaling
-2. **Between contours** — lerp between adjacent isochrone radii
-3. **Outer contour → support boundary** — blend to identity (unwarped)
-4. **Beyond support** — identity pass-through
+The page draws the field two ways (`static/warp/app.js`):
 
-The frontend renders via a GLSL fragment shader that reads a 2048x1 LUT texture and performs the inverse warp per-pixel in real time. MapLibre GL renders tiles off-screen; the shader samples the resulting texture with warp-corrected UVs.
+- **The normal map** (always): MapLibre with travel-time bands under the labels, contoured in
+  the browser (`static/shared/mesh/contours.js`). A tap gives the minutes at that spot.
+- **The bent map** (experimental): the mesh renderer below. Each place sits at a distance from
+  the pin proportional to its minutes, in its own direction (by reach, the default, or true
+  compass), so the rings are exact circles. "Bend the map" dissolves the normal map into the
+  mesh, then morphs it. A tap lists every place drawn under the finger, folds included. For
+  public transport the bent map stays hidden (`?polar=1` shows it) because it fails Direction 4's
+  checks at all five test origins: see [docs/warp-time-polar.md](docs/warp-time-polar.md).
 
-World pixels follow MapLibre's convention (a 512-px world at zoom 0), so a radius computed at
-zoom *z* is the same number of screen pixels on the map at zoom *z*. The page asks for one
-answer per (pin, travel mode) at a fixed reference zoom (walking 14, cycling 12, driving 11)
-and rescales it by 2^(zoom − reference) as you zoom, around the pin's screen position. Panning,
-zooming and resizing therefore never send a request, and nothing is fetched while the normal
-map is showing: moving the pin there shows only the pin, and "Show time map" fetches the answer
-for the newest pin and mode, draws its lines, then bends them. Where a bent area's source is off
-screen, it is drawn grey and the legend says to zoom out. The shader reads the lookup table with
-`texelFetch` and interpolates between angles itself, because 32-bit float textures are not
-filterable on every device. `static/warp/warpmath.js` holds the same maths for the overlay
-and the tests.
+Panning, zooming and resizing never send a request; a new pin, mode or window sends one, and
+the old picture stays up until the new one is ready.
 
-Isochrone polygons are fetched from the **Mapbox Isochrone API** and vector tile geometry from the **Mapbox Vector Tiles API**.
+### The mesh renderer
 
-### The mesh renderer (spike)
-
-`static/shared/mesh/` is the renderer meant to replace the screen re-sampling above (#5,
-W-01; whether it does is decided once it has run on phones and real tiles). It draws vector geometry (water, parks, rail, main roads) through a mesh whose vertices
-move: `screen = mix(ordinary(p), pin + k·target(p), u)`, where `target()` is a time-polar
-layout (bearing kept, distance proportional to travel time) or any layout given as a grid of
-positions (the London map, #6). Lines are extruded in screen pixels after the warp, so they
-stay sharp, and a place 20 km away can be drawn next to the pin. `warp.js` holds the
-`lon/lat → screen` function and its GLSL twin. A worker fetches and tessellates tiles once per
-tile; the morph only changes a uniform. It needs WebGL2 and no float-texture extension.
-`/warp/lab/` (not linked from anywhere) compares the three back-ends and runs the checks; it uses
-synthetic travel times and, unless `?geom=tiles` is given, synthetic geometry, so it needs no
-tiles token and spends no tile budget. `scripts/lab_headless.mjs` drives it in a headless Chrome. Results and the
-decision are in [docs/warp-renderer-spike.md](docs/warp-renderer-spike.md). The `/warp/` page
-does not use it yet.
+`static/shared/mesh/` draws vector geometry (water, parks, rail, main roads) through a mesh
+whose vertices move: `screen = mix(ordinary(p), pin + k·target(p), u)`, where `target()` is a
+time-polar layout or any layout given as a grid of positions (the London map, #6). Lines are
+extruded in screen pixels after the warp, so they stay sharp, and a place 20 km away can be
+drawn next to the pin. `warp.js` holds the `lon/lat → screen` function and its GLSL twin. A
+worker fetches and tessellates tiles once per tile, and per origin refines edges where the field
+bends them (`refine.js`); the morph only changes a uniform. It needs WebGL2 and no
+float-texture extension. `/warp/lab/` (not linked from anywhere) runs the checks: on synthetic
+travel times by default, or on the page's own fields with `?field=real`.
+`scripts/lab_headless.mjs` drives the lab or `/warp/` in a headless Chrome. W-01's results are in
+[docs/warp-renderer-spike.md](docs/warp-renderer-spike.md).
 
 ## How the Meetup Works
 
@@ -260,8 +271,10 @@ finer resolution searched and `answer_resolution` the one the answer came from.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/warp-params` | Warp LUT + ring metadata for client-side shader |
-| `POST` | `/api/isochrones` | Raw isochrone polygons (via Mapbox Isochrone API) |
+| `POST` | `/api/travel-time-field` | A travel-time field for a pin, mode and (transit) timetable window |
+| `GET`  | `/api/transit/status` | Whether public transport times are available: windows, coverage, credits, validity |
+| `POST` | `/api/warp-params` | The old radial lookup table (retired at the end of W-02) |
+| `POST` | `/api/isochrones` | Raw isochrone polygons (via Mapbox Isochrone API; the meetup page uses it) |
 | `GET`  | `/tiles/{z}/{x}/{y}` | Mapbox vector tile proxy |
 | `GET`  | `/glyphs/{fontstack}/{range}` | Mapbox font glyph proxy |
 | `POST` | `/api/meetup/solve` | Find optimal meeting point (via Mapbox Matrix API) |
@@ -316,7 +329,9 @@ Requests are capped before any work starts:
 - 2–8 participants and `margin_km` ≤ 10;
 - a search radius of at most 15 km (walking), 40 km (cycling) or 150 km (driving) for the
   group's slowest mode;
-- 1–4 travel times of at most 60 minutes;
+- 1–4 travel times of at most 60 minutes (`/api/isochrones`);
+- a travel-time field: two isochrone requests per new pin and mode (5-minute cache), 20 a minute
+  per client (`PER_IP_TRAVEL_TIME_FIELD_PER_MIN`);
 - API bodies of at most 16 KiB.
 
 A meetup search is then *sized to fit*. The candidate count starts at `max_candidates`
@@ -354,6 +369,11 @@ Deploy checklist (the app logs a warning at startup for each item it can detect)
 - The caps checked against the Mapbox account's real remaining allowance. Other apps on the
   same account share it.
 - `GEOCODER_USER_AGENT` with a contact address, as Nominatim's policy asks.
+- `TRANSIT_DIR` only once the rail and TfL licences allow publishing derived times
+  (`docs/transit-sources.md`) and the build says `licences_cleared: true`. Never set
+  `TRANSIT_ALLOW_UNCLEARED` on a public server.
+- Mapbox's terms for drawing Streets tiles with our own renderer (the bent map) confirmed
+  (`docs/provider-terms.md`).
 - No CORS origin to configure: the API is same-origin only, so there is no allow-list.
 
 ## Privacy rules
@@ -369,6 +389,8 @@ Participant locations are often people's homes.
   request paths, including `/tiles/z/x/y`.
 - Place searches are POSTed to our server, so they stay out of URLs and access logs, and are
   then sent to Nominatim. The pages say so next to the search box.
+- Travel-time fields are POSTed too. The server keeps each one in memory for 5 minutes, keyed
+  by the pin rounded to about 11 m, and writes nothing to disk.
 - Shareable links are still planned. When they come, keep the scenario in the URL fragment,
   which is never sent to the server. Round locations unless their owner opts in.
 

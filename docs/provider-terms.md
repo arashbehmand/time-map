@@ -21,8 +21,11 @@ Pricing (<https://www.mapbox.com/pricing>): "Up to 100,000 Free" monthly request
 per 1,000.
 
 **Where we stand: known conflict.** We draw Mapbox isochrones with MapLibre GL JS (meetup page)
-and with our own WebGL canvas (warp page). Neither is a Mapbox library or SDK. Changing only the
-base map would not fix this, because the clause is about how Mapbox-made isochrones are shown.
+and, turned into a travel-time field, as bands on MapLibre and through our own WebGL mesh (warp
+page, since #5 W-02). Neither is a Mapbox library or SDK. Changing only the base map would not
+fix this, because the clause is about how Mapbox-made isochrones are shown. The warp page now
+asks for distance contours as well as time contours (`contours_meters`, `denoise=0`); the same
+clause applies.
 
 **Decision (owner, 2026-11-11):** keep the current behaviour for now, and handle permission
 from Mapbox, or a replacement isochrone source, as separate work. The options are:
@@ -58,8 +61,10 @@ it on the street network, labelled with that waypoint's street name when it has 
 
 Each tool opens on a saved London example, so the first view makes no routing request:
 
-- `static/warp/example.json`: the radial profile (per-angle radii) the server built from one
-  Mapbox Isochrone response for King's Cross, walking, 5/10/15/20 minutes.
+- `static/warp/example-field.json`: a travel-time field for King's Cross, walking, made from
+  Mapbox Isochrone output. Today's file was converted from the old page's saved radial profile
+  (one Mapbox response, 5/10/15/20 minutes); `scripts/make_examples.py` regenerates it from two
+  live responses.
 - `static/meetup/example.json`: one solve, i.e. travel times from Mapbox Matrix for three
   public starting points (Angel, Vauxhall, Marble Arch) to the chosen meeting places.
 
@@ -85,6 +90,11 @@ has loaded glyphs this way since before this change. The glyph cap (`GLYPHS_MONT
 default 180,000 a month) is therefore an abuse bound. A refused glyph range is served empty,
 so maps draw without labels. It can't be refused with an error instead, because MapLibre
 drops the whole vector tile when a glyph range fails to load.
+
+**Drawing the tiles ourselves.** Since #5 W-02 the warp page's bent map draws Streets v8
+geometry through our own WebGL renderer (`static/shared/mesh/`), not through MapLibre. The
+terms for that use were not read (W-01 flagged it). Confirm them before the bent map is
+public; the normal map still draws through MapLibre.
 
 **Not read:** the product terms on caching or proxying tile and glyph responses.
 <https://www.mapbox.com/legal/product-terms> did not render its service-specific sections
@@ -116,7 +126,8 @@ fixed elements above the canvases, because its MapLibre map is hidden. The logo 
 OpenStreetMap credit (<https://www.openstreetmap.org/copyright>) is covered by the
 "© OpenStreetMap" link. The transit tables (#1) bring their own sources and credits
 ("Powered by TfL Open Data", rail, BODS, ONS): see [transit-sources.md](transit-sources.md).
-The pages must show those credits when they start using the tables.
+The warp page shows the build's own credit list (its manifest's `attribution`) in the credit
+line whenever it draws public transport times.
 
 ## Nominatim (place search)
 

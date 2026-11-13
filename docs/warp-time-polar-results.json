@@ -1,0 +1,2072 @@
+{
+ "note": "Measured 2026-11-13 on an Apple M2, headless Chrome 157, local server. Public transport fields from the T-01 build 2026-11-12 (uncleared, served with TRANSIT_ALLOW_UNCLEARED=1 locally). No Mapbox routing token was available, so every transit field here is the tables alone (sources 'tables'): the 2 km walking near field is missing, and the seams below are the field's own slope over 100 m, not the near-field seam. No tiles token either: the self-tests use the lab's synthetic geometry.",
+ "direction_checks": {
+  "kind": "direction-checks",
+  "at": "2026-11-13T17:02:22.595Z",
+  "mode": "transit",
+  "ring": 45,
+  "limits": {
+   "folded": 0.1,
+   "stretch": 3
+  },
+  "ms": 6158,
+  "results": [
+   {
+    "origin": "baker-street",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.522,
+    "stackedShare": 0.839,
+    "medianStretch": 5.503,
+    "foldedShare800": 0.164,
+    "medianStretch800": 3.232,
+    "cellsSkipped": 67396,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.503,
+    "stackedShare": 0.795,
+    "medianStretch": 5.699,
+    "foldedShare800": 0.151,
+    "medianStretch800": 3.364,
+    "cellsSkipped": 67396,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.583,
+    "stackedShare": 1.006,
+    "medianStretch": 5.993,
+    "foldedShare800": 0.189,
+    "medianStretch800": 3.363,
+    "cellsSkipped": 67257,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.564,
+    "stackedShare": 0.954,
+    "medianStretch": 6.278,
+    "foldedShare800": 0.174,
+    "medianStretch800": 3.448,
+    "cellsSkipped": 67257,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.517,
+    "stackedShare": 0.837,
+    "medianStretch": 5.588,
+    "foldedShare800": 0.156,
+    "medianStretch800": 3.189,
+    "cellsSkipped": 67418,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.498,
+    "stackedShare": 0.79,
+    "medianStretch": 5.791,
+    "foldedShare800": 0.138,
+    "medianStretch800": 3.384,
+    "cellsSkipped": 67418,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.579,
+    "stackedShare": 1.004,
+    "medianStretch": 6.095,
+    "foldedShare800": 0.187,
+    "medianStretch800": 3.402,
+    "cellsSkipped": 67263,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.559,
+    "stackedShare": 0.948,
+    "medianStretch": 6.332,
+    "foldedShare800": 0.168,
+    "medianStretch800": 3.599,
+    "cellsSkipped": 67263,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.516,
+    "stackedShare": 0.84,
+    "medianStretch": 5.606,
+    "foldedShare800": 0.169,
+    "medianStretch800": 3.133,
+    "cellsSkipped": 67344,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.497,
+    "stackedShare": 0.792,
+    "medianStretch": 5.796,
+    "foldedShare800": 0.153,
+    "medianStretch800": 3.421,
+    "cellsSkipped": 67344,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.58,
+    "stackedShare": 1.011,
+    "medianStretch": 6.11,
+    "foldedShare800": 0.21,
+    "medianStretch800": 3.304,
+    "cellsSkipped": 67194,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.56,
+    "stackedShare": 0.955,
+    "medianStretch": 6.344,
+    "foldedShare800": 0.191,
+    "medianStretch800": 3.575,
+    "cellsSkipped": 67194,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.513,
+    "stackedShare": 0.827,
+    "medianStretch": 5.607,
+    "foldedShare800": 0.158,
+    "medianStretch800": 3.273,
+    "cellsSkipped": 67441,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.495,
+    "stackedShare": 0.782,
+    "medianStretch": 5.783,
+    "foldedShare800": 0.143,
+    "medianStretch800": 3.389,
+    "cellsSkipped": 67441,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.576,
+    "stackedShare": 0.995,
+    "medianStretch": 6.016,
+    "foldedShare800": 0.186,
+    "medianStretch800": 3.522,
+    "cellsSkipped": 67301,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.558,
+    "stackedShare": 0.943,
+    "medianStretch": 6.32,
+    "foldedShare800": 0.168,
+    "medianStretch800": 3.64,
+    "cellsSkipped": 67301,
+    "cells": 73440,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.441,
+    "stackedShare": 0.744,
+    "medianStretch": 4.601,
+    "foldedShare800": 0.159,
+    "medianStretch800": 3.243,
+    "cellsSkipped": 54161,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.364,
+    "stackedShare": 0.576,
+    "medianStretch": 5.953,
+    "foldedShare800": 0.115,
+    "medianStretch800": 4.055,
+    "cellsSkipped": 54161,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.487,
+    "stackedShare": 0.877,
+    "medianStretch": 5.008,
+    "foldedShare800": 0.171,
+    "medianStretch800": 3.193,
+    "cellsSkipped": 54100,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.408,
+    "stackedShare": 0.682,
+    "medianStretch": 6.391,
+    "foldedShare800": 0.124,
+    "medianStretch800": 4.208,
+    "cellsSkipped": 54100,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.454,
+    "stackedShare": 0.796,
+    "medianStretch": 4.751,
+    "foldedShare800": 0.179,
+    "medianStretch800": 3.135,
+    "cellsSkipped": 53839,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.375,
+    "stackedShare": 0.611,
+    "medianStretch": 6.147,
+    "foldedShare800": 0.133,
+    "medianStretch800": 4.105,
+    "cellsSkipped": 53839,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.502,
+    "stackedShare": 0.941,
+    "medianStretch": 5.117,
+    "foldedShare800": 0.192,
+    "medianStretch800": 3.164,
+    "cellsSkipped": 53761,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.422,
+    "stackedShare": 0.726,
+    "medianStretch": 6.651,
+    "foldedShare800": 0.144,
+    "medianStretch800": 4.106,
+    "cellsSkipped": 53761,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.476,
+    "stackedShare": 0.834,
+    "medianStretch": 4.751,
+    "foldedShare800": 0.183,
+    "medianStretch800": 3.115,
+    "cellsSkipped": 53593,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.407,
+    "stackedShare": 0.659,
+    "medianStretch": 5.983,
+    "foldedShare800": 0.136,
+    "medianStretch800": 4.21,
+    "cellsSkipped": 53593,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.526,
+    "stackedShare": 0.985,
+    "medianStretch": 5.196,
+    "foldedShare800": 0.203,
+    "medianStretch800": 3.207,
+    "cellsSkipped": 53514,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.456,
+    "stackedShare": 0.784,
+    "medianStretch": 6.578,
+    "foldedShare800": 0.152,
+    "medianStretch800": 4.324,
+    "cellsSkipped": 53514,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.448,
+    "stackedShare": 0.779,
+    "medianStretch": 4.662,
+    "foldedShare800": 0.172,
+    "medianStretch800": 2.996,
+    "cellsSkipped": 53991,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.363,
+    "stackedShare": 0.586,
+    "medianStretch": 6.206,
+    "foldedShare800": 0.12,
+    "medianStretch800": 4.11,
+    "cellsSkipped": 53991,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.495,
+    "stackedShare": 0.918,
+    "medianStretch": 5.037,
+    "foldedShare800": 0.185,
+    "medianStretch800": 2.982,
+    "cellsSkipped": 53926,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.408,
+    "stackedShare": 0.695,
+    "medianStretch": 6.724,
+    "foldedShare800": 0.13,
+    "medianStretch800": 4.158,
+    "cellsSkipped": 53926,
+    "cells": 58065,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.574,
+    "stackedShare": 1.013,
+    "medianStretch": 5.661,
+    "foldedShare800": 0.267,
+    "medianStretch800": 3.58,
+    "cellsSkipped": 66157,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.533,
+    "stackedShare": 0.895,
+    "medianStretch": 6.115,
+    "foldedShare800": 0.238,
+    "medianStretch800": 3.71,
+    "cellsSkipped": 66157,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.625,
+    "stackedShare": 1.2,
+    "medianStretch": 6.115,
+    "foldedShare800": 0.291,
+    "medianStretch800": 3.604,
+    "cellsSkipped": 66005,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.584,
+    "stackedShare": 1.061,
+    "medianStretch": 6.625,
+    "foldedShare800": 0.258,
+    "medianStretch800": 3.671,
+    "cellsSkipped": 66005,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.0658141036401503e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.567,
+    "stackedShare": 1.001,
+    "medianStretch": 5.587,
+    "foldedShare800": 0.258,
+    "medianStretch800": 3.502,
+    "cellsSkipped": 66396,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.526,
+    "stackedShare": 0.875,
+    "medianStretch": 6.067,
+    "foldedShare800": 0.224,
+    "medianStretch800": 3.864,
+    "cellsSkipped": 66396,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.617,
+    "stackedShare": 1.189,
+    "medianStretch": 5.978,
+    "foldedShare800": 0.277,
+    "medianStretch800": 3.57,
+    "cellsSkipped": 66259,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.576,
+    "stackedShare": 1.04,
+    "medianStretch": 6.551,
+    "foldedShare800": 0.24,
+    "medianStretch800": 3.833,
+    "cellsSkipped": 66259,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.563,
+    "stackedShare": 0.993,
+    "medianStretch": 5.485,
+    "foldedShare800": 0.254,
+    "medianStretch800": 3.459,
+    "cellsSkipped": 66427,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.522,
+    "stackedShare": 0.869,
+    "medianStretch": 6.025,
+    "foldedShare800": 0.223,
+    "medianStretch800": 3.698,
+    "cellsSkipped": 66427,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.617,
+    "stackedShare": 1.184,
+    "medianStretch": 5.948,
+    "foldedShare800": 0.276,
+    "medianStretch800": 3.381,
+    "cellsSkipped": 66294,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.576,
+    "stackedShare": 1.036,
+    "medianStretch": 6.533,
+    "foldedShare800": 0.24,
+    "medianStretch800": 3.671,
+    "cellsSkipped": 66294,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.559,
+    "stackedShare": 0.985,
+    "medianStretch": 5.497,
+    "foldedShare800": 0.26,
+    "medianStretch800": 3.487,
+    "cellsSkipped": 66530,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.518,
+    "stackedShare": 0.861,
+    "medianStretch": 5.999,
+    "foldedShare800": 0.227,
+    "medianStretch800": 3.782,
+    "cellsSkipped": 66530,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.612,
+    "stackedShare": 1.167,
+    "medianStretch": 5.92,
+    "foldedShare800": 0.279,
+    "medianStretch800": 3.68,
+    "cellsSkipped": 66403,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.572,
+    "stackedShare": 1.023,
+    "medianStretch": 6.512,
+    "foldedShare800": 0.243,
+    "medianStretch800": 3.801,
+    "cellsSkipped": 66403,
+    "cells": 72420,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.367,
+    "stackedShare": 0.632,
+    "medianStretch": 5.365,
+    "foldedShare800": 0.184,
+    "medianStretch800": 3.245,
+    "cellsSkipped": 45470,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.284,
+    "stackedShare": 0.418,
+    "medianStretch": 7.351,
+    "foldedShare800": 0.122,
+    "medianStretch800": 3.951,
+    "cellsSkipped": 45470,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.396,
+    "stackedShare": 0.732,
+    "medianStretch": 5.788,
+    "foldedShare800": 0.198,
+    "medianStretch800": 3.434,
+    "cellsSkipped": 45422,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.307,
+    "stackedShare": 0.477,
+    "medianStretch": 7.981,
+    "foldedShare800": 0.13,
+    "medianStretch800": 4.195,
+    "cellsSkipped": 45422,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.361,
+    "stackedShare": 0.638,
+    "medianStretch": 5.442,
+    "foldedShare800": 0.183,
+    "medianStretch800": 3.386,
+    "cellsSkipped": 45472,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.281,
+    "stackedShare": 0.417,
+    "medianStretch": 7.351,
+    "foldedShare800": 0.121,
+    "medianStretch800": 4.147,
+    "cellsSkipped": 45472,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.0658141036401503e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.391,
+    "stackedShare": 0.744,
+    "medianStretch": 5.753,
+    "foldedShare800": 0.213,
+    "medianStretch800": 3.352,
+    "cellsSkipped": 45417,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.304,
+    "stackedShare": 0.478,
+    "medianStretch": 7.803,
+    "foldedShare800": 0.136,
+    "medianStretch800": 4.195,
+    "cellsSkipped": 45417,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.375,
+    "stackedShare": 0.68,
+    "medianStretch": 5.446,
+    "foldedShare800": 0.187,
+    "medianStretch800": 4.194,
+    "cellsSkipped": 45321,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.297,
+    "stackedShare": 0.458,
+    "medianStretch": 6.898,
+    "foldedShare800": 0.126,
+    "medianStretch800": 4.107,
+    "cellsSkipped": 45321,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.407,
+    "stackedShare": 0.794,
+    "medianStretch": 5.727,
+    "foldedShare800": 0.205,
+    "medianStretch800": 3.883,
+    "cellsSkipped": 45257,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.322,
+    "stackedShare": 0.527,
+    "medianStretch": 7.517,
+    "foldedShare800": 0.133,
+    "medianStretch800": 4.195,
+    "cellsSkipped": 45257,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.357,
+    "stackedShare": 0.617,
+    "medianStretch": 5.311,
+    "foldedShare800": 0.176,
+    "medianStretch800": 3.773,
+    "cellsSkipped": 45525,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.277,
+    "stackedShare": 0.405,
+    "medianStretch": 7.171,
+    "foldedShare800": 0.118,
+    "medianStretch800": 3.951,
+    "cellsSkipped": 45525,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.389,
+    "stackedShare": 0.719,
+    "medianStretch": 5.635,
+    "foldedShare800": 0.193,
+    "medianStretch800": 3.53,
+    "cellsSkipped": 45465,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.303,
+    "stackedShare": 0.466,
+    "medianStretch": 7.757,
+    "foldedShare800": 0.131,
+    "medianStretch800": 4.154,
+    "cellsSkipped": 45465,
+    "cells": 47175,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.444,
+    "stackedShare": 0.825,
+    "medianStretch": 6.101,
+    "foldedShare800": 0.13,
+    "medianStretch800": 4.389,
+    "cellsSkipped": 59300,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.401,
+    "stackedShare": 0.668,
+    "medianStretch": 6.514,
+    "foldedShare800": 0.1,
+    "medianStretch800": 4.356,
+    "cellsSkipped": 59300,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.503,
+    "stackedShare": 0.995,
+    "medianStretch": 6.532,
+    "foldedShare800": 0.148,
+    "medianStretch800": 4.41,
+    "cellsSkipped": 59169,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.457,
+    "stackedShare": 0.801,
+    "medianStretch": 7.087,
+    "foldedShare800": 0.114,
+    "medianStretch800": 4.504,
+    "cellsSkipped": 59169,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.454,
+    "stackedShare": 0.829,
+    "medianStretch": 6.078,
+    "foldedShare800": 0.14,
+    "medianStretch800": 4.471,
+    "cellsSkipped": 59338,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.415,
+    "stackedShare": 0.69,
+    "medianStretch": 6.19,
+    "foldedShare800": 0.112,
+    "medianStretch800": 4.217,
+    "cellsSkipped": 59338,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.514,
+    "stackedShare": 0.998,
+    "medianStretch": 6.521,
+    "foldedShare800": 0.168,
+    "medianStretch800": 4.457,
+    "cellsSkipped": 59226,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.472,
+    "stackedShare": 0.829,
+    "medianStretch": 6.706,
+    "foldedShare800": 0.137,
+    "medianStretch800": 4.337,
+    "cellsSkipped": 59226,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.457,
+    "stackedShare": 0.852,
+    "medianStretch": 6.31,
+    "foldedShare800": 0.134,
+    "medianStretch800": 4.193,
+    "cellsSkipped": 59179,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.422,
+    "stackedShare": 0.711,
+    "medianStretch": 6.295,
+    "foldedShare800": 0.11,
+    "medianStretch800": 4.346,
+    "cellsSkipped": 59179,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.52,
+    "stackedShare": 1.027,
+    "medianStretch": 6.627,
+    "foldedShare800": 0.152,
+    "medianStretch800": 4.296,
+    "cellsSkipped": 59059,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.48,
+    "stackedShare": 0.855,
+    "medianStretch": 6.939,
+    "foldedShare800": 0.126,
+    "medianStretch800": 4.623,
+    "cellsSkipped": 59059,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.432,
+    "stackedShare": 0.8,
+    "medianStretch": 6.422,
+    "foldedShare800": 0.139,
+    "medianStretch800": 4.152,
+    "cellsSkipped": 59585,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.388,
+    "stackedShare": 0.65,
+    "medianStretch": 6.185,
+    "foldedShare800": 0.108,
+    "medianStretch800": 4.026,
+    "cellsSkipped": 59585,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.491,
+    "stackedShare": 0.963,
+    "medianStretch": 6.613,
+    "foldedShare800": 0.155,
+    "medianStretch800": 4.029,
+    "cellsSkipped": 59487,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "tables",
+    "notes": [
+     "near_field_missing"
+    ],
+    "foldedShare": 0.442,
+    "stackedShare": 0.782,
+    "medianStretch": 6.64,
+    "foldedShare800": 0.122,
+    "medianStretch800": 4.29,
+    "cellsSkipped": 59487,
+    "cells": 63900,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   }
+  ],
+  "seams": [
+   {
+    "origin": "baker-street",
+    "window": "wd08",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.0386149735297927,
+    "p90": 2.0273718760420607
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd13",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.0500001907348633,
+    "p90": 2.0457266969264793
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd19",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.0553621887598936,
+    "p90": 2.0278381889535417
+   },
+   {
+    "origin": "baker-street",
+    "window": "sa13",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.0500001907348633,
+    "p90": 2.0278381889535417
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd08",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.029985341916511,
+    "p90": 2.353777687088364
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd13",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.1466915141980643,
+    "p90": 2.396127278875298
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd19",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.1106771810112228,
+    "p90": 2.4432296663564586
+   },
+   {
+    "origin": "wembley-park",
+    "window": "sa13",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.0518904947392613,
+    "p90": 2.396127278875298
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd08",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.0947992291380508,
+    "p90": 2.900968501115308
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd13",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.1139426769721048,
+    "p90": 3.012635545232392
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd19",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.1038779646149912,
+    "p90": 3.012635545232392
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "sa13",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.1370024881577017,
+    "p90": 3.012635545232392
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd08",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.14720684511056,
+    "p90": 3.6122265985975233
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd13",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.164595777617123,
+    "p90": 3.6122265985975233
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd19",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.1761701786009446,
+    "p90": 3.7245862718147826
+   },
+   {
+    "origin": "heathrow",
+    "window": "sa13",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.1246240436216652,
+    "p90": 3.7215523285731713
+   },
+   {
+    "origin": "croydon",
+    "window": "wd08",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.1667269608128876,
+    "p90": 2.1057146773713136
+   },
+   {
+    "origin": "croydon",
+    "window": "wd13",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.0375000151469216,
+    "p90": 2.067915113006599
+   },
+   {
+    "origin": "croydon",
+    "window": "wd19",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.1086554990482576,
+    "p90": 2.140029585632135
+   },
+   {
+    "origin": "croydon",
+    "window": "sa13",
+    "sources": "tables",
+    "bearings": 360,
+    "median": 1.1570127137262531,
+    "p90": 2.1178227346139025
+   }
+  ],
+  "wembley": [
+   {
+    "window": "wd08",
+    "fieldMinutes": 20.9,
+    "stationRowMinutes": 20,
+    "sources": "tables"
+   },
+   {
+    "window": "wd13",
+    "fieldMinutes": 19.9,
+    "stationRowMinutes": 19,
+    "sources": "tables"
+   },
+   {
+    "window": "wd19",
+    "fieldMinutes": 19.9,
+    "stationRowMinutes": 19,
+    "sources": "tables"
+   },
+   {
+    "window": "sa13",
+    "fieldMinutes": 19.9,
+    "stationRowMinutes": 19,
+    "sources": "tables"
+   }
+  ],
+  "summary": {
+   "byReachPassesEverywhere": false,
+   "compassPassesEverywhere": false
+  }
+ },
+ "selftest_backend_b_real_transit_wd08": {
+  "baker-street": {
+   "origin": "baker-street",
+   "mode": "gpu",
+   "G1maxPx": 0.0013,
+   "G2": true,
+   "G3maxPx": 0.061,
+   "G3p99Px": 0.057,
+   "G3drawn": 1000,
+   "G3pass": true,
+   "G4phone": 1,
+   "G4desktop": 1,
+   "G4phoneNearFold": 0.9958,
+   "G4pass": true,
+   "G5pass": true,
+   "G5failed": [],
+   "G5scaleAware": {
+    "factor": 1,
+    "alpha": 1,
+    "bent": 0.55,
+    "coveragePx": 1.013,
+    "expectedPx": 1.014
+   },
+   "refined": 14303,
+   "shaded": 422405
+  },
+  "wembley-park": {
+   "origin": "wembley-park",
+   "mode": "gpu",
+   "G1maxPx": 0.0011,
+   "G2": true,
+   "G3maxPx": 0.061,
+   "G3p99Px": 0.055,
+   "G3drawn": 1000,
+   "G3pass": true,
+   "G4phone": 1,
+   "G4desktop": 1,
+   "G4phoneNearFold": 0.997,
+   "G4pass": true,
+   "G5pass": true,
+   "G5failed": [],
+   "G5scaleAware": {
+    "factor": 0.35,
+    "alpha": 1,
+    "bent": 0.55,
+    "coveragePx": 0.379,
+    "expectedPx": 0.378
+   },
+   "refined": 6841,
+   "shaded": 334612
+  },
+  "canary-wharf": {
+   "origin": "canary-wharf",
+   "mode": "gpu",
+   "G1maxPx": 0.0029,
+   "G2": true,
+   "G3maxPx": 0.06,
+   "G3p99Px": 0.057,
+   "G3drawn": 1000,
+   "G3pass": true,
+   "G4phone": 1,
+   "G4desktop": 1,
+   "G4phoneNearFold": 0.9986,
+   "G4pass": true,
+   "G5pass": false,
+   "G5failed": [
+    "scaleAware"
+   ],
+   "G5scaleAware": {
+    "factor": 1,
+    "alpha": 1,
+    "bent": 0.55,
+    "coveragePx": 0.402,
+    "expectedPx": 1.005
+   },
+   "refined": 15784,
+   "shaded": 385828
+  },
+  "heathrow": {
+   "origin": "heathrow",
+   "mode": "gpu",
+   "G1maxPx": 0.0039,
+   "G2": true,
+   "G3maxPx": 0.061,
+   "G3p99Px": 0.056,
+   "G3drawn": 1000,
+   "G3pass": true,
+   "G4phone": 1,
+   "G4desktop": 0.9927,
+   "G4phoneNearFold": 0.9814,
+   "G4pass": true,
+   "G5pass": true,
+   "G5failed": [],
+   "G5scaleAware": {
+    "factor": 1,
+    "alpha": 1,
+    "bent": 0.55,
+    "coveragePx": 0.825,
+    "expectedPx": 0.825
+   },
+   "refined": 2349,
+   "shaded": 225330
+  },
+  "croydon": {
+   "origin": "croydon",
+   "mode": "gpu",
+   "G1maxPx": 0.001,
+   "G2": true,
+   "G3maxPx": 0.06,
+   "G3p99Px": 0.057,
+   "G3drawn": 1000,
+   "G3pass": true,
+   "G4phone": 1,
+   "G4desktop": 1,
+   "G4phoneNearFold": 0.9963,
+   "G4pass": true,
+   "G5pass": true,
+   "G5failed": [],
+   "G5scaleAware": {
+    "factor": 1,
+    "alpha": 1,
+    "bent": 0.55,
+    "coveragePx": 0.923,
+    "expectedPx": 0.924
+   },
+   "refined": 8810,
+   "shaded": 344059
+  }
+ },
+ "selftest_backend_c_baker_street": {
+  "G1maxPx": 0.0001,
+  "G3maxPx": 0.062,
+  "G3drawn": 1000,
+  "G4phone": 1,
+  "G4desktop": 1,
+  "G5pass": true
+ },
+ "wembley_park_from_baker_street": {
+  "tfl_station_to_station_wd08_minutes": [
+   13,
+   14,
+   14,
+   13,
+   13,
+   13
+  ],
+  "tfl_median": 13,
+  "tfl_request": "Journey Planner 940GZZLUBST to 940GZZLUWYP, 2026-12-09, departing 08:00-08:50 every 10 min, all Metropolitan line",
+  "table_row_wd08": 20,
+  "field_at_station_wd08": 20.9,
+  "accepted_line_minutes": 8,
+  "issue_line_minutes": 3
+ },
+ "pan_warp_page": {
+  "pans": 50,
+  "ordinary": {
+   "p50_ms": 16.2,
+   "p95_ms": 20.6,
+   "max_ms": 23.9
+  },
+  "bent": {
+   "p50_ms": 16.4,
+   "p95_ms": 19.3,
+   "max_ms": 20.0
+  },
+  "api_requests_during_pans": 0
+ },
+ "new_pin_transit_field": {
+  "pins": 20,
+  "p50_ms": 209,
+  "p95_ms": 222,
+  "max_ms": 226,
+  "blocking_overlays": 0,
+  "includes": "request, the server's build, decode and the ordinary-view bands; not the bent scene (no tiles token)"
+ },
+ "payload": {
+  "transit_field_baker_street_gzip_bytes": 289934,
+  "transit_field_base64_bytes": 786260,
+  "grid": [
+   577,
+   511
+  ],
+  "server_build_ms": 95
+ }
+}

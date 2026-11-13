@@ -92,6 +92,13 @@ file downloads without a login). The gate needs a free TfL API key; see `transit
 
 ## May the tables be published?
 
+**Serving times is publishing too.** The warp page (#5, W-02) shows times derived from the
+tables to every visitor. So the app serves a build only if its manifest says
+`licences_cleared: true` (`server/transit/provider.py`), which `transit.build manifest` copies
+from `[publication] licences_cleared`. `TRANSIT_ALLOW_UNCLEARED=1` serves an uncleared build for
+local development only: the app refuses it on Railway, and the page says "development only".
+
+
 Not yet. Two rules hold whatever the licences turn out to say:
 
 - **Only derived tables, never the source data.** The feeds (gb-transit's GTFS, the BODS

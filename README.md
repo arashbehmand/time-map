@@ -148,8 +148,9 @@ Sources and licences: [docs/transit-sources.md](docs/transit-sources.md); result
 The warp map reads a build at runtime when `TRANSIT_DIR` points at one
 (`server/transit/provider.py`, using `transit/tables.py` only). It serves it only if the build is
 complete, unexpired, matches the hashes in its manifest and says `licences_cleared: true`.
-`TRANSIT_ALLOW_UNCLEARED=1` serves an uncleared build for local development; it is refused on
-Railway. Without a usable build, the page offers walk, cycle and drive only.
+`TRANSIT_ALLOW_UNCLEARED=1` serves an uncleared build for local development: only to requests
+from this machine with no forwarding header, whatever the host, and never on Railway. Without a
+usable build, the page offers walk, cycle and drive only.
 
 ## Opening examples
 
@@ -162,10 +163,6 @@ changing the field or the response shapes:
 uvicorn server.app:app --port 8000            # with a real MAPBOX_ROUTING_TOKEN
 python scripts/make_examples.py http://localhost:8000
 ```
-
-The warp example in the repo was converted from the old page's saved answer
-(`--from-saved`), so it has no islands or holes and stops at 25 minutes; regenerate it when a
-routing token is at hand.
 
 The saved meetup example was made before answers carried street names, so it opens with
 "Meet here" until it is regenerated.

@@ -62,9 +62,8 @@ it on the street network, labelled with that waypoint's street name when it has 
 Each tool opens on a saved London example, so the first view makes no routing request:
 
 - `static/warp/example-field.json`: a travel-time field for King's Cross, walking, made from
-  Mapbox Isochrone output. Today's file was converted from the old page's saved radial profile
-  (one Mapbox response, 5/10/15/20 minutes); `scripts/make_examples.py` regenerates it from two
-  live responses.
+  two Mapbox Isochrone responses (walking distance contours, 2026-11-13);
+  `scripts/make_examples.py` regenerates it.
 - `static/meetup/example.json`: one solve, i.e. travel times from Mapbox Matrix for three
   public starting points (Angel, Vauxhall, Marble Arch) to the chosen meeting places.
 

@@ -12,7 +12,8 @@ Issue #5, part W-01 (Direction 5). Written 2026-11-13 against `master` at 002af6
   - the two phones;
   - real map tiles (the census needs a tiles token, which this worktree didn't have).
 
-  So the decision below is provisional. The steps for each are in [What is left](#what-is-left).
+  B is the chosen renderer, with C as its fallback, but it still has to be confirmed on the phones
+  and on real tiles. The steps for each are in [What is left](#what-is-left).
 
 All travel times here are **synthetic** (`static/warp/lab/stations.json`, made-up speeds over
 hand-typed station positions). So is the lab's default geometry. They test the renderer; they
@@ -137,12 +138,16 @@ const { x, y, alpha } = warp.toScreen(lon, lat, camera, u);   // CSS px
 The reference views for G1, G3 and G4 are 390×844 and 1440×900, with the 45-minute ring at
 0.42 of the short side.
 
-**Decision rule (D22):**
+**Decision rule (D22, as decided by the owner on 2026-11-13):**
 
 - A back-end passes if it meets G1–G8 on both phones.
-- Among those that pass, prefer the one with the fewest capability needs (C, then B, then A),
-  unless another is at least 2× faster on origin change.
-- If none passes, transit uses the geographic reach view.
+- B is the renderer and C is its fallback:
+  - The renderer already drops to C on any device where B's start-up probe or its programs fail.
+  - If B misses a phone gate that C meets, C is used on that kind of device.
+- If neither passes, transit uses the geographic reach view.
+
+The rule first ranked C above B because B needs float textures read in the vertex shader. Those are
+core WebGL2, so that need costs nothing on a conformant device.
 
 ## Results: desktop
 
@@ -267,7 +272,26 @@ Back-end B, synthetic geometry, toy transit field, 1000×700 at DPR 1, taken wit
 - **Shedding is visible.** Baker Street's 48 m scene is at the 300k budget, so its secondary roads
   and smallest parks (Regent's Park among them) are dropped.
 
-## Decision (provisional)
+## Decision
+
+**B, with C as its fallback** (the owner's call, 2026-11-13).
+
+- B's only extra need, float textures read in the vertex shader, is core WebGL2, and the start-up
+  probe checks it on every device. `createMeshRenderer(canvas, {backend: "gpu"})` uses C wherever
+  B can't run.
+- C costs more:
+  - 24 bytes more per fill vertex and per segment;
+  - a full repack and re-upload of the scene whenever the field changes (another mode or
+    departure time), where B uploads one texture;
+  - a per-origin target pass in the worker (a median 5.8 ms for the 53k points of Baker Street's
+    48 m scene, timed in node on the M2).
+- B is also faster on origin change: 16.7 against 18.7 ms (p95) on desktop, and 28.5 against 37.3
+  ms on the throttled stress run.
+
+**Still to confirm:**
+
+- the phones, for G6–G8;
+- the census, because real tiles may hold far more vertices than the synthetic scenes.
 
 On desktop, B and C pass every gate the lab measures. The exception is G4 on the cliff field at
 Wembley Park, which is a question about the mesh and applies to both.
@@ -277,31 +301,6 @@ where the bend turns them (26% of segments under 75% of their width). A hook
 that rebuilt the extrusion from extra attributes, or a `LineLayer` subclass with its own vertex
 shader, could keep the width. That was not built, because it means writing our line shader again
 inside deck, on top of 577 kB.
-
-**Under D22 as written, C is preferred on the desktop numbers.** B is not 2× faster on origin
-change (G7 p95: B 16.7 ms, C 18.7 ms). B stays in the code as a `#define`.
-
-On the throttled stress run (24 m cells, held to 300k shaded by the budget), B is 1.3× faster:
-28.5 ms against 37.3 ms. That is short of D22's threshold, so on present numbers the rule keeps C;
-the phone runs decide.
-
-**One decision for the owner.** D22 ranks C first for needing "no vertex float textures". Those
-are core WebGL2: every conformant device has them, and the probe confirms it at start-up. C's own
-costs:
-
-- 24 bytes more per fill vertex and per segment;
-- a full repack and re-upload of the scene whenever the field changes (another mode or
-  departure time), where B uploads one texture;
-- a per-origin target pass in the worker (a median 5.8 ms for the 53k points of Baker Street's
-  48 m scene, timed in node on the M2).
-
-My recommendation is to rank B first, with C as its fallback. The rule was approved as written,
-so this is the owner's call.
-
-**Either way the decision waits on two runs:**
-
-- the phones, for G6–G8;
-- the census, because real tiles may hold far more vertices than the synthetic scenes.
 
 ## Label policy (as built)
 
@@ -412,6 +411,8 @@ enforced after every scene, including the current tiles once packed.
 - **deck.gl probe (D4).** `LineLayer` instead of `PathLayer`, because it takes our per-segment
   buffers directly. Naming LineLayer's own attributes in the hook stopped the shader compiling,
   so the hook reads the segment end from `geometry.uv`.
+- **Decision rule (D22).** B first with C as its fallback, not C first (the owner's call; see
+  Decision).
 - **Lab geometry.** Synthetic by default. `?geom=tiles` uses real tiles and is required for the
   census.
 
@@ -435,8 +436,7 @@ enforced after every scene, including the current tiles once packed.
      then "Copy results", and paste the JSON here.
    - Results accumulate in the page's storage until "Clear results". Record the exact models and
      browser versions.
-3. **The D22 tie-break:** the owner's call (see Decision).
-4. **W-02** takes over:
+3. **W-02** takes over:
    - the real field (#1's composition and the walking near field), including where it jumps
      (the cliff case above);
    - the two views;

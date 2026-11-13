@@ -6,6 +6,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server/ server/
+# The app imports only the pure table helpers from the transit build (numpy and h3).
+COPY transit/__init__.py transit/tables.py transit/
 COPY static/ static/
 
 EXPOSE 8000

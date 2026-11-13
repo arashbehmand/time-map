@@ -1,3 +1,4 @@
+import functools
 import hashlib
 import logging
 import os
@@ -26,6 +27,7 @@ from server.meetup.routes import router as meetup_router
 from server.meetup.routing import build_router as build_meetup_router
 from server.middleware import BodyLimit
 from server.settings import DEFAULT_USAGE_DB_PATH, Settings, on_railway
+from server.transit.provider import TransitHolder
 from server.upstream import fail, mapbox_send
 from server.warp.mapbox_client import MapboxClient
 from server.warp.routes import router as warp_router
@@ -231,6 +233,18 @@ def create_app(
             client=state.http_client, guard=state.guard,
         )
         state.geocoder = Geocoder(state.http_client, state.guard, settings, clock)
+        state.transit = TransitHolder(bool(settings.transit_dir))
+        if settings.transit_dir:
+            # About a second or two (hashes, a raster of cells); the app answers meanwhile and
+            # transit says it is loading.
+            load = functools.partial(state.transit.load, settings.transit_dir,
+                                     allow_uncleared=settings.transit_allow_uncleared,
+                                     on_railway=on_railway())
+            if settings.transit_block_startup:
+                await asyncio.to_thread(load)
+            else:
+                state.transit_task = asyncio.create_task(asyncio.to_thread(load))
+        state.field_slots = asyncio.Semaphore(settings.max_concurrent_fields)
         usage_task = asyncio.create_task(state.guard.usage_loop())
 
         yield

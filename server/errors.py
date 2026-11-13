@@ -102,6 +102,18 @@ class NoIsochrone(ApiError):
     message = "No travel-time area is available for this place."
 
 
+class TransitUnavailableError(ApiError):
+    status = 503
+    code = "transit_unavailable"
+    message = "Public transport times aren't available right now."
+
+
+class OutsideTransitArea(ApiError):
+    status = 422
+    code = "outside_transit_area"
+    message = "Public transport times cover London only."
+
+
 class NotFound(ApiError):
     status = 404
     code = "not_found"

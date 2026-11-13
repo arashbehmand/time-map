@@ -42,3 +42,17 @@ class WarpParamsRequest(BaseModel):
     height: int = Field(default=720, ge=256, le=2048)
     profile: Profile = "walking"
     travel_times: TravelTimes = Field(default_factory=lambda: [5, 10, 15, 20])
+
+
+TravelMode = Literal["walking", "cycling", "driving", "transit"]
+TransitWindow = Literal["wd08", "wd13", "wd19", "sa13"]
+
+
+class TravelFieldRequest(BaseModel):
+    """POST /api/travel-time-field. `window` is for transit only (default: the window nearest
+    the current London time)."""
+    model_config = _STRICT
+    longitude: float = Field(ge=-180, le=180)
+    latitude: float = Field(ge=-WEB_MERCATOR_MAX_LAT, le=WEB_MERCATOR_MAX_LAT)
+    mode: TravelMode = "walking"
+    window: TransitWindow | None = None

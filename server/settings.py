@@ -57,6 +57,8 @@ DEFAULT_PER_IP = {
     "solve": 6,
     "isochrones": 20,
     "warp_params": 30,
+    "travel_time_field": 20,
+    "transit_status": 60,
     "geocode": 10,
     "tiles": 400,
     "glyphs": 300,

@@ -31,6 +31,7 @@ from server.transit.provider import TransitHolder
 from server.upstream import fail, mapbox_send
 from server.warp.mapbox_client import MapboxClient
 from server.warp.routes import router as warp_router
+from server.warp.travel_field import TravelFieldService
 
 # ── Logging ──────────────────────────────────────────────────────────
 set_secrets(SECRETS)
@@ -244,7 +245,11 @@ def create_app(
                 await asyncio.to_thread(load)
             else:
                 state.transit_task = asyncio.create_task(asyncio.to_thread(load))
-        state.field_slots = asyncio.Semaphore(settings.max_concurrent_fields)
+        state.fields = TravelFieldService(
+            state.isochrones, state.transit, asyncio.Semaphore(settings.max_concurrent_fields),
+            # Small on purpose: a transit field is a few hundred kB.
+            BoundedTTLCache(maxsize=24, ttl=300, clock=clock.monotonic),
+        )
         usage_task = asyncio.create_task(state.guard.usage_loop())
 
         yield

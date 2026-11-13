@@ -114,7 +114,8 @@ class Grid:
         return round(-self.y0 / self.cell), round(-self.x0 / self.cell)
 
     def header(self) -> dict:
-        return {"cell": self.cell, "nx": self.nx, "ny": self.ny, "x0": self.x0, "y0": self.y0}
+        return {"cell": float(self.cell), "nx": int(self.nx), "ny": int(self.ny),
+                "x0": float(self.x0), "y0": float(self.y0)}
 
 
 # ── Contours → minutes ───────────────────────────────────────────────
@@ -271,7 +272,7 @@ def crop(minutes: np.ndarray, filled: np.ndarray, grid: Grid, margin_m: float = 
     j0, j1 = max(0, rows[0] - pad), min(grid.ny - 1, rows[-1] + pad)
     i0, i1 = max(0, cols[0] - pad), min(grid.nx - 1, cols[-1] + pad)
     oj, oi = grid.origin_index()
-    j0, j1, i0, i1 = min(j0, oj), max(j1, oj), min(i0, oi), max(i1, oi)
+    j0, j1, i0, i1 = int(min(j0, oj)), int(max(j1, oj)), int(min(i0, oi)), int(max(i1, oi))
     g = Grid(grid.cell, grid.x0 + i0 * grid.cell, grid.y0 + j0 * grid.cell, i1 - i0 + 1, j1 - j0 + 1)
     return minutes[j0:j1 + 1, i0:i1 + 1], filled[j0:j1 + 1, i0:i1 + 1], g
 

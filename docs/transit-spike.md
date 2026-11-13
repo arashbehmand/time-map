@@ -13,7 +13,7 @@ calibrated version was tried and dropped after review; see "Calibration experime
 | # | Done when | State |
 |---|---|---|
 | 1 | A current London GTFS loads into R5, with a table of sources, versions and licences; Underground, DLR, Overground, Elizabeth line, buses, trams (+ National Rail if terms allow) | Met for building. Publishing waits for the rail and TfL licence terms ([transit-sources.md](transit-sources.md)) |
-| 2 | Go/no-go: R5 builds on a laptop; three hand-checked journeys within 3 min; memory and build time recorded | Builds on the laptop (3-6 min, 3.1-4.3 GB). The three journeys: 1 of 3 within 3 min station to station, so the strict test is not met; all 3 are within the accepted 8 min. Owner decision: go, as a rough estimate |
+| 2 | Go/no-go: R5 builds on a laptop; three hand-checked journeys within 3 min; memory and build time recorded | Builds on the laptop (3-6 min, 3.1-4.7 GB). The three journeys: 1 of 3 within 3 min station to station, so the strict test is not met; all 3 are within the accepted 8 min. Owner decision: go, as a rough estimate |
 | 3 | Tables, walksheds and manifest build from one script | Met. `python -m transit.build all` ran every stage in one go, twice, on 2026-11-13; see "Tables" |
 | 4 | The gate passes, or its numbers are published with a decision | Published with a decision. The full gate has not run (no TfL key). The one-hour quick look passes on the owner's accepted lines and fails on the issue's; see "Decision" |
 
@@ -87,7 +87,7 @@ may be real buses running close together; nothing removes them yet.
 R5 v7.5.1 (r5py 1.1.7), Temurin JDK 21, 10 GB heap, on the prepared feeds and the clipped
 OSM extract:
 
-- **Cold build: 174-355 s (3 to 6 min)** over three builds. Peak resident memory 3.1-4.3 GB;
+- **Cold build: 157-355 s (3 to 6 min)** over five builds. Peak resident memory 3.1-4.7 GB;
   macOS peak memory footprint 11.1 GB (first build).
 - **From r5py's cache: 7-9 s** (the cached network is 0.95 GB on disk).
 - **Points:** 640 stations and 3,076 H3 res-8 cells over Greater London + 2 km, 3,716 in all.
@@ -162,10 +162,10 @@ had been clipped and deleted earlier, which saves a 1.4 GB download).
 | Wed 19-20 | 3,709 | 8.5 min | 0.14 | 4.5% |
 | Sat 13-14 | 3,709 | 7.4 min | 0.12 | 2.6% |
 
-A second `all`, after a comment-only edit to `settings.py`, rebuilt every stage from prep on
-by itself (the code each stage runs is part of its key) in 31.4 min. Its tables, mask, points
+Three more runs of `all`, each started by nothing but a code change (the code each stage runs
+is part of its key), rebuilt every stage from prep on in 31-34 min. Their tables, mask, points
 and walksheds are byte-identical to the first run's, and the rescored quick look below is the
-same. The prepared feed zips differ in their bytes (zip timestamps), so a re-prep always
+same each time. The prepared feed zips differ in their bytes (zip timestamps), so a re-prep always
 rebuilds the network and the tables.
 
 - **Sizes:** each table is 3,716 × 3,716 uint8 (13.8 MB); peak memory 3.1 GB.
@@ -365,6 +365,11 @@ Seven reviews found, besides the calibration:
 - **Smaller:** BODS de-duplication now keeps the newer version; sentinels need a minimum
   number of trips; the age of gb-transit's TfL copy is checked; the hand-picked cases that
   could never pass were fixed; strict option parsing; exact counts; seeds by CRC32.
+- **On the PR, an automated review found eight more paths to stale outputs,** all fixed. A
+  new table could keep an old checkpoint; packaging trusted the manifest after a later pilot;
+  the manifest compared only settings across tables; stage keys left out options (`--redate`)
+  and the region file; `fetch` could not recover a stale OSM clip; a file placed by hand was
+  refused on the second run; a rescore could change its scope or meet a renumbered point list.
 
 ## Decision (owner, 2026-11-13)
 
@@ -385,7 +390,7 @@ Seven reviews found, besides the calibration:
   **On the accepted lines the quick look passes; on the issue's lines it fails.**
 - **The tables of record are plain R5,** not the calibrated tables first kept, for the
   reasons under "Calibration experiment".
-- **The pieces work.** The laptop builds London (3-6 min and 3.1-4.3 GB for the network;
+- **The pieces work.** The laptop builds London (3-6 min and 3.1-4.7 GB for the network;
   31-40 min for everything), and one script builds the tables, walksheds and manifest, the
   same to the byte each time it runs.
 - **What the numbers mean for the app:** street to street the tables are unbiased; trips over

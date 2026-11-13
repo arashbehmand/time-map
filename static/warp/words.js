@@ -14,7 +14,8 @@ export function spacingWords(plan) {
   return sp.map((s, i) => `${i ? "then every " + s.step : "every " + s.step + " minutes"}${sp[i + 1] ? " up to " + sp[i + 1].from : ""}`).join(", ");
 }
 
-export function sentence(mode, outer, plan, bent) {
+export function sentence(mode, outer, plan, bent, layout = "fold") {
+  if (bent && layout === "squash") return `Each line joins places the same number of minutes away: a line ${spacingWords(plan)}. The map is bent so that nothing overlaps.`;
   if (bent) return `Distance from the pin now means travel time: a ring ${spacingWords(plan)}.`;
   return `The coloured bands show where you can ${VERBS[mode]} to within ${outer} minutes, a band ${spacingWords(plan)}.`;
 }
@@ -45,7 +46,8 @@ export const BEND_FAILED = "The bent map couldn't be prepared. Press the button 
 export const EXPIRED = "These public transport times have expired, so this shows walking.";
 export const UPDATING = "Updating…";
 
-export function beyond(outer) {
+export function beyond(outer, layout = "fold") {
+  if (layout === "squash") return `Places more than ${outer} minutes away are left uncoloured.`;
   return `Places more than ${outer} minutes away aren't shown.`;
 }
 
@@ -56,7 +58,7 @@ export const DIRECTION_NOTES = {
 
 export const LAYOUT_NOTES = {
   fold: "Fold: every place sits at its own minutes. Where a fast line makes far places as quick as nearer ones, the map overlaps itself.",
-  squash: "Squash: going outward, distance never shrinks, so nothing overlaps. Colour shows each place's own minutes, so quick spots near stations sit further out than their colour says.",
+  squash: "Squash: going outward, places never come back closer, so nothing overlaps. Distance from the pin isn't minutes any more; the lines are. Quick spots near stations show as small loops beyond the main lines.",
   islands: "Islands: the ground around each station you reach by train or bus is cut out and drawn as a small map on the ring of its time. The gaps between islands are slow ground.",
 };
 

@@ -19,7 +19,7 @@ import { decodeField, knownMinutes, nodeAt } from "/shared/mesh/field.js";
 import { fitFor, reachBox } from "/shared/mesh/fit.js";
 import { cameraFromMap, localFrame } from "/shared/mesh/frame.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "/shared/mesh/labels.js";
-import { islandLayout, squashField } from "/shared/mesh/layouts.js";
+import { islandLayout, squashField, squashReach } from "/shared/mesh/layouts.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "/shared/mesh/pipeline.js";
 import { createMeshRenderer } from "/shared/mesh/renderer.js";
 import { bandColor, bandRgb, ringPlan } from "/shared/mesh/rings.js";
@@ -245,8 +245,12 @@ function meshSpec(entry) {
   if (spread > 0 && S.layout !== "islands") fold.angles = angularSpread(entry.field, S.outer, { spread });
   if (S.layout === "squash") {
     const R = squashField(entry.field, Number(Q.get("squashslope")) > 0 ? { minSlope: Number(Q.get("squashslope")) / 1000 } : {});
-    const spec = { ...fold, field: R };
-    return { spec, fit: fold, refine: true, worker: { kind: "polar", field: plainField(R), maxMinutes: S.outer, angles: fold.angles || null } };
+    // The view reaches as far out as squash draws the places within the outer time (99% of
+    // them), and the real minute lines replace the rings.
+    const reach = squashReach(entry.field, R, S.outer);
+    const spec = { ...fold, field: R, maxMinutes: reach };
+    return { spec, fit: fold, refine: true, frameMinutes: reach, lines: true,
+             worker: { kind: "polar", field: plainField(R), maxMinutes: reach, angles: fold.angles || null } };
   }
   if (S.layout === "islands") {
     const fill = Number(Q.get("islandfill"));
@@ -278,6 +282,7 @@ function prepareMesh({ retry = false } = {}) {
   const spec = L.spec;
   measureBox();
   const fit = fitFor(L.fit, entry.frame, box.w, box.h, S.outer);
+  if (L.frameMinutes) fit.k *= S.outer / L.frameMinutes;
   const reach = reachBox(L.fit, S.outer);
   const cover = tileCover(entry.frame, reach);
   const eps = V.refineEps(fit.k);
@@ -290,11 +295,12 @@ function prepareMesh({ retry = false } = {}) {
     type: "scene", gen, origin: entry.frame.origin, tiles: cover.tiles,
     spacingDiv: DEFAULT_SPACING_DIV, budget: DEFAULT_BUDGET, source: "tiles",
     warp: needsCpuTargets() ? (L.worker || { kind: "polar", field: plainField(entry.field), maxMinutes: S.outer, angles: spec.angles || null }) : null,
-    refine: L.refine ? { field: L.worker ? L.worker.field : plainField(entry.field), maxMinutes: S.outer, eps, angles: spec.angles || null } : null,
+    refine: L.refine ? { field: L.worker ? L.worker.field : plainField(entry.field), maxMinutes: spec.maxMinutes, eps, angles: spec.angles || null } : null,
     cut: L.cut || null,
   });
   if (!prev) {
-    S.worker.postMessage({ type: "layers", key, gen, field: workerField(entry.field), maxMinutes: S.outer,
+    S.worker.postMessage({ type: "layers", key, gen, field: workerField(entry.field), maxMinutes: spec.maxMinutes,
+                           lines: L.lines ? levels() : null,
                            angles: spec.angles || null, eps: L.refine ? eps : null, box: reach, cpu: needsCpuTargets(),
                            warp: L.worker, mask: L.mask || null });
   }
@@ -491,7 +497,8 @@ function drawFrame(now) {
     });
     if (!stats.skipped) S.drawn = now;
     pin = { x: cam.pin[0], y: cam.pin[1] };
-    drawRings(cam, m.outer);
+    if (m.layers && m.layers.lines) drawTimeLines(cam, m.layers.lines, m.outer);
+    else drawRings(cam, m.outer);
     drawLabels(m, cam);
   } else {
     const p = map.project([S.origin.lon, S.origin.lat]);
@@ -528,6 +535,39 @@ function drawRings(cam, outer) {
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillText(`${r.minutes} min`, cam.pin[0] + cam.k * r.minutes * Math.SQRT1_2 + 4, cam.pin[1] - cam.k * r.minutes * Math.SQRT1_2 - 4);
+    }
+  }
+  ctx.restore();
+}
+
+// Squash: the real minute lines, bent with the map (layouts.js timeLines), where the fold draws
+// rings. Each major line is labelled at its highest point on screen.
+function drawTimeLines(cam, lines, outer) {
+  const a = Math.max(0, Math.min(1, (S.u - V.RING_FROM_U) / (1 - V.RING_FROM_U)));
+  if (a <= 0) return;
+  const major = new Set(ringPlan(outer).filter((r) => r.major).map((r) => r.minutes));
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.lineJoin = "round";
+  for (const { minutes, xy } of lines) {
+    const big = major.has(minutes);
+    let top = null, pen = false;
+    ctx.beginPath();
+    for (let i = 0; i < xy.length; i += 2) {
+      if (Number.isNaN(xy[i])) { pen = false; continue; }
+      const x = cam.pin[0] + cam.k * xy[i], y = cam.pin[1] + cam.k * xy[i + 1];
+      if (pen) ctx.lineTo(x, y); else { ctx.moveTo(x, y); pen = true; }
+      if (big && x > 0 && x < cam.width && y > 20 && (!top || y < top[1])) top = [x, y];
+    }
+    ctx.strokeStyle = big ? "rgba(31, 78, 156, 0.85)" : "rgba(31, 78, 156, 0.35)";
+    ctx.lineWidth = big ? 2 : 1;
+    ctx.stroke();
+    if (big && top) {
+      ctx.font = "bold 12px system-ui, sans-serif";
+      ctx.fillStyle = "#1f4e9c";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(`${minutes} min`, top[0], top[1] - 3);
     }
   }
   ctx.restore();
@@ -597,10 +637,10 @@ function updateLegend() {
   const outer = bentNow && S.mesh ? S.mesh.outer : S.outer;
   setText($("from"), T.fromLine(S.origin));
   setText($("sentence"), S.dragging ? "Drop the pin where you want to start."
-    : T.sentence(S.mode, outer, ringPlan(outer), bentNow));
+    : T.sentence(S.mode, outer, ringPlan(outer), bentNow, S.layout));
   const limits = S.origin.example ? T.EXAMPLE_NOTE : T.limits(S.active && S.active.json);
   setText($("limits"), S.notice ? `${S.notice} ${limits}` : limits);
-  setText($("beyond"), T.beyond(outer));
+  setText($("beyond"), T.beyond(outer, S.layout));
   show($("beyond"), S.bent || bentNow);    // on the normal map, further places are shown, uncoloured
   const offered = !!bendOffered();
   show(toggleBtn, offered);
@@ -613,7 +653,7 @@ function updateLegend() {
   setText($("layout-note"), T.LAYOUT_NOTES[S.layout]);
   show($("direction-note"), offered && S.bent && S.layout !== "islands");
   setText($("direction-note"), T.DIRECTION_NOTES[S.directions]);
-  show($("overlap-note"), S.bent && S.mode === "transit");
+  show($("overlap-note"), S.bent && S.mode === "transit" && S.layout !== "squash");
   setText($("overlap-note"), T.OVERLAP_NOTE);
   show($("more-options"), S.mode === "transit" && S.transit.available);
 }

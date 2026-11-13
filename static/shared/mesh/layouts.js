@@ -22,6 +22,14 @@
 //                        at walking scale. Basins are torn apart at their borders (no-data
 //                        nodes on the slower side), so nothing is smeared between islands.
 //                        Returns a target grid (field.js) for a "grid" warp.
+//
+//   timeLines(field, warp, levels)   the real minute lines (region boundaries, contours.js)
+//                        carried through a warp into layout units, as one polyline set per
+//                        level with NaN breaks where the warp doesn't place a point. Squash
+//                        draws these instead of rings: its distance from the pin isn't minutes.
+//   squashReach(field, R, maxMinutes)   how far out squash draws the places within maxMinutes
+//                        (the 99th percentile of R over them), so the view can reach that far.
+import { regionRings } from "./contours.js";
 import { BEYOND, createField, createTargetGrid, GRID_NO_DATA } from "./field.js";
 
 const WALK_M_PER_MIN = 4000 / 60;
@@ -243,4 +251,39 @@ export function islandLayout(f, { maxMinutes, persistence = 4, minNodes = 25, fi
     stats: { islands: islands.size, slid, unplaced, torn, scale, persistence },
     islands: placed.map((p) => ({ t: p.t, nodes: p.nodes, extent: p.extent, deg: p.deg })),
   };
+}
+
+export function squashReach(f, R, maxMinutes, { share = 0.99, cap = 3 } = {}) {
+  const r = [];
+  for (let k = 0; k < f.minutes.length; k++) {
+    const t = f.minutes[k];
+    if (known(t) && t <= maxMinutes && known(R.minutes[k])) r.push(R.minutes[k]);
+  }
+  if (!r.length) return maxMinutes;
+  r.sort((a, b) => a - b);
+  return Math.min(cap * maxMinutes, Math.max(maxMinutes, r[Math.min(r.length - 1, Math.floor(share * r.length))]));
+}
+
+// Loops shorter than `minLoop` layout minutes all round (a single grid node's pocket) are left
+// out: they are noise at a 100 m grid, and they clutter the outer lines.
+export function timeLines(f, warp, levels, { minStep = 0.1, minLoop = 1.5 } = {}) {
+  return levels.map((T) => {
+    const out = [];
+    for (const ring of regionRings(f, T)) {
+      const piece = [];
+      let lx = NaN, ly = NaN, open = false, length = 0;
+      for (const [x, y] of ring) {
+        const p = warp.target(x, y);
+        if (!p) { if (open) { piece.push(NaN, NaN); open = false; } continue; }
+        const d = open ? Math.hypot(p[0] - lx, p[1] - ly) : 0;
+        if (open && d < minStep) continue;
+        piece.push(p[0], p[1]);
+        length += d;
+        lx = p[0]; ly = p[1]; open = true;
+      }
+      if (open) piece.push(NaN, NaN);
+      if (length >= minLoop) out.push(...piece);
+    }
+    return { minutes: T, xy: Float32Array.from(out) };
+  });
 }

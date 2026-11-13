@@ -171,6 +171,37 @@ passes either check.**
 run: with `?polar=1` the overlap and the tap list are there to test. A fold-free layout is
 #6's question, not W-02's.
 
+## Trial: two other layouts for transit's pockets
+
+Around each station the minutes drop, then rise again as you walk away, so along a line out
+from the pin the time doesn't only grow. The fold draws every place at its own minutes, so
+each pocket folds over its station. Two other layouts are on the bent map behind
+`?layouts=1` (`static/shared/mesh/layouts.js`); the default is still the fold.
+
+- **Squash.** A place's distance is the slowest time met so far along its direction from the
+  pin, rising at least 3 minutes per km, so places never come back closer and nothing
+  overlaps. Distance stops being minutes, so the rings are replaced by the real minute lines,
+  bent with the map: each joins places exactly that many minutes away, and quick spots near
+  stations show as small loops beyond the main lines. The view reaches out to where 99% of
+  the places within the chosen time are drawn (82 at Baker Street for 45 minutes).
+- **Islands.** Each pocket is cut out and drawn as a small undistorted map on the ring of its
+  station's time. It passes both checks, but at the size the rings allow the islands are
+  specks, and most can't find a free place on their ring.
+
+| Origin, weekday 08–09, 45 minutes | Fold | Squash | Islands |
+|---|---|---|---|
+| Baker Street | 52.0%, 5.5:1 | 0.9%, 3.3:1 | 2.6%, 1.0:1 |
+| Wembley Park | 43.5%, 4.6:1 | 0.8%, 4.0:1 | 2.2%, 1.0:1 |
+| Canary Wharf | 57.2%, 5.7:1 | 1.5%, 3.6:1 | 2.2%, 1.0:1 |
+| Heathrow | 36.4%, 5.3:1 | 0.2%, 5.5:1 | 0.2%, 1.0:1 |
+| Croydon | 43.9%, 6.3:1 | 1.4%, 3.6:1 | 3.4%, 1.0:1 |
+
+Folded share, then median stretch (limits 10% and 3:1); squash measured before its view was
+widened. Why squash needed lines instead of rings: a circle at its 30 held only 13–56% of the
+places within 30 minutes, and only 0–59% of the places on it were 30 minutes away. Inside 45,
+21–37% of places sat at their own minutes; the median one was 2.4–5.1 minutes too far out.
+The 15 circle was right (70–100%), as walking dominates there.
+
 ## Done when
 
 | Done when | Result |

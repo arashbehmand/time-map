@@ -8,6 +8,7 @@ import { createField, createTargetGrid, sampleField } from "./field.js";
 import { censusTile, LINE_VERTS, packScene, spacingForZoom, tessellateTile, vectorTileFeatures } from "./pipeline.js";
 import { TILE_URL } from "./schema-streets-v8.js";
 import { meshSheetIndex } from "./hit.js";
+import { timeLines } from "./layouts.js";
 import { makeEdgeTest, MAX_DEPTH, refineFills } from "./refine.js";
 import { createWarp, targetsFor } from "./warp.js";
 
@@ -269,7 +270,8 @@ function fieldMessage(msg) {
     for (let v = n; v < minutes.length; v++) minutes[v] = sampleField(f, r.pos[2 * v], r.pos[2 * v + 1]);
     const mesh = { pos: r.pos, minutes, index: r.index };
     const targets = msg.cpu ? targetsFor(warp, mesh.pos) : null;
-    const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped };
+    const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped,
+                      lines: msg.lines ? timeLines(f, warp, msg.lines) : null };
     // The index keeps pos and minutes, so the page gets copies.
     const copy = () => {
       const out = { pos: mesh.pos.slice(), minutes: mesh.minutes.slice(), index: mesh.index.slice(), targets: targets ? targets.slice() : null };

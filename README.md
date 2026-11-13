@@ -99,7 +99,10 @@ server/                          # FastAPI backend
     └── solver.py                # Scoring, refinement, snapped and named answers
 static/                          # Frontend assets (vanilla JS modules, no build step)
 ├── shared/                      # ui.css, api.js (errors, search), latest.js (latest answer only)
+│   ├── mesh/                    # Mesh renderer spike: warp, tiles → mesh worker, WebGL2 renderer
+│   └── vendor/                  # pbf, @mapbox/vector-tile, point-geometry, earcut (ES modules)
 ├── warp/                        # Warp map — app.js (WebGL2), warpmath.js, example.json
+│   └── lab/                     # /warp/lab/: renderer lab (unlinked, synthetic travel times)
 ├── meetup/                      # Meetup — app.js, words.js (its sentences), example.json
 ├── portfolio/                   # Landing page
 ├── manifest.json                # PWA manifest
@@ -108,7 +111,8 @@ static/                          # Frontend assets (vanilla JS modules, no build
 transit/                         # London public-transport tables (offline build, not imported by the app)
 scripts/make_examples.py         # Regenerates the two saved examples
 scripts/try_solves.py            # Runs fixed meetup groups against a server (timings, diagnostics)
-tests/js/                        # node --test: warp maths, latest-answer helper, meetup sentences
+tests/js/                        # node --test: warp maths, mesh renderer, latest-answer helper, meetup sentences
+docs/warp-renderer-spike.md      # Mesh renderer spike (#5, W-01): what was built, measured and decided
 ```
 
 ## Tests
@@ -187,6 +191,22 @@ filterable on every device. `static/warp/warpmath.js` holds the same maths for t
 and the tests.
 
 Isochrone polygons are fetched from the **Mapbox Isochrone API** and vector tile geometry from the **Mapbox Vector Tiles API**.
+
+### The mesh renderer (spike)
+
+`static/shared/mesh/` is the renderer meant to replace the screen re-sampling above (#5,
+W-01; whether it does is decided once it has run on phones and real tiles). It draws vector geometry (water, parks, rail, main roads) through a mesh whose vertices
+move: `screen = mix(ordinary(p), pin + k·target(p), u)`, where `target()` is a time-polar
+layout (bearing kept, distance proportional to travel time) or any layout given as a grid of
+positions (the London map, #6). Lines are extruded in screen pixels after the warp, so they
+stay sharp, and a place 20 km away can be drawn next to the pin. `warp.js` holds the
+`lon/lat → screen` function and its GLSL twin. A worker fetches and tessellates tiles once per
+tile; the morph only changes a uniform. It needs WebGL2 and no float-texture extension.
+`/warp/lab/` (not linked from anywhere) compares the three back-ends and runs the checks; it uses
+synthetic travel times and, unless `?geom=tiles` is given, synthetic geometry, so it needs no
+tiles token and spends no tile budget. `scripts/lab_headless.mjs` drives it in a headless Chrome. Results and the
+decision are in [docs/warp-renderer-spike.md](docs/warp-renderer-spike.md). The `/warp/` page
+does not use it yet.
 
 ## How the Meetup Works
 

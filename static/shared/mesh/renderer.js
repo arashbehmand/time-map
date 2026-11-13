@@ -11,7 +11,7 @@
 // refuses a camera, scene or warp from a different origin rather than draw a misplaced map.
 import { createEvaluator, floatTexture, link, probeCaps } from "./caps.js";
 import { BACKGROUND, hexToRgba, PASSES, STYLES, widthAt } from "./schema-streets-v8.js";
-import { WARP_GLSL, warpDefines } from "./warp.js";
+import { ANGLE_VEC4, STYLE, WARP_GLSL, warpDefines } from "./warp.js";
 
 export const MAX_DPR = 2;
 const NSTYLE = STYLES.length;
@@ -25,6 +25,8 @@ ${defines}
 ${WARP_GLSL}
 uniform vec4  u_color[NSTYLE];
 uniform float u_width[NSTYLE];
+uniform bool  u_adaptive;       // the scale-aware style on or off
+uniform float u_bent[NSTYLE];   // each class's strength on the bent map (scale-aware style)
 uniform float u_dpr;
 vec4 clipOf(vec2 css) {
   vec2 c = css / u_view * 2.0 - 1.0;
@@ -50,6 +52,7 @@ precision highp float;
 in vec4 v_color;
 uniform bool u_showFolds;
 uniform bool u_foldOnly;    // the fold layer: draw only flipped triangles, as a tint
+uniform bool u_adaptive;    // scale-aware style: folded parks and water are dimmed
 out vec4 o;
 void main() {
   // Unfolded triangles face front (frontFace CW, see draw()); a fold flips them.
@@ -60,6 +63,7 @@ void main() {
   }
   vec4 c = v_color;
   if (u_showFolds && !gl_FrontFacing) c.rgb = mix(c.rgb, vec3(${FOLD_TINT.join(", ")}) * c.a, 0.65);
+  else if (u_adaptive && !gl_FrontFacing) c *= ${STYLE.FILL_FOLD_FADE.toFixed(2)};
   o = c;
 }`;
 
@@ -71,6 +75,7 @@ in float a_style;
 #ifdef CPU_TARGETS
 in vec3 a_ta;
 in vec3 a_tb;
+in vec4 a_jac;         // the warp's local scale at the midpoint, from the worker
 #endif
 out vec2 v_seg;        // along, across: device px from a, in the segment's own frame
 out float v_len;
@@ -81,7 +86,15 @@ void main() {
   vec3 A = warpScreen(a_a, TARGET(a_a, a_ta));
   vec3 B = warpScreen(a_b, TARGET(a_b, a_tb));
   vec2 pa = A.xy * u_dpr, pb = B.xy * u_dpr;
-  float hw = 0.5 * u_width[int(a_style)] * u_dpr;
+#if defined(WARP_POLAR) || defined(WARP_GRID)
+  vec4 jt = fieldJacobian(0.5 * (a_a + a_b));
+#elif defined(CPU_TARGETS)
+  vec4 jt = a_jac;
+#else
+  vec4 jt = vec4(0.0);
+#endif
+  vec2 emph = u_adaptive ? lineEmphasis(jt, a_b - a_a) : vec2(1.0);
+  float hw = 0.5 * u_width[int(a_style)] * u_dpr * emph.x;
   float m = hw + 1.0;                           // room for the anti-aliased edge
   vec2 d = pb - pa;
   float len = length(d);
@@ -93,7 +106,8 @@ void main() {
   v_seg = vec2(along, across);
   v_len = len;
   v_hw = hw;
-  v_color = u_color[int(a_style)];
+  if (u_adaptive) emph.y *= mix(1.0, u_bent[int(a_style)], u_u);
+  v_color = u_color[int(a_style)] * emph.y;
   v_alpha = vec2(A.z, B.z);
   gl_Position = clipOf(p / u_dpr);
 }`;
@@ -116,9 +130,21 @@ void main() {
 }`;
 
 const FILL_ATTRIBS = ["a_pos", "a_style", "a_t"];
-const LINE_ATTRIBS = ["a_corner", "a_a", "a_b", "a_style", "a_ta", "a_tb"];
+const LINE_ATTRIBS = ["a_corner", "a_a", "a_b", "a_style", "a_ta", "a_tb", "a_jac"];
+const BENT = new Float32Array(STYLES.map((s) => s.bent ?? 1));
+
+// A directions-by-reach table (warp.js angularSpread) as the shader's vec4 array.
+function packAngles({ a, tMax }) {
+  const v = new Float32Array(ANGLE_VEC4 * 4);
+  v.set(a);
+  return { v, tMax };
+}
+function setAngleUniforms(gl, L, angles) {
+  gl.uniform1i(L.u_angleOn, angles ? 1 : 0);
+  if (angles) { gl.uniform4fv(L.u_angles, angles.v); gl.uniform1f(L.u_angleTMax, angles.tMax); }
+}
 const UNIFORMS = ["u_cam", "u_ppm", "u_view", "u_pin", "u_k", "u_u", "u_dpr", "u_color", "u_width",
-  "u_showFolds", "u_foldOnly", "u_warpTex", "u_warpGrid", "u_warpSize"];
+  "u_showFolds", "u_foldOnly", "u_warpTex", "u_warpGrid", "u_warpSize", "u_adaptive", "u_bent", "u_angleOn", "u_angles", "u_angleTMax"];
 const KINDS = ["none", "polar", "grid"];
 
 export function sameOrigin(a, b) {
@@ -137,7 +163,7 @@ export function createMeshRenderer(canvas, opts = {}) {
   let programs = new Map();
   let passes = {};          // name → {vao, count, kind, buffers}
   let fold = null;          // the fold layer: {vao, count, buffers}
-  let warpTex = null;       // {texture, kind, x0, y0, cell, nx, ny, maxMinutes}
+  let warpTex = null;       // {texture, kind, x0, y0, cell, nx, ny, maxMinutes, angles}
   let warpKind = "none";
   let warpOrigin = null, sceneOrigin = null;
   let quad = null;
@@ -177,6 +203,8 @@ export function createMeshRenderer(canvas, opts = {}) {
     gl.bindBuffer(gl.ARRAY_BUFFER, quad);
     // Two triangles: (along, across) corners.
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 1, 1, 0, -1, 1, 1, 0, 1]), gl.STATIC_DRAW);
+    // a_jac when a line buffer carries none: zero means "no local scale", not WebGL's (0,0,0,1).
+    gl.vertexAttrib4f(LINE_ATTRIBS.indexOf("a_jac"), 0, 0, 0, 0);
   }
   try {
     init();
@@ -275,6 +303,7 @@ export function createMeshRenderer(canvas, opts = {}) {
           const tb = upload(s.targets); buffers.push(tb);
           attrib(4, tb, 3, 24, 0, 1);
           attrib(5, tb, 3, 24, 12, 1);
+          if (s.jac) { const jb = upload(s.jac); buffers.push(jb); attrib(6, jb, 4, 0, 0, 1); }
         }
       }
       gl.bindVertexArray(null);
@@ -308,6 +337,7 @@ export function createMeshRenderer(canvas, opts = {}) {
         texture: floatTexture(gl, warp.kind, src.nx, src.ny, data), kind: warp.kind,
         x0: src.x0, y0: src.y0, cell: src.cell, nx: src.nx, ny: src.ny,
         maxMinutes: warp.kind === "polar" ? (warp.maxMinutes ?? 1e9) : 1e9,
+        angles: warp.kind === "polar" && warp.angles ? packAngles(warp.angles) : null,
       };
     }
     return performance.now() - t0;
@@ -320,7 +350,7 @@ export function createMeshRenderer(canvas, opts = {}) {
     return dpr;
   }
 
-  function setUniforms(L, cam, u, dpr, styleSet, showFolds, foldOnly = false) {
+  function setUniforms(L, cam, u, dpr, styleSet, showFolds, foldOnly = false, adaptive = true) {
     gl.uniform2f(L.u_cam, cam.center[0], cam.center[1]);
     gl.uniform1f(L.u_ppm, cam.ppm);
     gl.uniform2f(L.u_view, cam.width, cam.height);
@@ -332,12 +362,15 @@ export function createMeshRenderer(canvas, opts = {}) {
     gl.uniform1fv(L.u_width, styleSet.widths);
     gl.uniform1i(L.u_showFolds, showFolds ? 1 : 0);
     gl.uniform1i(L.u_foldOnly, foldOnly ? 1 : 0);
+    gl.uniform1i(L.u_adaptive, adaptive ? 1 : 0);
+    gl.uniform1fv(L.u_bent, BENT);
     if (warpTex) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, warpTex.texture);
       gl.uniform1i(L.u_warpTex, 0);
       gl.uniform4f(L.u_warpGrid, warpTex.x0, warpTex.y0, warpTex.cell, warpTex.maxMinutes);
       gl.uniform2i(L.u_warpSize, warpTex.nx, warpTex.ny);
+      setAngleUniforms(gl, L, warpTex.angles);
     }
   }
 
@@ -365,7 +398,8 @@ export function createMeshRenderer(canvas, opts = {}) {
 
   // Draw one frame. cam: frame.js camera; u: morph. Returns stats for this frame, or
   // {skipped} when the frame would be wrong (lost context, or origins that don't match).
-  function draw(cam, u, { showFolds = false, target = null } = {}) {
+  // adaptive: the scale-aware style (line widths and fades follow the bent map's local scale).
+  function draw(cam, u, { showFolds = false, target = null, adaptive = true } = {}) {
     if (lost) return { skipped: "context lost" };
     const why = mismatch(cam);
     if (why) return { skipped: why };
@@ -384,12 +418,14 @@ export function createMeshRenderer(canvas, opts = {}) {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     const sets = styleSets(cam.zoom);
     let drawCalls = 0, instances = 0, fillIndices = 0;
+    let foldDrawn = false;
     for (const pass of PASSES) {
-      if (pass.name === "rail" && fold && showFolds) {
+      if (pass.kind === "line" && !foldDrawn && fold && showFolds) {
         // The fold layer goes over the fills and under the lines.
+        foldDrawn = true;
         const prog = program("fill");
         gl.useProgram(prog.p);
-        setUniforms(prog.L, cam, u, dpr, sets.fill, false, true);
+        setUniforms(prog.L, cam, u, dpr, sets.fill, false, true, adaptive);
         gl.bindVertexArray(fold.vao);
         gl.drawElements(gl.TRIANGLES, fold.count, gl.UNSIGNED_INT, 0);
         drawCalls++;
@@ -398,7 +434,7 @@ export function createMeshRenderer(canvas, opts = {}) {
       if (!p) continue;
       const prog = program(p.kind);
       gl.useProgram(prog.p);
-      setUniforms(prog.L, cam, u, dpr, pass.casing ? sets.casing : sets.fill, showFolds);
+      setUniforms(prog.L, cam, u, dpr, pass.casing ? sets.casing : sets.fill, showFolds, false, adaptive);
       gl.bindVertexArray(p.vao);
       if (p.kind === "fill") {
         gl.drawElements(gl.TRIANGLES, p.count, gl.UNSIGNED_INT, 0);
@@ -427,8 +463,8 @@ export function createMeshRenderer(canvas, opts = {}) {
   // Draw line segments alone, in white, into an offscreen target and read back a rectangle
   // of it (device px, y down): the checks measure widths and positions from these pixels.
   // lines: {seg: Float32Array (ax, ay, bx, by per segment, local metres), style: Float32Array,
-  // targets?: Float32Array (cpu back-end)}. rect: [x, y, w, h] in device px.
-  function renderLines(cam, u, lines, rect) {
+  // targets?, jac?: Float32Array (cpu back-end)}. rect: [x, y, w, h] in device px.
+  function renderLines(cam, u, lines, rect, { adaptive = true } = {}) {
     const dpr = sizeCanvas(cam);
     const fb = gl.createFramebuffer(), rb = gl.createRenderbuffer();
     gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
@@ -452,12 +488,13 @@ export function createMeshRenderer(canvas, opts = {}) {
       bufs.push(upload(lines.targets));
       attrib(4, bufs[2], 3, 24, 0, 1);
       attrib(5, bufs[2], 3, 24, 12, 1);
+      if (lines.jac) { bufs.push(upload(lines.jac)); attrib(6, bufs[3], 4, 0, 0, 1); }
     }
     const prog = program("line");
     gl.useProgram(prog.p);
     const sets = styleSets(cam.zoom);
     const colors = new Float32Array(NSTYLE * 4).fill(1);
-    setUniforms(prog.L, cam, u, dpr, { colors, widths: sets.fill.widths }, false);
+    setUniforms(prog.L, cam, u, dpr, { colors, widths: sets.fill.widths }, false, false, adaptive);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, n);
     const [x, y, w, h] = rect;
     const raw = new Uint8Array(w * h * 4);

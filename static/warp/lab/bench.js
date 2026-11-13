@@ -7,7 +7,7 @@
 //                     with the GPU finished; it includes uploading B's field texture
 //   G8 new origin     cold tiles → first frame, p95 ≤ 1.5 s; only measured with ?geom=tiles,
 //                     because synthetic geometry makes no request
-//   G9 budget         ≤ 300k vertices shaded and ≤ 48 tiles per origin, or overBudget reported
+//   G9 budget         ≤ the budget (5M vertices shaded) and ≤ 48 tiles per origin, or overBudget reported
 import { tileCover } from "../../shared/mesh/cover.js";
 import { localFrame } from "../../shared/mesh/frame.js";
 import { foldDiagnostics, makeWarpSpec } from "./fields.js";

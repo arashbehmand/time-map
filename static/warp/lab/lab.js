@@ -9,7 +9,7 @@ import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "../../sha
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "../../shared/mesh/pipeline.js";
 import { createMeshRenderer } from "../../shared/mesh/renderer.js";
 import { maplibreStyle } from "../../shared/mesh/schema-streets-v8.js";
-import { createWarp, targetsFor } from "../../shared/mesh/warp.js";
+import { angularSpread, createWarp, dotScale, targetsFor } from "../../shared/mesh/warp.js";
 import { FIELD_HALF, GRID_FIELDS, makeWarpSpec, POLAR_FIELDS } from "./fields.js";
 
 const Q = new URLSearchParams(location.search);
@@ -23,6 +23,15 @@ const OPT = {
   max: Number(Q.get("max")) || 45,
   caps: Q.get("caps") || "",
   folds: Q.get("folds") === "1",
+  // The scale-aware style (line widths, fades and dots follow the bent map's local scale);
+  // ?style=plain draws every line at its nominal width.
+  adaptive: Q.get("style") !== "plain",
+  // The toy network drawn schematically on the transit field (?network=0 hides it).
+  network: Q.get("network") !== "0",
+  // Directions by reach (warp.js angularSpread): 0 keeps every bearing, 1 gives each
+  // direction the share of the circle it holds of the area reachable on each ring; the
+  // default, 0.5, goes halfway.
+  spread: Q.has("spread") ? Math.min(1, Math.max(0, Number(Q.get("spread")) || 0)) : 0.5,
   budget: Number(Q.get("budget")) || DEFAULT_BUDGET,
 };
 const MORPH_MS = 1800;
@@ -188,6 +197,7 @@ function originById(id) {
 function setOrigin(id, { frame: reframe = true, clear = false } = {}) {
   const origin = originById(id);
   const spec = makeWarpSpec(OPT.field, origin, S.network, { example: S.example, maxMinutes: OPT.max });
+  if (spec.kind === "polar" && OPT.spread > 0) spec.angles = angularSpread(spec.field, spec.maxMinutes ?? OPT.max, { spread: OPT.spread });
   const warp = createWarp(spec);
   const el = S.map.getContainer();
   const max = spec.maxMinutes ?? OPT.max;
@@ -240,6 +250,12 @@ function stepMorph(now) {
 const overlay = $("overlay"), ctx = overlay.getContext("2d");
 const FONTS = { station: "600 12px system-ui, sans-serif", place: "12px system-ui, sans-serif" };
 const PIN_R = 10;
+// The toy network's line colours (close to TfL's, darkened where needed to read on the map).
+const LINE_COLORS = {
+  Metropolitan: "#9b0056", Jubilee: "#56616a", Elizabeth: "#6950a1", Piccadilly: "#003688",
+  DLR: "#00a4a7", "Southern via Clapham": "#3f8f2f", "Thameslink via Norwood": "#d6007f",
+};
+const NETWORK_FROM_U = 0.3;       // the schematic network fades in over the rest of the morph
 
 function measure(text, type) { ctx.font = FONTS[type] || FONTS.place; return ctx.measureText(text).width; }
 
@@ -291,16 +307,20 @@ function drawOverlay(cam) {
     }
     ctx.restore();
   }
+  drawNetwork(cam, u);
   placeLabelsNow(cam);
   // Every station gets a dot, labelled or not, so one that loses a collision still shows
-  // where it is (a tap lists it).
+  // where it is (a tap lists it). In the scale-aware style a dot shrinks where the bent map
+  // is crowded and grows where it is open, and a labelled station's dot is a little bigger.
+  const labelled = new Set(S.placed.filter((l) => l.type === "station").map((l) => `${l.x},${l.y}`));
   for (const l of S.labels) {
     if (l.type !== "station") continue;
     const p = S.warp.screenOfLocal(l.x, l.y, cam, u);
     if (p.alpha < 0.5 || p.x < 0 || p.y < 0 || p.x > cam.width || p.y > cam.height) continue;
+    const r = OPT.adaptive ? (labelled.has(`${l.x},${l.y}`) ? 3.5 : 2.5) * dotScale(S.warp.targetJacobian(l.x, l.y), cam, u) : 3;
     ctx.globalAlpha = p.alpha;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI);
+    ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
     ctx.fillStyle = "#1c1c28";
     ctx.fill();
     ctx.lineWidth = 1.5;
@@ -326,6 +346,43 @@ function drawOverlay(cam) {
   ctx.lineWidth = 3;
   ctx.strokeStyle = "#fff";
   ctx.stroke();
+}
+
+// The network that shaped the bent map, drawn as straight lines from stop to stop: on a time
+// map the ride between two stations has no geography of its own (the tiles' rail between
+// them crosses the tears between walking areas), so a schematic line says more. Only stops
+// inside the outer minute are joined.
+function drawNetwork(cam, u) {
+  if (!OPT.network || OPT.field !== "transit" || S.spec.kind !== "polar" || !S.network) return;
+  const a = Math.max(0, Math.min(1, (u - NETWORK_FROM_U) / (1 - NETWORK_FROM_U)));
+  if (a <= 0) return;
+  const max = S.spec.maxMinutes ?? OPT.max;
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const line of S.network.lines) {
+    const runs = [];
+    let run = [];
+    for (const [, lon, lat] of line.stops) {
+      const [x, y] = S.frame.toLocal(lon, lat);
+      const t = sampleField(S.spec.field, x, y);
+      if (t < 0 || t > max) { if (run.length > 1) runs.push(run); run = []; continue; }
+      const p = S.warp.screenOfLocal(x, y, cam, u);
+      run.push([p.x, p.y]);
+    }
+    if (run.length > 1) runs.push(run);
+    for (const [width, color] of [[6, "rgba(255,255,255,0.9)"], [3.5, LINE_COLORS[line.name] || "#333"]]) {
+      ctx.lineWidth = width;
+      ctx.strokeStyle = color;
+      for (const r of runs) {
+        ctx.beginPath();
+        r.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.restore();
 }
 
 function percentile(arr, p) {
@@ -372,7 +429,7 @@ function loop(now) {
       const t0 = performance.now();
       try {
         if (S.deck) drawStats = S.deck.draw(cam, S.u);
-        else if (S.renderer && S.renderer.supported) drawStats = S.renderer.draw(cam, S.u, { showFolds: OPT.folds });
+        else if (S.renderer && S.renderer.supported) drawStats = S.renderer.draw(cam, S.u, { showFolds: OPT.folds, adaptive: OPT.adaptive });
         if (drawStats && drawStats.skipped) ok = false;
       } catch (e) {
         ok = false;
@@ -431,13 +488,17 @@ function initControls() {
   for (const f of [...POLAR_FIELDS, ...GRID_FIELDS]) fieldSel.add(new Option(f, f));
   fieldSel.value = OPT.field;
   fieldSel.addEventListener("change", () => reloadWith({ field: fieldSel.value }));
-  for (const [id, key] of [["backend", "backend"], ["geom", "geom"], ["spacing", "spacing"]]) {
+  for (const [id, key] of [["backend", "backend"], ["geom", "geom"], ["spacing", "spacing"], ["spread", "spread"]]) {
     $(id).value = String(OPT[key]);
     $(id).addEventListener("change", () => reloadWith({ [key]: $(id).value }));
   }
   $("morph").addEventListener("click", () => morphTo(S.u > 0.5 || (S.anim && S.anim.to === 1) ? 0 : 1));
   $("u").addEventListener("input", () => { S.anim = null; S.u = Number($("u").value); S.dirty = true; });
   $("folds").checked = OPT.folds;
+  $("adaptive").checked = OPT.adaptive;
+  $("network").checked = OPT.network;
+  $("network").addEventListener("change", () => { OPT.network = $("network").checked; S.dirty = true; });
+  $("adaptive").addEventListener("change", () => { OPT.adaptive = $("adaptive").checked; S.dirty = true; });
   $("folds").addEventListener("change", () => { OPT.folds = $("folds").checked; if (OPT.folds) buildFoldLayer(); S.dirty = true; });
   $("basemap").addEventListener("change", () => {
     document.body.classList.toggle("basemap", $("basemap").checked);

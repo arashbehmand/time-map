@@ -5,10 +5,12 @@ import { VectorTile, classifyRings } from "../vendor/vector-tile/index.js";
 import { tilePlacement } from "./frame.js";
 import { classify, NEAR_FIELD_M, PASSES } from "./schema-streets-v8.js";
 import { enforceBudget, gridFill, lineSegments } from "./tessellate.js";
-import { targetsFor } from "./warp.js";
+import { jacobiansFor, targetsFor } from "./warp.js";
 
 export const DEFAULT_SPACING_DIV = 128;  // cells per z12 tile edge: about 48 m in London (the size-weighted chord check fails at 64)
-export const DEFAULT_BUDGET = 300_000;   // vertices shaded: fill vertices + 6 per line segment (D19)
+// Vertices shaded: fill vertices + 6 per line segment for each pass that draws it. Real
+// transit scenes measured 1.1M–3.3M at 48 m cells; over this, the farthest detail goes first.
+export const DEFAULT_BUDGET = 5_000_000;
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
@@ -164,6 +166,8 @@ export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null 
       // Two placements per segment, a then b, three floats each: the same layout as `seg`
       // read as endpoint pairs, so targetsFor can fill it in one pass.
       passes[name].targets = targetsFor(warp, seg, new Float32Array(ns * 6));
+      // The warp's local scale at each segment, for the scale-aware style.
+      passes[name].jac = jacobiansFor(warp, seg, new Float32Array(ns * 4));
     }
   }
 
@@ -182,7 +186,7 @@ export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null 
   for (const [name, p] of Object.entries(passes)) {
     if (p.kind === "fill") fillVerts += p.pos.length / 2;
     else { segments += p.count; lineShaded += LINE_VERTS * DRAWS(name) * p.count; }
-    for (const a of [p.pos, p.style, p.index, p.seg, p.targets, p.zoom]) if (a) bytes += a.byteLength;
+    for (const a of [p.pos, p.style, p.index, p.seg, p.targets, p.zoom, p.jac]) if (a) bytes += a.byteLength;
   }
   return {
     origin: { lon: frame.origin.lon, lat: frame.origin.lat },

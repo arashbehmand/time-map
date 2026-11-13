@@ -38,6 +38,11 @@
         <option value="128">48 m cells</option>
         <option value="256">24 m cells</option>
       </select></label>
+      <label>Directions <select id="spread">
+        <option value="0.5">Half by reach</option>
+        <option value="1">By reach</option>
+        <option value="0">Exact bearings</option>
+      </select></label>
     </div>
     <div class="row">
       <button class="btn primary" type="button" id="morph">Bend</button>
@@ -45,6 +50,8 @@
     </div>
     <div class="row">
       <label><input type="checkbox" id="folds" /> Tint folds</label>
+      <label><input type="checkbox" id="adaptive" /> Scale-aware style</label>
+      <label><input type="checkbox" id="network" /> Network</label>
       <label><input type="checkbox" id="basemap" /> Show base map</label>
     </div>
     <div class="row">

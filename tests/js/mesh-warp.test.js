@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createField, createTargetGrid, fieldFromFunction, gridFromFunction, NO_DATA, sampleField, sampleGrid } from "../../static/shared/mesh/field.js";
 import { localFrame, makeCamera } from "../../static/shared/mesh/frame.js";
-import { createWarp, DIR_EPS, targetsFor, WARP_GLSL, warpDefines } from "../../static/shared/mesh/warp.js";
+import { ANGLE_BINS, ANGLE_LEVELS, angularSpread, createWarp, DIR_EPS, dotScale, jacobiansFor, lineEmphasis, remapBearing, STYLE, targetsFor, WARP_GLSL, warpDefines } from "../../static/shared/mesh/warp.js";
 
 const ORIGIN = { lon: -0.1571, lat: 51.5226 };
 const frame = localFrame(ORIGIN);
@@ -106,4 +106,114 @@ test("the shader twin uses the same constants and defines", () => {
   // GLSL ES won't compare a float with an integer literal: every number interpolated into a
   // comparison must read as a float (this once made the GPU programs fail to compile).
   assert.ok(!/(>=|<=|[<>])\s*-?\d+\s*\)/.test(WARP_GLSL), WARP_GLSL.match(/(>=|<=|[<>])\s*-?\d+\s*\)/)?.[0]);
+});
+
+// A target Jacobian that, at u = 1, scales the ordinary map by sx along x and sy along y.
+const jtFor = (sx, sy) => [(sx * cam.ppm) / cam.k, 0, 0, (sy * cam.ppm) / cam.k];
+
+test("the scale-aware style changes nothing on the ordinary map", () => {
+  for (const jt of [jtFor(1, 1 / 9), jtFor(3, -2), null]) assert.deepEqual(lineEmphasis(jt, 1, 0, cam, 0), { width: 1, alpha: 1 });
+  assert.equal(dotScale(jtFor(1, 1 / 9), cam, 0), 1);
+});
+
+test("a line squeezed sideways thins; along the squeeze, or where the map widens, it keeps its width", () => {
+  const jt = jtFor(1, 1 / 9);                         // squeezed 9× across x-direction lines
+  assert.equal(lineEmphasis(jt, 1, 0, cam, 1).width, STYLE.WF_MIN);   // √(1/9) = 0.33, clamped
+  assert.equal(lineEmphasis(jtFor(1, 0.25), 1, 0, cam, 1).width, 0.5);
+  assert.ok(Math.abs(lineEmphasis(jt, 0, 1, cam, 1).width - 1) < 1e-9);
+  const half = lineEmphasis(jt, 1, 0, cam, 0.5).width;
+  assert.ok(half > STYLE.WF_MIN && half < 1);
+  assert.deepEqual(lineEmphasis(jtFor(4, 4), 1, 0, cam, 1), { width: 1, alpha: 1 });
+});
+
+test("a line on a fold fades", () => {
+  assert.equal(lineEmphasis(jtFor(1, 1), 1, 0, cam, 1).alpha, 1);
+  assert.equal(lineEmphasis(jtFor(1, -1), 1, 0, cam, 1).alpha, STYLE.FOLD_FADE);
+});
+
+test("station dots shrink where the map is squeezed, and never grow", () => {
+  assert.ok(Math.abs(dotScale(jtFor(0.5, 0.5), cam, 1) - Math.SQRT1_2) < 1e-9);
+  assert.equal(dotScale(jtFor(0.1, 0.1), cam, 1), 0.6);
+  assert.equal(dotScale(jtFor(9, 9), cam, 1), 1);
+});
+
+test("the target Jacobian matches the field, and is zero where it is unknown", () => {
+  // T = r / 100 m: the target is (x, y) / 100, so its Jacobian is 0.01 · I.
+  const jt = polar.targetJacobian(1000, 500);
+  for (const [v, want] of [[jt[0], 0.01], [jt[1], 0], [jt[2], 0], [jt[3], 0.01]]) assert.ok(Math.abs(v - want) < 2e-4, `${v}`);
+  const j = jacobiansFor(polar, new Float32Array([900, 500, 1100, 500, 4400, 0, 4600, 0]));
+  assert.ok(Math.abs(j[0] - 0.01) < 2e-4);
+  assert.deepEqual([...j.subarray(4)], [0, 0, 0, 0]);  // next to the no-data region
+});
+
+test("the shader twin of the style uses the same constants", () => {
+  for (const name of ["fieldJacobian", "lineEmphasis"]) assert.ok(WARP_GLSL.includes(`${name}(`), name);
+  for (const k of ["WF_MIN", "FOLD_FADE"]) assert.ok(WARP_GLSL.includes(STYLE[k].toFixed(2)), k);
+});
+
+// Directions by reach. A field that is quick to the east: 100 m a minute there, 40 m
+// elsewhere, so the east holds more of the reachable area on every ring.
+const eastFast = fieldFromFunction({ origin: ORIGIN, cell: 100, halfSize: 5000 }, (x, y) => Math.hypot(x, y) / (x > 0 && Math.abs(y) < x ? 100 : 40));
+const row = (ang, m) => Array.from(ang.a.subarray(m * (ANGLE_BINS + 1), (m + 1) * (ANGLE_BINS + 1)));
+
+test("directions by reach keep every bearing at spread 0", () => {
+  const ang = angularSpread(eastFast, 45, { spread: 0 });
+  const w0 = createWarp({ kind: "polar", field: eastFast, maxMinutes: 45 });
+  const w1 = createWarp({ kind: "polar", field: eastFast, maxMinutes: 45, angles: ang });
+  const r = rand(7);
+  for (let i = 0; i < 500; i++) {
+    const x = -4000 + 8000 * r(), y = -4000 + 8000 * r();
+    const a = w0.target(x, y), b = w1.target(x, y);
+    if (!a) { assert.equal(b, null); continue; }
+    assert.ok(Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-4, `${x},${y}`);
+  }
+});
+
+test("directions by reach keep minutes as radius, keep order, and add no folds", () => {
+  const ang = angularSpread(eastFast, 45);
+  for (let m = 0; m < ANGLE_LEVELS; m++) {
+    const a = row(ang, m);
+    for (let b = 1; b < a.length; b++) assert.ok(a[b] > a[b - 1], `level ${m} bin ${b}`);
+    assert.ok(Math.abs(a[ANGLE_BINS] - a[0] - 2 * Math.PI) < 1e-5);
+  }
+  const w0 = createWarp({ kind: "polar", field: eastFast, maxMinutes: 45 });
+  const w1 = createWarp({ kind: "polar", field: eastFast, maxMinutes: 45, angles: ang });
+  const r = rand(9);
+  for (let i = 0; i < 500; i++) {
+    const x = -4000 + 8000 * r(), y = -4000 + 8000 * r();
+    const t = sampleField(eastFast, x, y);
+    const p = w1.target(x, y);
+    if (!p) continue;
+    assert.ok(Math.abs(Math.hypot(p[0], p[1]) - t) < 1e-9);
+    const j0 = w0.jacobian(x, y), j1 = w1.jacobian(x, y);
+    if (j0 && j1 && Math.abs(j0.det) > 1e-6) assert.equal(Math.sign(j1.det), Math.sign(j0.det), `${x},${y}`);
+  }
+});
+
+test("on the outer ring each direction gets its share of the reachable area", () => {
+  const ang = angularSpread(eastFast, 45, { spread: 1, floor: 0, smooth: 0 });
+  const area = new Float64Array(ANGLE_BINS);
+  const f = eastFast;
+  for (let j = 0; j < f.ny; j++) for (let i = 0; i < f.nx; i++) {
+    const t = f.minutes[j * f.nx + i], x = f.x0 + i * f.cell, y = f.y0 + j * f.cell;
+    if (t < 0 || t > 45 || Math.hypot(x, y) <= DIR_EPS) continue;
+    area[Math.min(ANGLE_BINS - 1, Math.floor(((Math.atan2(y, x) + Math.PI) / (2 * Math.PI)) * ANGLE_BINS))] += 1;
+  }
+  const total = area.reduce((s, v) => s + v, 0);
+  const a = row(ang, ANGLE_LEVELS - 1);
+  for (let b = 0; b < ANGLE_BINS; b++) assert.ok(Math.abs((a[b + 1] - a[b]) / (2 * Math.PI) - area[b] / total) < 1e-6, `bin ${b}`);
+  // The quick east (bins around 0) gets well over its even share; the west well under.
+  const east = (a[ANGLE_BINS / 2 + 1] - a[ANGLE_BINS / 2]) * ANGLE_BINS / (2 * Math.PI);
+  const west = (a[1] - a[0]) * ANGLE_BINS / (2 * Math.PI);
+  assert.ok(east > 2 && west < 0.5, `${east} ${west}`);
+});
+
+test("near the origin, inside the walk, bearings barely move", () => {
+  const ang = angularSpread(eastFast, 45);
+  for (const th of [-3, -1.5, 0.2, 2.5]) assert.ok(Math.abs(remapBearing(ang, th, 0) - th) < 1e-6);
+});
+
+test("the shader twin of directions by reach uses the same table layout", () => {
+  for (const n of ["polarDir(", "u_angles[", "u_angleOn", "u_angleTMax"]) assert.ok(WARP_GLSL.includes(n), n);
+  assert.ok(WARP_GLSL.includes(`${ANGLE_BINS + 1}`) && WARP_GLSL.includes(`${(ANGLE_LEVELS - 1).toFixed(1)}`));
 });

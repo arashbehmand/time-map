@@ -56,7 +56,7 @@ export function link(gl, vs, fs, { attribs = [], varyings = null } = {}) {
 export function createEvaluator(gl, kind, cpuTargets) {
   const prog = link(gl, TF_VS(warpDefines(kind, cpuTargets)), TF_FS, { attribs: ["a_p", "a_t"], varyings: ["v_out"] });
   const loc = (n) => gl.getUniformLocation(prog, n);
-  const L = Object.fromEntries(["u_cam", "u_ppm", "u_view", "u_pin", "u_k", "u_u", "u_warpTex", "u_warpGrid", "u_warpSize"].map((n) => [n, loc(n)]));
+  const L = Object.fromEntries(["u_cam", "u_ppm", "u_view", "u_pin", "u_k", "u_u", "u_warpTex", "u_warpGrid", "u_warpSize", "u_angleOn", "u_angles", "u_angleTMax"].map((n) => [n, loc(n)]));
   return {
     prog,
     run(points, targets, U, tex = null) {
@@ -92,6 +92,8 @@ export function createEvaluator(gl, kind, cpuTargets) {
         gl.uniform1i(L.u_warpTex, 0);
         gl.uniform4f(L.u_warpGrid, tex.x0, tex.y0, tex.cell, tex.maxMinutes);
         gl.uniform2i(L.u_warpSize, tex.nx, tex.ny);
+        gl.uniform1i(L.u_angleOn, tex.angles ? 1 : 0);
+        if (tex.angles) { gl.uniform4fv(L.u_angles, tex.angles.v); gl.uniform1f(L.u_angleTMax, tex.angles.tMax); }
       }
       const tf = gl.createTransformFeedback();
       gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tf);

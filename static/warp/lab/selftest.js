@@ -14,8 +14,12 @@
 //                    angles; every one within ±0.25 px of nominal
 import { makeCamera } from "../../shared/mesh/frame.js";
 import { NO_DATA, sampleField } from "../../shared/mesh/field.js";
-import { STYLE_ID } from "../../shared/mesh/schema-streets-v8.js";
-import { targetsFor } from "../../shared/mesh/warp.js";
+import { STYLE_ID, STYLES } from "../../shared/mesh/schema-streets-v8.js";
+import { jacobiansFor, lineEmphasis, targetsFor } from "../../shared/mesh/warp.js";
+
+// The geometry gates check the drawing contract (a line keeps its nominal width), so they
+// draw with the scale-aware style off; g5Width checks the style on its own.
+const PLAIN = { adaptive: false };
 
 export const REFERENCE_VIEWS = [{ name: "phone", width: 390, height: 844 }, { name: "desktop", width: 1440, height: 900 }];
 const N = 1000;
@@ -125,9 +129,9 @@ function drawnCentres(r, warp, cam, u, pts, want, style) {
     const seg = new Float32Array(batch.length * 4), sty = new Float32Array(batch.length).fill(style);
     batch.forEach((k, j) => { seg.set([pts[2 * k], pts[2 * k + 1], pts[2 * k], pts[2 * k + 1]], 4 * j); });
     const targets = r.mode === "cpu" ? targetsFor(warp, seg) : null;
-    const probe = r.renderLines(cam, u, { seg, style: sty, targets }, [0, 0, 1, 1]);
+    const probe = r.renderLines(cam, u, { seg, style: sty, targets }, [0, 0, 1, 1], PLAIN);
     const dpr = probe.dpr, W = Math.round(cam.width * dpr), H = Math.round(cam.height * dpr);
-    const all = r.renderLines(cam, u, { seg, style: sty, targets }, [0, 0, W, H]);
+    const all = r.renderLines(cam, u, { seg, style: sty, targets }, [0, 0, W, H], PLAIN);
     batch.forEach((k) => {
       const cx = want[k].x * dpr, cy = want[k].y * dpr;
       let s = 0, sx = 0, sy = 0;
@@ -333,7 +337,8 @@ function drawPath(r, warp, cam, u, local, style) {
   const seg = new Float32Array((local.length - 1) * 4);
   for (let i = 1; i < local.length; i++) seg.set([...local[i - 1], ...local[i]], 4 * (i - 1));
   const sty = new Float32Array(local.length - 1).fill(style);
-  return { seg, style: sty, targets: r.mode === "cpu" ? targetsFor(warp, seg) : null };
+  const cpu = r.mode === "cpu";
+  return { seg, style: sty, targets: cpu ? targetsFor(warp, seg) : null, jac: cpu ? jacobiansFor(warp, seg) : null };
 }
 
 function g5Width(lab, rand) {
@@ -353,12 +358,12 @@ function g5Width(lab, rand) {
   const turn = (30 * Math.PI) / 180;
   for (let i = 1; i <= 30; i++) pts.push([cx + 4 * i * Math.cos(turn), cy + 4 * i * Math.sin(turn)]);
   const chain = drawPath(r, warp, cam, 0, pathToLocal(cam, pts), style);
-  const probe = r.renderLines(cam, 0, chain, [0, 0, 1, 1]);
+  const probe = r.renderLines(cam, 0, chain, [0, 0, 1, 1], PLAIN);
   const dpr = probe.dpr, nominal = probe.widths[style];
   const devPts = pts.map(([x, y]) => [x * dpr, y * dpr]);
   const straightRect = [Math.round((cx - 100) * dpr), Math.round((cy - 12) * dpr), Math.round(80 * dpr), Math.round(24 * dpr)];
   const kinkRect = [Math.round((cx - 20) * dpr), Math.round((cy - 20) * dpr), Math.round(40 * dpr), Math.round(40 * dpr)];
-  const s1 = r.renderLines(cam, 0, chain, straightRect), s2 = r.renderLines(cam, 0, chain, kinkRect);
+  const s1 = r.renderLines(cam, 0, chain, straightRect, PLAIN), s2 = r.renderLines(cam, 0, chain, kinkRect, PLAIN);
   results.chainStraightPx = round(widthIn(s1.cov, straightRect, devPts, dpr));
   results.chainKinkPx = round(widthIn(s2.cov, kinkRect, devPts, dpr));
 
@@ -370,7 +375,7 @@ function g5Width(lab, rand) {
     const one = drawPath(r, warp, cam, 0, pathToLocal(cam, p), style);
     const mid = [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2];
     const rect = [Math.round((mid[0] - 20) * dpr), Math.round((mid[1] - 20) * dpr), Math.round(40 * dpr), Math.round(40 * dpr)];
-    const got = r.renderLines(cam, 0, one, rect);
+    const got = r.renderLines(cam, 0, one, rect, PLAIN);
     angles.push(widthIn(got.cov, rect, p.map(([x, y]) => [x * dpr, y * dpr]), dpr));
   }
   results.anglesMinPx = round(Math.min(...angles));
@@ -406,12 +411,25 @@ function g5Width(lab, rand) {
     const scr = local.map(([x, y]) => warp.screenOfLocal(x, y, live, 1));
     if (Math.hypot(scr[1].x - scr[0].x, scr[1].y - scr[0].y) < 60) continue;
     const one = drawPath(r, warp, live, 1, local, style);
-    const p0 = r.renderLines(live, 1, one, [0, 0, 1, 1]);
+    const p0 = r.renderLines(live, 1, one, [0, 0, 1, 1], PLAIN);
     const mid = [(scr[0].x + scr[1].x) / 2, (scr[0].y + scr[1].y) / 2];
     const rect = [Math.round((mid[0] - 20) * p0.dpr), Math.round((mid[1] - 20) * p0.dpr), Math.round(40 * p0.dpr), Math.round(40 * p0.dpr)];
-    const got = r.renderLines(live, 1, one, rect);
+    const got = r.renderLines(live, 1, one, rect, PLAIN);
     results.stretched = { stretch: round(best.stretch, 1), widthPx: round(widthIn(got.cov, rect, scr.map((q) => [q.x * p0.dpr, q.y * p0.dpr]), p0.dpr)), nominalPx: round(p0.widths[style]) };
     if (Math.abs(results.stretched.widthPx - results.stretched.nominalPx) > 0.25) fails.push("stretched");
+    // The scale-aware style on the same segment: what the shader draws must be what
+    // lineEmphasis() and the class's bent strength give in JS. Compared as coverage across
+    // the line: a capsule of half-width h device px covers 2h, or (h + ½)² under h = ½.
+    const jt = warp.targetJacobian((local[0][0] + local[1][0]) / 2, (local[0][1] + local[1][1]) / 2);
+    const e = lineEmphasis(jt, local[1][0] - local[0][0], local[1][1] - local[0][1], live, 1);
+    const h = (p0.widths[style] * e.width * p0.dpr) / 2;
+    const gr = r.renderLines(live, 1, one, rect);
+    results.scaleAware = {
+      factor: round(e.width), alpha: round(e.alpha), bent: STYLES[style].bent ?? 1,
+      coveragePx: round(widthIn(gr.cov, rect, scr.map((q) => [q.x * p0.dpr, q.y * p0.dpr]), p0.dpr)),
+      expectedPx: round(((h >= 0.5 ? 2 * h : (h + 0.5) ** 2) / p0.dpr) * e.alpha * (STYLES[style].bent ?? 1)),
+    };
+    if (!(Math.abs(results.scaleAware.coveragePx - results.scaleAware.expectedPx) <= 0.1)) fails.push("scaleAware");
     break;
   }
   results.nominalPx = round(nominal);

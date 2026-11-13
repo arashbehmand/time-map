@@ -10,26 +10,29 @@
 export const SCHEMA = "mapbox-streets-v8";
 export const TILE_URL = (z, x, y) => `/tiles/${z}/${x}/${y}`;
 
-// Draw order. Fills first, then lines; road casings under road fills.
+// Draw order. Fills first, then lines: road casings under road fills, and rail on top.
 export const PASSES = [
   { name: "water", kind: "fill" },
   { name: "park", kind: "fill" },
-  { name: "rail", kind: "line" },
   { name: "roadCase", kind: "line", buffer: "road", casing: true },
   { name: "road", kind: "line" },
+  { name: "rail", kind: "line" },
 ];
 
 // One entry per style id. Widths: [[zoom, px], …], linear between stops, clamped outside.
+// bent: the line's strength on the fully bent map in the scale-aware style. There the base
+// map is context and the stations and the network carry the picture, so minor classes
+// recede most. Rail recedes too: between stations it is the geometry the bend tears most.
 export const STYLES = [
   { name: "water", color: "#aad3df" },
   { name: "park", color: "#c8facc" },
-  { name: "major_rail", color: "#8c8c8c", width: [[10, 1], [16, 2.5]] },
-  { name: "minor_rail", color: "#a6a6a6", width: [[10, 0.8], [16, 1.8]] },
-  { name: "rail_tunnel", color: "#b6aecb", width: [[10, 1], [16, 2.5]] },
-  { name: "motorway", color: "#e892a2", width: [[10, 2.5], [16, 7]], casing: "#e05f4f", casingWidth: [[10, 4], [16, 10]] },
-  { name: "trunk", color: "#f9b29c", width: [[10, 2], [16, 6]], casing: "#c89b7a", casingWidth: [[10, 2], [16, 7]] },
-  { name: "primary", color: "#fcd6a4", width: [[10, 1.5], [16, 5]], casing: "#c89b7a", casingWidth: [[10, 2], [16, 7]] },
-  { name: "secondary", color: "#f7fabf", width: [[10, 1], [16, 4]], casing: "#e0d8c0", casingWidth: [[10, 1], [16, 5]] },
+  { name: "major_rail", color: "#8c8c8c", width: [[10, 1], [16, 2.5]], bent: 0.45 },
+  { name: "minor_rail", color: "#a6a6a6", width: [[10, 0.8], [16, 1.8]], bent: 0.35 },
+  { name: "rail_tunnel", color: "#b6aecb", width: [[10, 1], [16, 2.5]], bent: 0.45 },
+  { name: "motorway", color: "#e892a2", width: [[10, 2.5], [16, 7]], casing: "#e05f4f", casingWidth: [[10, 4], [16, 10]], bent: 0.8 },
+  { name: "trunk", color: "#f9b29c", width: [[10, 2], [16, 6]], casing: "#c89b7a", casingWidth: [[10, 2], [16, 7]], bent: 0.7 },
+  { name: "primary", color: "#fcd6a4", width: [[10, 1.5], [16, 5]], casing: "#c89b7a", casingWidth: [[10, 2], [16, 7]], bent: 0.55 },
+  { name: "secondary", color: "#f7fabf", width: [[10, 1], [16, 4]], casing: "#e0d8c0", casingWidth: [[10, 1], [16, 5]], bent: 0.4 },
 ];
 export const STYLE_ID = Object.fromEntries(STYLES.map((s, i) => [s.name, i]));
 export const BACKGROUND = "#f0ede9";

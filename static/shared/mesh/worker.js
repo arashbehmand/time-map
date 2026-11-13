@@ -11,7 +11,7 @@ import { createWarp } from "./warp.js";
 // The server's tile limit (16 at once, server/settings.py) is per process, shared by every
 // visitor; past it a request waits up to 10 s, then gets 503. Keep well under it.
 const MAX_IN_FLIGHT = 8;
-const RESIDENT_LIMIT = 600_000;   // cached vertices shaded (D19), enforced after every scene
+const RESIDENT_LIMIT = 8_000_000; // cached vertices shaded: a real scene and most of the last one
 const PARTIAL_EVERY_MS = 400;     // while tiles arrive, send what has arrived this often
 const RETRIES = 2;                // network errors and 5xx other than 503
 const MAX_RETRY_AFTER_S = 2;      // 429/503: retry once, only if the server asks for ≤ 2 s
@@ -117,7 +117,7 @@ async function loadMesh(t, opts, counters) {
 
 function warpFrom(spec) {
   if (!spec) return null;
-  if (spec.kind === "polar") return createWarp({ kind: "polar", field: createField(spec.field), maxMinutes: spec.maxMinutes });
+  if (spec.kind === "polar") return createWarp({ kind: "polar", field: createField(spec.field), maxMinutes: spec.maxMinutes, angles: spec.angles || null });
   if (spec.kind === "grid") return createWarp({ kind: "grid", grid: createTargetGrid(spec.grid) });
   return null;
 }
@@ -125,7 +125,7 @@ function warpFrom(spec) {
 function post(gen, scene, extra) {
   const transfer = [];
   for (const p of Object.values(scene.passes)) {
-    for (const a of [p.pos, p.style, p.index, p.seg, p.targets, p.zoom]) if (a) transfer.push(a.buffer);
+    for (const a of [p.pos, p.style, p.index, p.seg, p.targets, p.zoom, p.jac]) if (a) transfer.push(a.buffer);
   }
   self.postMessage({ type: "scene", gen, ...extra, scene }, transfer);
 }

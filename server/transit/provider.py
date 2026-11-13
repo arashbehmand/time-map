@@ -32,7 +32,8 @@ import numpy as np
 import shapely
 from shapely.geometry import mapping
 
-from server.warp.field import WALK_M_PER_MIN, Grid, LocalFrame, mercator, metres_per_unit
+from server.localgrid import Grid, LocalFrame, mercator, metres_per_unit
+from server.warp.field import WALK_M_PER_MIN
 from transit.tables import Walksheds, compose_row, decode_minutes
 
 log = logging.getLogger("time_map.transit")
@@ -48,7 +49,7 @@ STATION_WALK_M = 150.0          # around a station, the last steps are walked st
 FILL_PASSES = 3                 # 100 m grid: gaps up to about 300 m from a known node
 COVERAGE_BUFFER_M = 1200.0
 COVERAGE_SIMPLIFY_M = 300.0
-GRID_HALF_M = 30_000.0
+GRID_MAX_HALF = 800                 # cells either side of the pin: the whole coverage box fits
 
 
 class TransitUnavailable(Exception):
@@ -100,7 +101,8 @@ class TransitData:
 
     def __init__(self, directory: Path, manifest: dict, lon: np.ndarray, lat: np.ndarray,
                  kind: np.ndarray, names: list[str], ok: np.ndarray, walksheds: Walksheds,
-                 development_only: bool):
+                 development_only: bool, snap_lon: np.ndarray | None = None,
+                 snap_lat: np.ndarray | None = None):
         self.directory = directory
         self.manifest = manifest
         self.build = str(manifest.get("build", ""))
@@ -108,6 +110,10 @@ class TransitData:
         self.windows = {w: manifest["windows"][w] for w in WINDOWS}
         self.development_only = development_only
         self.lon, self.lat, self.ok = lon, lat, ok
+        # Where each point's times were measured from: R5 snaps it to the street network.
+        self.snap_lon = lon if snap_lon is None else snap_lon
+        self.snap_lat = lat if snap_lat is None else snap_lat
+        self.is_station = kind == "station"
         self.walksheds = walksheds
         self.stations = [Station(int(i), display_name(names[i]), float(lon[i]), float(lat[i]))
                          for i in np.flatnonzero((kind == "station") & ok)]
@@ -161,7 +167,7 @@ class TransitData:
             if fp.get("complete") is not True:
                 raise TransitUnavailable("incomplete")
 
-        idx, kind, names, lon, lat = [], [], [], [], []
+        idx, kind, names, lon, lat, slon, slat = [], [], [], [], [], [], []
         with open(d / "points.csv", newline="") as f:
             for row in csv.DictReader(f):
                 idx.append(int(row["idx"]))
@@ -169,6 +175,8 @@ class TransitData:
                 names.append(row["name"])
                 lon.append(float(row["lon"]))
                 lat.append(float(row["lat"]))
+                slon.append(_float_or(row.get("snap_lon"), lon[-1]))
+                slat.append(_float_or(row.get("snap_lat"), lat[-1]))
         n = len(idx)
         if idx != list(range(n)):
             raise TransitUnavailable("bad_points")
@@ -183,7 +191,7 @@ class TransitData:
         if len(walksheds.points) and (walksheds.points.min() < 0 or walksheds.points.max() >= n):
             raise TransitUnavailable("bad_walksheds")
         return cls(d, manifest, np.asarray(lon), np.asarray(lat), np.asarray(kind), names, ok,
-                   walksheds, development_only)
+                   walksheds, development_only, np.asarray(slon), np.asarray(slat))
 
     def table(self, window: str) -> np.ndarray:
         if window not in self._tables:
@@ -256,7 +264,14 @@ class TransitData:
         return self.valid_until >= (today or london_today())
 
     def covered(self, lon: float, lat: float) -> bool:
-        return bool(self._access(lon, lat))
+        """Inside the area the tables cover: the same polygon the page enables the chip by."""
+        x, y = self.coverage_local_frame.to_local(lon, lat)
+        return bool(shapely.contains_xy(self.coverage_local, float(x), float(y)))
+
+    def reachable_from(self, lon: float, lat: float) -> bool:
+        """A journey can start here: a walkshed reaches the pin's cell (or a ring near it), or
+        the pin is at a station."""
+        return self.station_near(lon, lat) is not None or bool(self._access(lon, lat))
 
     def _access(self, lon: float, lat: float) -> list[tuple[int, float]]:
         """[(res-10 cell, extra walking minutes)] whose walkshed reaches: the pin's own cell,
@@ -285,10 +300,11 @@ class TransitData:
         """Minutes from the pin to every table point (inf: none within the tables' limit)."""
         table = self.table(window)
         best = np.full(table.shape[1], np.inf)
-        origin_point = self.station_near(lon, lat)
+        # The ring offset is a walk to the nearest cell with a walkshed: it belongs to the
+        # cell access only, never to the row of a station the pin stands at.
         for cell, extra in self._access(lon, lat):
-            best = np.minimum(best, compose_row(table, self.walksheds, cell, origin_point) + extra)
-            origin_point = None                 # its row is in the first pass already
+            best = np.minimum(best, compose_row(table, self.walksheds, cell) + extra)
+        origin_point = self.station_near(lon, lat)
         if origin_point is not None:
             best = np.minimum(best, decode_minutes(table[origin_point]))
         best[~self.ok] = np.inf
@@ -300,11 +316,12 @@ class TransitData:
         return np.minimum.reduceat(vals, self._eg_starts) if len(vals) else np.zeros(0)
 
     def grid_for(self, frame: LocalFrame, cell: float) -> Grid:
+        """The whole coverage box, wherever the pin is in it (from Heathrow the tables reach
+        56 km east)."""
         lon0, lat0, lon1, lat1 = self.coverage_bbox
         xs, ys = frame.to_local(np.array([lon0, lon1]), np.array([lat1, lat0]))
-        x0, x1 = max(float(xs[0]), -GRID_HALF_M), min(float(xs[1]), GRID_HALF_M)
-        y0, y1 = max(float(ys[0]), -GRID_HALF_M), min(float(ys[1]), GRID_HALF_M)
-        return Grid.covering(cell, x0, y0, x1, y1)
+        return Grid.covering(cell, float(xs[0]), float(ys[0]), float(xs[1]), float(ys[1]),
+                             max_half=GRID_MAX_HALF)
 
     def field(self, lon: float, lat: float, window: str, frame: LocalFrame,
               grid: Grid) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -327,36 +344,42 @@ class TransitData:
             ci[inside] = raster[iy[inside], ix[inside]]
             known = ci >= 0
             out[known] = per_cell[ci[known]]
-        # A place that is itself a table point (a station, a cell centre) ends there: its own
-        # time, with no walk from a nearby access point (compose_pair's dest_point).
-        px, py = frame.to_local(self.lon[self.ok], self.lat[self.ok])
+        # A place that is itself a table point ends there: its own time, with no walk from a
+        # nearby access point (compose_pair's dest_point), at the street point R5 measured it
+        # from. A station is a place to be, so its node takes its time even over water (a
+        # station on a bridge); a table cell only lowers a node that already holds a time.
+        # Several points can share a node: np.fmin.at / np.minimum.at keep the quickest.
+        px, py = frame.to_local(self.snap_lon[self.ok], self.snap_lat[self.ok])
         pi = np.rint((np.asarray(px) - grid.x0) / grid.cell).astype(np.int64)
         pj = np.rint((np.asarray(py) - grid.y0) / grid.cell).astype(np.int64)
-        on = (pi >= 0) & (pj >= 0) & (pi < grid.nx) & (pj < grid.ny)
-        own = row[self.ok][on]
-        jj, ii = pj[on], pi[on]
-        cur = out[jj, ii]
-        better = np.isfinite(own) & ~(cur <= own)
-        out[jj[better], ii[better]] = own[better]
+        own = row[self.ok]
+        station = self.is_station[self.ok]
+        on = (pi >= 0) & (pj >= 0) & (pi < grid.nx) & (pj < grid.ny) & np.isfinite(own)
+        cell_ok = on & ~station
+        cell_ok[cell_ok] = np.isfinite(out[pj[cell_ok], pi[cell_ok]])
+        st_ok = on & station
+        np.minimum.at(out, (pj[cell_ok], pi[cell_ok]), own[cell_ok])
+        np.fmin.at(out, (pj[st_ok], pi[st_ok]), own[st_ok])
         # And the last few steps from a station, straight at 4 km/h: within STATION_WALK_M the
-        # walkshed's whole minutes from the nearest cell centre are coarser than the walk.
+        # walkshed's whole minutes from the nearest cell centre are coarser than the walk. It
+        # only lowers nodes that already hold a time: water and places no walkshed reaches stay
+        # as they are, so this never paints reach across a river.
         st = np.array([s.idx for s in self.stations], dtype=np.int64)
         if len(st):
-            sx, sy = frame.to_local(self.lon[st], self.lat[st])
+            sx, sy = frame.to_local(self.snap_lon[st], self.snap_lat[st])
             sx, sy, smin = np.asarray(sx), np.asarray(sy), row[st]
             reach = int(np.ceil(STATION_WALK_M / grid.cell))
             ci = np.rint((sx - grid.x0) / grid.cell).astype(np.int64)
             cj = np.rint((sy - grid.y0) / grid.cell).astype(np.int64)
+            known = np.isfinite(out)
             for dj in range(-reach, reach + 1):
                 for di in range(-reach, reach + 1):
                     ni, nj = ci + di, cj + dj
                     ok = (ni >= 0) & (nj >= 0) & (ni < grid.nx) & (nj < grid.ny) & np.isfinite(smin)
                     d = np.hypot(grid.x0 + ni * grid.cell - sx, grid.y0 + nj * grid.cell - sy)
                     ok &= d <= STATION_WALK_M
-                    cand = smin[ok] + d[ok] / WALK_M_PER_MIN
-                    cur = out[nj[ok], ni[ok]]
-                    take = ~(cur <= cand)
-                    out[nj[ok][take], ni[ok][take]] = cand[take]
+                    ok[ok] = known[nj[ok], ni[ok]]
+                    np.minimum.at(out, (nj[ok], ni[ok]), smin[ok] + d[ok] / WALK_M_PER_MIN)
         filled = np.zeros(X.shape, dtype=bool)
         for _ in range(FILL_PASSES):
             gap = np.isnan(out)
@@ -403,6 +426,13 @@ def _roll0(a: np.ndarray, dj: int, di: int) -> np.ndarray:
     return out
 
 
+def _float_or(value, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -437,14 +467,23 @@ class TransitHolder:
         finally:
             self.loading = False
 
-    def usable(self, today: date | None = None) -> TransitData | None:
+    def usable(self, today: date | None = None, *, local: bool = False) -> TransitData | None:
+        """The build, if it may be served to this request: unexpired, and, if its licences
+        are not cleared (the development override), only to a request from this machine."""
         if self.data is not None and not self.data.valid_on(today):
             self.reason = "expired"
             return None
+        if self.data is not None and self.data.development_only and not local:
+            return None
         return self.data
 
-    def status(self) -> dict:
-        data = self.usable()
+    def reason_for(self, local: bool) -> str:
+        if self.data is not None and self.data.development_only and not local and self.data.valid_on():
+            return "development_only"
+        return self.reason or "unavailable"
+
+    def status(self, *, local: bool = False) -> dict:
+        data = self.usable(local=local)
         if data is not None:
             return {**data.status(), "loading": False, "reason": ""}
-        return {"available": False, "loading": self.loading, "reason": self.reason}
+        return {"available": False, "loading": self.loading, "reason": self.reason_for(local)}

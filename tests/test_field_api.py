@@ -7,7 +7,7 @@ import httpx
 import numpy as np
 import pytest
 from conftest import MockMapbox
-from tiny_transit import A, make_build
+from tiny_transit import A, C, make_build
 
 from server.cache import BoundedTTLCache
 from server.transit.provider import TransitHolder
@@ -20,9 +20,17 @@ FIELD = "/api/travel-time-field"
 
 @pytest.fixture
 def transit_client(make_client, settings, tmp_path):
+    """A cleared build: served to any client."""
+    build = make_build(tmp_path, cleared=True)
+    return make_client(settings.with_(transit_dir=str(build), transit_block_startup=True))
+
+
+@pytest.fixture
+def dev_app(make_client, settings, tmp_path):
+    """An uncleared build under TRANSIT_ALLOW_UNCLEARED: for this machine only."""
     build = make_build(tmp_path)
     return make_client(settings.with_(transit_dir=str(build), transit_allow_uncleared=True,
-                                      transit_block_startup=True))
+                                      transit_block_startup=True)).app
 
 
 def _decode(body):
@@ -71,7 +79,7 @@ def test_transit_field_composes_without_matrix(mapbox, transit_client):
     assert body["mode"] == "transit" and body["window"] == "wd08"
     assert body["window_label"] == "a weekday, 08:00–09:00"
     assert body["sources"] == "mapbox+tables" and body["limit_minutes"] == 180
-    assert body["development_only"] is True and body["valid_until"]
+    assert body["development_only"] is False and body["valid_until"]
     assert "Powered by TfL Open Data" in body["credits"]
     assert mapbox.count("isochrone") == 2 and mapbox.count("matrix") == 0
     names = {s["name"]: s["minutes"] for s in body["stations"]}
@@ -104,16 +112,19 @@ def test_without_tables_transit_is_unavailable(mapbox, client):
     assert mapbox.count() == 0
 
 
-def test_a_refused_near_field_still_gives_the_tables(mapbox, transit_client):
+def test_a_refused_near_field_still_gives_the_tables_and_is_not_kept(mapbox, transit_client):
+    pin = {"longitude": A[0], "latitude": A[1], "mode": "transit", "window": "wd08"}
     mapbox.behaviour["isochrone"] = 429
-    body = transit_client.post(FIELD, json={"longitude": A[0], "latitude": A[1], "mode": "transit",
-                                            "window": "wd08"}).json()
+    body = transit_client.post(FIELD, json=pin).json()
     assert body["sources"] == "tables" and body["notes"] == ["near_field_missing"]
+    mapbox.behaviour.pop("isochrone")
+    again = transit_client.post(FIELD, json=pin).json()       # not served from the cache
+    assert again["sources"] == "mapbox+tables" and again["notes"] == []
 
 
 def test_status_with_tables(transit_client):
     s = transit_client.get("/api/transit/status").json()
-    assert s["available"] and not s["loading"] and s["development_only"]
+    assert s["available"] and not s["loading"] and not s["development_only"]
     assert [w["id"] for w in s["windows"]] == ["wd08", "wd13", "wd19", "sa13"]
     assert s["coverage"]["type"] in ("Polygon", "MultiPolygon")
 
@@ -142,6 +153,27 @@ class _OpenGuard:
         yield
 
 
+def test_walk_and_transit_asked_at_once_share_the_two_requests(tmp_path):
+    """A new pin, walk and transit (and two windows) in flight together: still two calls."""
+    mapbox = MockMapbox()
+    http = httpx.AsyncClient(transport=httpx.MockTransport(mapbox))
+    iso = MapboxClient(http, _OpenGuard(), "pk.test", BoundedTTLCache(16, 300))
+    holder = TransitHolder(True)
+    holder.load(str(make_build(tmp_path, cleared=True)), allow_uncleared=False, on_railway=False)
+    service = TravelFieldService(iso, holder, asyncio.Semaphore(2), BoundedTTLCache(8, 300))
+
+    async def run():
+        return await asyncio.gather(
+            service.get(A[0], A[1], "walking", None),
+            service.get(A[0], A[1], "transit", "wd08"),
+            service.get(A[0], A[1], "transit", "sa13"),
+        )
+
+    walk, t8, sa = asyncio.run(run())
+    assert walk["mode"] == "walking" and t8["window"] == "wd08" and sa["window"] == "sa13"
+    assert mapbox.count("isochrone") == 2
+
+
 def test_concurrent_identical_requests_share_one_build():
     mapbox = MockMapbox()
     http = httpx.AsyncClient(transport=httpx.MockTransport(mapbox))
@@ -166,10 +198,43 @@ def test_default_window_follows_london_time():
     assert default_window(datetime(2026, 11, 15, 9, 0, tzinfo=LONDON)) == "sa13"
 
 
-def test_unsmoothed_transit_keeps_whole_minutes(transit_client):
+def _local(app):
+    from fastapi.testclient import TestClient
+    return TestClient(app, client=("127.0.0.1", 50000))
+
+
+def test_an_uncleared_build_is_served_to_this_machine_only(dev_app):
     pin = {"longitude": A[0], "latitude": A[1], "mode": "transit", "window": "wd08"}
-    raw = transit_client.post(FIELD, json={**pin, "smooth": False}).json()
-    smooth = transit_client.post(FIELD, json=pin).json()
+    from fastapi.testclient import TestClient
+    remote = TestClient(dev_app)                                  # client host "testclient"
+    resp = remote.post(FIELD, json=pin)
+    assert resp.status_code == 503 and resp.json()["reason"] == "development_only"
+    assert remote.get("/api/transit/status").json() == {"available": False, "loading": False,
+                                                         "reason": "development_only"}
+    local = _local(dev_app)
+    assert local.get("/api/transit/status").json()["development_only"] is True
+    assert local.post(FIELD, json=pin).status_code == 200
+    # Through a proxy on this machine is not this machine.
+    proxied = local.post(FIELD, json=pin, headers={"X-Forwarded-For": "203.0.113.9"})
+    assert proxied.status_code == 503
+
+
+def test_inside_london_but_out_of_reach_is_its_own_answer(mapbox, transit_client):
+    data = transit_client.app.state.transit.data
+    pin = next((C[0], C[1] + k * 25 / 111_320) for k in range(1, 40)
+               if data.covered(C[0], C[1] + k * 25 / 111_320)
+               and not data.reachable_from(C[0], C[1] + k * 25 / 111_320))
+    resp = transit_client.post(FIELD, json={"longitude": pin[0], "latitude": pin[1], "mode": "transit"})
+    assert resp.status_code == 422 and resp.json()["code"] == "no_transit_access"
+    assert mapbox.count() == 0
+
+
+def test_whole_minutes_are_for_development_builds_only(transit_client, dev_app):
+    pin = {"longitude": A[0], "latitude": A[1], "mode": "transit", "window": "wd08"}
+    assert transit_client.post(FIELD, json={**pin, "smooth": False}).json()["smoothed"] is True
+    local = _local(dev_app)
+    raw = local.post(FIELD, json={**pin, "smooth": False}).json()
+    smooth = local.post(FIELD, json=pin).json()
     assert raw["smoothed"] is False and smooth["smoothed"] is True
     m, _ = _decode(raw)
     far = m[np.isfinite(m)]

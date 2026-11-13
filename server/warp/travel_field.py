@@ -11,7 +11,10 @@ of the warp page (#5, W-02). See server/warp/field.py for the grid and the wire 
             tables alone beyond it. No Matrix call. London only, behind the licence flag.
 
 Every field is cached for 5 minutes by (pin to 4 decimal places, mode, window, build), and
-concurrent identical requests share one build. No coordinates are logged.
+concurrent identical requests share one build; a field built without its walking near field
+(a refused or failed Mapbox call) is not cached. A build whose licences are not cleared
+(TRANSIT_ALLOW_UNCLEARED) is served only to this machine (`local`). No coordinates are
+logged.
 """
 from __future__ import annotations
 
@@ -24,7 +27,13 @@ from datetime import datetime
 import numpy as np
 
 from server.cache import BoundedTTLCache
-from server.errors import ApiError, NoIsochrone, OutsideTransitArea, TransitUnavailableError
+from server.errors import (
+    ApiError,
+    NoIsochrone,
+    NoTransitAccess,
+    OutsideTransitArea,
+    TransitUnavailableError,
+)
 from server.transit.provider import LONDON, WINDOWS, TransitHolder, window_label
 from server.warp import field as F
 from server.warp.mapbox_client import MapboxClient
@@ -67,14 +76,17 @@ class TravelFieldService:
         self.cache = cache
         self._inflight: dict[tuple, asyncio.Task] = {}
 
-    async def get(self, lon: float, lat: float, mode: str, window: str | None, *, smooth: bool = True) -> dict:
+    async def get(self, lon: float, lat: float, mode: str, window: str | None, *, smooth: bool = True,
+                  local: bool = False) -> dict:
         lon, lat = round(lon, 4), round(lat, 4)
         data = None
         if mode == "transit":
-            data = self.transit.usable()
+            data = self.transit.usable(local=local)
             if data is None:
-                raise TransitUnavailableError(extra={"reason": self.transit.reason or "unavailable"})
+                raise TransitUnavailableError(extra={"reason": self.transit.reason_for(local)})
             window = window if window in WINDOWS else default_window()
+            # The tables' whole minutes are a diagnostic (Direction 4), for development only.
+            smooth = smooth or not data.development_only
         else:
             window = None
             smooth = True
@@ -88,7 +100,8 @@ class TravelFieldService:
             self._inflight[key] = task
             task.add_done_callback(lambda _t, k=key: self._inflight.pop(k, None))
         result = await asyncio.shield(task)
-        self.cache.set(key, result)
+        if not result["notes"]:                 # never keep a degraded field for everyone
+            self.cache.set(key, result)
         return result
 
     async def _contours(self, lon: float, lat: float, mode: str) -> list[dict]:
@@ -121,6 +134,8 @@ class TravelFieldService:
 
         if not data.covered(lon, lat):
             raise OutsideTransitArea()
+        if not data.reachable_from(lon, lat):
+            raise NoTransitAccess()
 
         async def walking():
             try:
@@ -162,14 +177,16 @@ class TravelFieldService:
     def _transit_field(features: list[dict], frame: F.LocalFrame, data, grid: F.Grid,
                        composed: tuple, smooth: bool = True) -> dict:
         comp, filled, row = composed
-        if smooth:
-            comp = F.dequantise(comp)
         if features:
             regions = F.contour_regions(features, frame, _to_minutes("meters"))
             walk = F.contour_field(regions, grid)
         else:
             walk = np.full(comp.shape, np.nan)
         minutes, filled = F.merge_near(walk, comp, filled, grid, NEAR_FIELD_M)
+        if smooth:
+            # After the merge, and only where the tables won: walking times stay as they are.
+            from_tables = np.isfinite(minutes) & (minutes == comp)
+            minutes = F.dequantise(minutes, only=from_tables)
         oj, oi = grid.origin_index()
         minutes[oj, oi] = 0.0
         filled[oj, oi] = False
@@ -179,17 +196,25 @@ class TravelFieldService:
 
 
 def _stations(data, row: np.ndarray, frame: F.LocalFrame, grid: F.Grid) -> list[dict]:
-    """Usable stations inside the grid with a time, one per name (the quickest)."""
-    best: dict[str, dict] = {}
+    """Usable stations inside the grid with a time. Records with one name within 500 m of each
+    other are one station (Bank's Underground and DLR platforms); the quickest is kept.
+    Same-named stations further apart stay separate."""
+    kept: list[dict] = []
     x1, y1 = grid.x0 + (grid.nx - 1) * grid.cell, grid.y0 + (grid.ny - 1) * grid.cell
     for s in data.stations:
         t = float(row[s.idx])
         if not math.isfinite(t) or t > TABLES_LIMIT_MINUTES:
             continue
         x, y = frame.to_local(s.lon, s.lat)
+        x, y = float(x), float(y)
         if not (grid.x0 <= x <= x1 and grid.y0 <= y <= y1):
             continue
-        if s.name not in best or t < best[s.name]["minutes"]:
-            best[s.name] = {"name": s.name, "lon": round(s.lon, 5), "lat": round(s.lat, 5),
-                            "minutes": round(t, 1)}
-    return sorted(best.values(), key=lambda s: (s["minutes"], s["name"]))
+        same = next((k for k in kept if k["name"] == s.name and math.hypot(k["_x"] - x, k["_y"] - y) <= 500), None)
+        entry = {"name": s.name, "lon": round(s.lon, 5), "lat": round(s.lat, 5), "minutes": round(t, 1), "_x": x, "_y": y}
+        if same is None:
+            kept.append(entry)
+        elif t < same["minutes"]:
+            same.update(entry)
+    for k in kept:
+        del k["_x"], k["_y"]
+    return sorted(kept, key=lambda s: (s["minutes"], s["name"]))

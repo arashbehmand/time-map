@@ -114,6 +114,13 @@ class OutsideTransitArea(ApiError):
     message = "Public transport times cover London only."
 
 
+class NoTransitAccess(ApiError):
+    status = 422
+    code = "no_transit_access"
+    message = ("No street or station near this spot is in the public transport times. "
+               "Move the pin onto a street.")
+
+
 class NotFound(ApiError):
     status = 404
     code = "not_found"

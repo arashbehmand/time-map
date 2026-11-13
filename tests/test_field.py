@@ -157,3 +157,19 @@ def test_wire_round_trip():
 def test_walking_minutes_are_4kmh():
     assert F.WALK_M_PER_MIN * 60 == pytest.approx(4000)
     assert math.isclose(2000 / F.WALK_M_PER_MIN, 30)
+
+
+def test_dequantise_leaves_the_nodes_it_is_told_to():
+    t = np.repeat(np.floor(np.arange(20) / 3.0)[None, :], 4, axis=0)
+    only = np.zeros(t.shape, bool)
+    only[:, 10:] = True
+    d = F.dequantise(t, only=only)
+    assert (d[:, :10] == t[:, :10]).all()
+    assert not (d[:, 10:] == t[:, 10:]).all()
+    assert np.all(np.abs(d - t) <= 0.5 + 1e-12)
+
+
+def test_a_grid_can_reach_further_one_way_than_the_other():
+    g = F.Grid.covering(100, -500, -500, 56_000, 500, max_half=800)
+    assert g.x0 == -500 and g.x0 + (g.nx - 1) * 100 >= 56_000
+    assert F.Grid.covering(100, -500, -500, 56_000, 500).nx == 5 + 300 + 1   # default: ±300 cells

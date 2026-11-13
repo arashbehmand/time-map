@@ -11,6 +11,7 @@ endpoint keeps the default.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Sequence
 
@@ -39,6 +40,9 @@ class MapboxClient:
         self.guard = guard
         self.token = token
         self.cache = cache if cache is not None else BoundedTTLCache(maxsize=256, ttl=300)
+        # Identical requests in flight share one call (a walk and a transit field asked for at
+        # once at one pin, say), so a new origin never costs more than its two requests.
+        self._inflight: dict[tuple, asyncio.Task] = {}
 
     async def fetch_isochrones(
         self,
@@ -61,7 +65,14 @@ class MapboxClient:
         if cached is not None:
             log.info("  isochrones (cache hit)")
             return cached
+        task = self._inflight.get(cache_key)
+        if task is None:
+            task = asyncio.create_task(self._fetch(lon, lat, profile, unit, values, denoise, cache_key))
+            self._inflight[cache_key] = task
+            task.add_done_callback(lambda _t, k=cache_key: self._inflight.pop(k, None))
+        return await asyncio.shield(task)
 
+    async def _fetch(self, lon, lat, profile, unit, values, denoise, cache_key) -> dict:
         params = {
             f"contours_{unit}": ",".join(map(str, values)),
             "polygons": "true",

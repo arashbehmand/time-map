@@ -158,3 +158,67 @@ def test_names_read_like_names():
 
 def test_station_names_in_the_build(data):
     assert [s.name for s in data.stations] == ["Alpha Road", "Bravo"]
+
+
+# ── Fixes from review ────────────────────────────────────────────────
+def _node(frame, grid, lon, lat):
+    x, y = frame.to_local(lon, lat)
+    return round((y - grid.y0) / grid.cell), round((x - grid.x0) / grid.cell)
+
+
+def test_the_last_steps_from_a_station_never_cover_a_gap(data):
+    """POND_B is 120 m from B, inside the straight walk's 150 m: it stays a gap (filled and
+    flagged, never a station time)."""
+    from tiny_transit import POND_B
+    frame = LocalFrame(*A)
+    grid = data.grid_for(frame, 100)
+    m, filled, _ = data.field(*A, "wd08", frame, grid)
+    j, i = _node(frame, grid, *POND_B)
+    assert filled[j, i]
+
+
+@pytest.mark.parametrize("twin,expect", [(9, 5), (3, 3)])
+def test_points_on_one_node_keep_the_quickest(tmp_path, twin, expect):
+    """B and its twin E (5 m apart) land on one node: the quicker of the two wins, whichever
+    is listed last."""
+    from tiny_transit import E
+    d = TransitData.load(make_build(tmp_path, twin=twin), allow_uncleared=True)
+    frame = LocalFrame(*A)
+    grid = d.grid_for(frame, 100)
+    m, _, _ = d.field(*A, "wd08", frame, grid)
+    assert m[_node(frame, grid, *B)] == expect
+    assert m[_node(frame, grid, *E)] == expect
+
+
+def test_a_station_pin_gets_no_ring_offset(data):
+    """A pin in B's pond (its own cell has no walkshed, so cell access needs a ring) still
+    starts from B's own row, with nothing added."""
+    from tiny_transit import POND_B
+    pin = (POND_B[0], POND_B[1] - 0.0004)            # 75 m from B, in the pond
+    assert data.station_near(*pin) == 1
+    assert data.row(*pin, "wd08")[0] == 6            # B → A on the table, not 6 + 2k
+    assert data.reachable_from(*pin)
+
+
+def test_coverage_is_the_polygon_and_access_is_separate(data):
+    """covered() is the polygon the page enables the chip by; reachable_from() is whether a
+    journey can start there. Inside the polygon but out of reach is a different answer."""
+    lon, lat = C
+    found = None
+    for k in range(1, 40):                           # walk north from C in 25 m steps
+        p = (lon, lat + k * 25 / 111_320)
+        if data.covered(*p) and not data.reachable_from(*p):
+            found = p
+            break
+    assert found, "a covered point out of every walkshed's reach"
+    assert not data.covered(-0.5, 51.3)
+
+
+def test_the_transit_grid_spans_the_whole_coverage_box(data):
+    """No ±30 km clamp: from a pin at one corner, the grid still reaches the far corner."""
+    lon0, lat0, lon1, lat1 = data.coverage_bbox
+    frame = LocalFrame(lon0 + 0.001, lat1 - 0.001)
+    grid = data.grid_for(frame, 100)
+    xs, ys = frame.to_local(lon1, lat0)
+    assert grid.x0 + (grid.nx - 1) * grid.cell >= float(xs) - 100
+    assert grid.y0 + (grid.ny - 1) * grid.cell >= float(ys) - 100

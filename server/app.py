@@ -245,8 +245,14 @@ def create_app(
                 await asyncio.to_thread(load)
             else:
                 state.transit_task = asyncio.create_task(asyncio.to_thread(load))
+        # The field's own isochrone client: walking contours (denoise=0) are larger than the
+        # meetup's, so a smaller cache; walk and transit at one pin still share an entry.
+        state.field_isochrones = MapboxClient(
+            state.http_client, state.guard, MAPBOX_ROUTING_TOKEN,
+            BoundedTTLCache(maxsize=16, ttl=300, clock=clock.monotonic),
+        )
         state.fields = TravelFieldService(
-            state.isochrones, state.transit, asyncio.Semaphore(settings.max_concurrent_fields),
+            state.field_isochrones, state.transit, asyncio.Semaphore(settings.max_concurrent_fields),
             # Small on purpose: a transit field is a few hundred kB.
             BoundedTTLCache(maxsize=24, ttl=300, clock=clock.monotonic),
         )

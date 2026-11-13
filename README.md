@@ -364,9 +364,9 @@ Deploy checklist (the app logs a warning at startup for each item it can detect)
 - The caps checked against the Mapbox account's real remaining allowance. Other apps on the
   same account share it.
 - `GEOCODER_USER_AGENT` with a contact address, as Nominatim's policy asks.
-- `TRANSIT_DIR` only once the rail and TfL licences allow publishing derived times
-  (`docs/transit-sources.md`) and the build says `licences_cleared: true`. Never set
-  `TRANSIT_ALLOW_UNCLEARED` on a public server.
+- `TRANSIT_DIR` pointing at a build whose manifest says `licences_cleared: true` (the owner
+  holds the rail and TfL licences, `docs/transit-sources.md`); build 2026-11-12 predates the
+  flag, so use the next monthly build. Never set `TRANSIT_ALLOW_UNCLEARED` on a public server.
 - Mapbox's terms for drawing Streets tiles with our own renderer (the bent map) confirmed
   (`docs/provider-terms.md`).
 - No CORS origin to configure: the API is same-origin only, so there is no allow-list.

@@ -7,7 +7,8 @@ Issue #5, part W-02. Written 2026-11-13 on top of W-01 (#12, `docs/warp-renderer
 - `/warp/` draws a real travel-time field in two views. The normal map with travel-time bands
   ships. The bent (time-polar) view is labelled experimental.
 - Public transport is built and drawn from the London tables (T-01, #14), behind the licence
-  flag. Its bent view stays hidden, because Direction 4's numeric checks fail at all five
+  flag. The owner holds the rail and TfL licences (2026-11-13), so the flag is set for new
+  builds. Its bent view stays hidden, because Direction 4's numeric checks fail at all five
   origins (see [Direction 4](#direction-4-on-real-fields)).
 - Measured with live Mapbox routing and tiles: the walking, cycling and driving fields, the
   transit near field and its seam, Direction 4 with the near field, the lab's gates on real
@@ -261,9 +262,9 @@ places, each with its minutes.
 1. **The phones (owner).** iPhone Safari and a mid-range Android, on `/warp/` with real tiles:
    pans, the morph, a new pin. Run W-01's lab protocol too.
 2. **The comprehension test** (above).
-3. **Before transit goes public:**
-   - the rail and TfL licences (`docs/transit-sources.md`);
-   - Mapbox's terms for drawing Streets tiles with our own renderer, for every view that bends.
+3. **Before transit goes public:** a build made with the licence flag set (the next monthly
+   rebuild; build 2026-11-12 predates it), and, for every view that bends, Mapbox's terms for
+   drawing Streets tiles with our own renderer.
 4. **Network lines** on the bent map need a transit-build export of stop sequences (not in the
    runtime build).
 

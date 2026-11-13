@@ -1,8 +1,9 @@
 # Transit data sources: what we use, versions, licences
 
 Read on 2026-11-12. This note records the sources of the London transit tables (issue #1,
-T-01) and what their terms say, in the style of [provider-terms.md](provider-terms.md). It
-does **not** claim that publishing the tables is allowed: see "May the tables be published?".
+T-01) and what their terms say, in the style of [provider-terms.md](provider-terms.md). On
+2026-11-13 the owner confirmed holding the rail and TfL licences: see "May the tables be
+published?".
 
 Every build records the same facts for its own downloads in `transit/out/<build>/manifest.json`
 (URL, size, sha256, Last-Modified, "timetable as of").
@@ -99,8 +100,11 @@ from `[publication] licences_cleared`. `TRANSIT_ALLOW_UNCLEARED=1` serves an unc
 local development only: to requests from the same machine with no forwarding header (whatever
 the host), never on Railway, and the page says "development only".
 
-
-Not yet. Two rules hold whatever the licences turn out to say:
+**Yes, under the owner's licences.** On 2026-11-13 the owner confirmed holding the rail
+(Rail Settlement Plan) and TfL licences, so `transit/sources.toml` now says
+`[publication] licences_cleared = true`. The terms below were read before that from RSP's
+template and TfL's summary only; the licences the owner holds are the ones that bind. Two rules
+hold whatever they say:
 
 - **Only derived tables, never the source data.** The feeds (gb-transit's GTFS, the BODS
   GTFS, TfL's TransXChange, any National Rail CIF/MCA files), the OSM extract and the
@@ -113,19 +117,20 @@ Not yet. Two rules hold whatever the licences turn out to say:
   (Rail Delivery Group / Rail Settlement Plan); and the OGL, ODbL and OS credits in
   `transit/sources.toml`.
 
-Publish only when:
+What this changes:
 
-1. the agreement that covers the rail timetable (not the template) allows derived tables to
-   be made public, its 3.3.2 notice is settled, and RSP is content under 3.1.5 that the
-   tables are approximate (or rail switches to Interline's GTFS, which allows derived
-   products with the credit "Powered by National Rail Enquiries");
-2. TfL's terms have been read for derived data; and
-3. the owner agrees.
-
-`transit/sources.toml` has `[publication] licences_cleared = false`. Until it is set to true,
-the archive's `LICENSE-DATA.txt` says it is **not licensed for publication** and grants no
-rights, and `python -m transit.build publish` refuses. With the flag set, publishing still
-needs `--confirm` and makes a draft release only.
+- **Builds.** `transit.build manifest` writes `licences_cleared: true`, `package` writes the
+  ODbL licence text with every credit, and `publish --confirm` makes a draft GitHub release.
+- **The app** serves a build whose manifest says `licences_cleared: true` to every visitor,
+  with the credits from the manifest under the map whenever a transit field is drawn.
+- **Build 2026-11-12** was written with the flag false. Its manifest can't be rewritten
+  without rebuilding the tables, because the build code changed after they were made. The
+  next monthly rebuild (due before its `valid_until`, 2026-12-12) writes a cleared manifest.
+- **If RSP's agreement asks for a clause 3.3.2 notice** in its own words, it goes in
+  the `[gb_transit]` `attribution` list in `transit/sources.toml`, so every build and the page
+  carry it.
+- **If either licence lapses,** set the flag back to false: the archive then says it is not
+  licensed, `publish` refuses, and the app stops serving the next build.
 
 ## Notes from gb-transit's "Using this data"
 

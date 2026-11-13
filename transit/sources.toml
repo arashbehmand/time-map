@@ -57,12 +57,12 @@ licence = "TfL Transport Data Service terms"
 attribution = ["Powered by TfL Open Data"]
 
 # ── Publishing ──────────────────────────────────────────────────────
-# Set to true only after the agreement that covers the rail timetable (not RSP's template) and
-# TfL's derived-data terms are read and allow publishing the derived tables, and the clause
-# 3.3.2 notice is settled (docs/transit-sources.md). Until then the archive says it is not
-# licensed and `publish` refuses. The source timetables are never published.
+# True: the owner holds the rail (Rail Settlement Plan) and TfL licences (confirmed
+# 2026-11-13; docs/transit-sources.md). Set it back to false if either lapses: the archive then
+# says it is not licensed, `publish` refuses, and the app stops serving new builds. The source
+# timetables are never published.
 [publication]
-licences_cleared = false
+licences_cleared = true
 
 # ── Lines that must be present with trips on both service dates ──────
 # Each sentinel matches routes by agency (regex on agency_name), route (regex on

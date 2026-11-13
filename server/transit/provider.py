@@ -10,10 +10,9 @@ walk). Access points are stations and table cells; a table cell's row carries it
 Places are H3 res-10 cells, mapped onto the field's grid through a raster of cell indexes
 built once at load.
 
-Serving these times is publishing derived output, which the rail and TfL licences don't
-clear yet (docs/transit-sources.md). So a build is served only if its manifest says
-`licences_cleared: true`, or for local development with TRANSIT_ALLOW_UNCLEARED=1, which is
-refused on Railway.
+Serving these times is publishing derived output (docs/transit-sources.md). So a build is
+served only if its manifest says `licences_cleared: true` (the owner's licences), or for local
+development with TRANSIT_ALLOW_UNCLEARED=1: to this machine only, and never on Railway.
 """
 from __future__ import annotations
 

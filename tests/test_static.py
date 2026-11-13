@@ -155,3 +155,74 @@ def test_landing_animations_stop_on_their_own():
     assert "infinite" not in html
     for dur, delay in re.findall(r"animation: [\w-]+ ([\d.]+)s [\w-]+ ([\d.]+)s 1 both", html):
         assert float(dur) + float(delay) < 5
+
+
+# ── The mesh renderer spike (issue #5, W-01) ─────────────────────────
+LAB = "warp/lab/index.html"
+
+
+def test_lab_page_is_unlisted_and_credits_the_map():
+    html = (ROOT / LAB).read_text()
+    assert '<meta name="robots" content="noindex' in html
+    for text in ("© Mapbox", "© OpenStreetMap", "Improve this map", 'id="mapbox-logo"'):
+        assert text in html
+    # Not in the app shell, and no page links to it.
+    assert "/warp/lab" not in (ROOT / "sw.js").read_text()
+    for page in [*PAGES, "portfolio/index.html"]:
+        assert "lab/" not in (ROOT / page).read_text()
+
+
+def test_lab_pins_its_third_party_scripts():
+    html = (ROOT / LAB).read_text()
+    tags = re.findall(r"<(?:script|link)[^>]*maplibre-gl[^>]*>", html, re.S)
+    assert len(tags) == 2
+    for tag in tags:
+        assert "maplibre-gl@4.7.1/" in tag
+        assert re.search(r'integrity="sha384-[A-Za-z0-9+/=]{64}"', tag)
+        assert 'crossorigin="anonymous"' in tag
+    deck = (ROOT / "warp/lab/backend-deck.js").read_text()
+    assert '"https://unpkg.com/deck.gl@9.4.1/dist.min.js"' in deck
+    assert re.search(r'DECK_SRI = "sha384-[A-Za-z0-9+/=]{64}"', deck)
+    assert "s.integrity = DECK_SRI" in deck and 's.crossOrigin = "anonymous"' in deck
+
+
+def test_mesh_renderer_needs_no_float_extension():
+    # Float textures are sampled with NEAREST and texelFetch only (core WebGL2); extensions are
+    # never asked for, only listed (caps.js reads getSupportedExtensions).
+    for path in (ROOT / "shared/mesh").glob("*.js"):
+        assert "getExtension" not in path.read_text(), path.name
+    caps = (ROOT / "shared/mesh/caps.js").read_text()
+    assert "gl.LINEAR" not in caps
+    assert "TEXTURE_MIN_FILTER, gl.NEAREST" in caps and "TEXTURE_MAG_FILTER, gl.NEAREST" in caps
+
+
+def test_vendored_libraries_are_listed_with_licences_and_import_relatively():
+    vendor = ROOT / "shared/vendor"
+    readme = (vendor / "README.md").read_text()
+    folders = re.findall(r"^\| `([\w-]+)/` \|", readme, re.M)
+    assert sorted(folders) == sorted(p.name for p in vendor.iterdir() if p.is_dir())
+    for folder in folders:
+        assert (vendor / folder / "LICENSE").is_file(), folder
+        for js in (vendor / folder).glob("*.js"):
+            for spec in re.findall(r'^import [^;]*? from [\'"]([^\'"]+)[\'"]', js.read_text(), re.M):
+                assert spec.startswith("."), f"{folder}/{js.name} imports {spec}"
+    # The mesh modules and the lab import only by relative path, so node tests can load them.
+    for js in [*(ROOT / "shared/mesh").glob("*.js"), *(ROOT / "warp/lab").glob("*.js")]:
+        for spec in re.findall(r'^import [^;]*? from "([^"]+)"', js.read_text(), re.M):
+            assert spec.startswith("."), f"{js.name} imports {spec}"
+
+
+def test_lab_spends_no_tile_budget_unless_asked():
+    js = (ROOT / "warp/lab/lab.js").read_text()
+    # Synthetic geometry unless ?geom=tiles; the census refuses to run without it.
+    assert 'geom: Q.get("geom") === "tiles" ? "tiles" : "synthetic"' in js
+    assert 'if (OPT.geom !== "tiles")' in js
+    # Mapbox's credit shows only when Mapbox data is drawn; otherwise the page says synthetic.
+    html = (ROOT / LAB).read_text()
+    assert 'id="synthetic-note"' in html and "updateCredits" in js
+
+
+def test_lab_driver_is_in_the_repo():
+    driver = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "lab_headless.mjs"
+    text = driver.read_text()
+    assert "__lab.runSelfTest()" in text and "Runtime.evaluate" in text

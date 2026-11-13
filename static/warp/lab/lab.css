@@ -1,0 +1,57 @@
+html, body { height: 100%; overflow: hidden; }
+body { background: #f0ede9; }
+
+/* MapLibre: camera and gestures. Invisible unless "Show base map" is on. */
+#map { position: fixed; inset: 0; z-index: 1; opacity: 0; }
+body.basemap #map { opacity: 1; }
+body.basemap #mesh, body.basemap #deck-canvas { opacity: 0.55; }
+body.no-mesh #map { opacity: 1; }
+body.no-mesh #mesh { display: none; }
+
+#mesh, #deck-canvas, #overlay {
+  position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none;
+}
+#mesh, #deck-canvas { z-index: 2; }
+#deck-canvas[hidden], #mesh[hidden] { display: none; }
+#overlay { z-index: 3; }
+
+#panel {
+  position: fixed; z-index: 10; top: 8px; left: 8px; width: min(380px, calc(100vw - 16px));
+  max-height: calc(100vh - 60px); overflow: auto;
+  background: rgba(255, 255, 255, 0.95); border-radius: 10px; box-shadow: var(--shadow);
+  padding: 8px 10px; font-size: 13px;
+}
+#panel summary { font-weight: 700; cursor: pointer; }
+#panel .note { color: var(--text-2); margin: 4px 0 6px; }
+#panel .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+#panel .grid label { display: flex; flex-direction: column; gap: 2px; }
+#panel select { width: 100%; }
+#panel .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+#panel .btn { min-height: 34px; padding: 4px 10px; }
+#u { flex: 1 1 120px; }
+#panel pre {
+  margin: 6px 0 0; white-space: pre-wrap; word-break: break-word; font-size: 11px; line-height: 1.35;
+  max-height: 40vh; overflow: auto;
+}
+#panel pre[hidden] { display: none; }
+#badge { font-weight: 400; color: var(--text-2); }
+
+/* Map credits, as on /warp/: above every canvas. */
+#attribution {
+  position: fixed; right: 0; bottom: 0; z-index: 5;
+  padding: 2px 6px; font-size: 11px; line-height: 1.4;
+  background: rgba(255, 255, 255, 0.85); color: #333; border-top-left-radius: 4px;
+  max-width: calc(100vw - 100px);
+}
+#attribution a { color: #333; text-decoration: none; margin-right: 4px; }
+#mapbox-logo {
+  position: fixed; left: 10px; bottom: 6px; z-index: 5;
+  display: block; width: 80px; height: 20px; line-height: 0;
+}
+#mapbox-logo img { width: 80px; height: 20px; }
+#mapbox-logo[hidden], #attribution[hidden], #synthetic-note[hidden] { display: none; }
+#synthetic-note {
+  position: fixed; right: 0; bottom: 0; z-index: 5; margin: 0;
+  padding: 2px 6px; font-size: 11px; background: rgba(255, 255, 255, 0.85); color: #333;
+  border-top-left-radius: 4px;
+}

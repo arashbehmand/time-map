@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Mesh renderer lab · Time-Map</title>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"
+        integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous" />
+  <link rel="stylesheet" href="/shared/ui.css" />
+  <link rel="stylesheet" href="lab.css" />
+</head>
+<body>
+  <!-- A developer page for the renderer spike (issue #5, W-01). Not linked from anywhere,
+       not in the service worker's app shell. The travel times here are synthetic. -->
+  <div id="map"></div>
+  <canvas id="mesh" aria-hidden="true"></canvas>
+  <canvas id="deck-canvas" aria-hidden="true" hidden></canvas>
+  <canvas id="overlay" aria-hidden="true"></canvas>
+
+  <details id="panel" open>
+    <summary>Mesh lab <span id="badge"></span></summary>
+    <p class="note">Synthetic travel times, for testing the renderer only.</p>
+    <div class="grid">
+      <label>Origin <select id="origin"></select></label>
+      <label>Field <select id="field"></select></label>
+      <label>Back-end <select id="backend">
+        <option value="b">B: GPU warp</option>
+        <option value="c">C: CPU warp in worker</option>
+        <option value="a">A: deck.gl probe</option>
+      </select></label>
+      <label>Geometry <select id="geom">
+        <option value="tiles">Map tiles</option>
+        <option value="synthetic">Synthetic</option>
+      </select></label>
+      <label>Spacing <select id="spacing">
+        <option value="64">95 m cells</option>
+        <option value="128">48 m cells</option>
+        <option value="256">24 m cells</option>
+      </select></label>
+    </div>
+    <div class="row">
+      <button class="btn primary" type="button" id="morph">Bend</button>
+      <input id="u" type="range" min="0" max="1" step="0.01" value="0" aria-label="How bent" />
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="folds" /> Tint folds</label>
+      <label><input type="checkbox" id="basemap" /> Show base map</label>
+    </div>
+    <div class="row">
+      <button class="btn" type="button" id="selftest">Self-test</button>
+      <button class="btn" type="button" id="bench">Run benchmark</button>
+      <button class="btn" type="button" id="census">Tile census</button>
+    </div>
+    <div class="row">
+      <button class="btn" type="button" id="copy">Copy results</button>
+      <button class="btn" type="button" id="clear">Clear results</button>
+    </div>
+    <pre id="hud"></pre>
+    <pre id="tap" hidden></pre>
+    <pre id="out"></pre>
+  </details>
+
+  <p id="synthetic-note" hidden>Synthetic map and made-up travel times: not Mapbox or OpenStreetMap data.</p>
+  <a id="mapbox-logo" href="https://www.mapbox.com/" target="_blank" rel="noopener" aria-label="Mapbox"><img
+     src="/icons/mapbox-logo.svg" alt="Mapbox" width="80" height="20" /></a>
+  <div id="attribution">
+    <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener">© Mapbox</a>
+    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>
+    <strong><a href="https://apps.mapbox.com/feedback/" target="_blank" rel="noopener">Improve this map</a></strong>
+  </div>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"
+          integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
+  <script type="module" src="lab.js"></script>
+</body>
+</html>

@@ -1,7 +1,8 @@
 // The renderer lab (issue #5, W-01): one page that draws the same tiles through back-end
 // B (GPU warp), C (CPU warp in the worker) or A (deck.gl probe), and measures them.
 // Query switches: origin, field, backend=b|c|a, geom=synthetic|tiles (tiles spends the tile
-// budget), spacing, max, caps=no-vtf|no-r32f|no-webgl2, folds=1, census=1, selftest=1, bench=1.
+// budget), spacing, max, caps=no-vtf|no-r32f|no-webgl2, folds=1, census=1, selftest=1, bench=1,
+// spread=0..1 (directions by reach, default 0.5), style=plain, network=0, budget.
 import { tileCover } from "../../shared/mesh/cover.js";
 import { cameraFromMap, WORLD_PX } from "../../shared/mesh/frame.js";
 import { sampleField } from "../../shared/mesh/field.js";

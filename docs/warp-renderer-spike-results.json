@@ -3,7 +3,7 @@
  "selftest": {
   "b": {
    "kind": "selftest",
-   "at": "2026-11-13T12:21:26.217Z",
+   "at": "2026-11-13T14:18:22.334Z",
    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
    "backend": "b",
    "mode": "gpu",
@@ -22,7 +22,7 @@
    },
    "gates": {
     "G1_parity": {
-     "maxPx": 0.0006,
+     "maxPx": 0.0035,
      "alphaMismatch": 0,
      "samples": 6000,
      "source": "field texture",
@@ -37,98 +37,98 @@
      "method": "dots drawn through the line program, centres read back from pixels (phone view)",
      "samples": 300,
      "drawn": 300,
-     "radiusMaxPx": 0.058,
-     "radiusP99Px": 0.054,
+     "radiusMaxPx": 0.06,
+     "radiusP99Px": 0.057,
      "ordinaryMaxPx": 0.061,
      "pass": true
     },
     "G4_chord": {
      "phone": {
-      "samples": 1105,
-      "within1px": 0.9991,
-      "p99Px": 0.213,
-      "maxPx": 1.455,
+      "samples": 1649,
+      "within1px": 1,
+      "p99Px": 0.305,
+      "maxPx": 0.695,
       "byZoom": {
        "10": {
-        "samples": 80,
+        "samples": 53,
         "within1px": 1,
-        "p99Px": 0.145
+        "p99Px": 0.085
        },
        "12": {
-        "samples": 726,
-        "within1px": 0.9986,
-        "p99Px": 0.213
+        "samples": 771,
+        "within1px": 1,
+        "p99Px": 0.292
        },
        "13": {
-        "samples": 141,
+        "samples": 125,
         "within1px": 1,
-        "p99Px": 0.235
+        "p99Px": 0.461
        },
        "14": {
-        "samples": 158,
+        "samples": 700,
         "within1px": 1,
-        "p99Px": 0.234
+        "p99Px": 0.295
        }
       },
       "nearFold": {
-       "samples": 1147,
-       "within1px": 0.9887,
-       "p99Px": 1.264
+       "samples": 1103,
+       "within1px": 0.9728,
+       "p99Px": 3.525
       },
       "nearNoData": {
-       "samples": 289,
-       "within1px": 0.6298,
-       "p99Px": 14.15
+       "samples": 402,
+       "within1px": 0.4403,
+       "p99Px": 13.664
       },
-      "invisible": 1459,
+      "invisible": 846,
       "crossingOuterMinute": {
-       "primitives": 257,
-       "longestEdgeAtHalfPx": 18,
-       "p99EdgeAtHalfPx": 16.2
+       "primitives": 522,
+       "longestEdgeAtHalfPx": 21.1,
+       "p99EdgeAtHalfPx": 18.2
       }
      },
      "desktop": {
-      "samples": 1157,
-      "within1px": 0.9957,
-      "p99Px": 0.511,
-      "maxPx": 3.364,
+      "samples": 1836,
+      "within1px": 0.994,
+      "p99Px": 0.837,
+      "maxPx": 4.092,
       "byZoom": {
        "10": {
-        "samples": 105,
+        "samples": 59,
         "within1px": 1,
-        "p99Px": 0.163
+        "p99Px": 0.536
        },
        "12": {
-        "samples": 768,
-        "within1px": 0.9935,
-        "p99Px": 0.673
+        "samples": 725,
+        "within1px": 0.9903,
+        "p99Px": 0.895
        },
        "13": {
-        "samples": 134,
-        "within1px": 1,
-        "p99Px": 0.429
+        "samples": 107,
+        "within1px": 0.9813,
+        "p99Px": 1.119
        },
        "14": {
-        "samples": 150,
-        "within1px": 1,
-        "p99Px": 0.229
+        "samples": 945,
+        "within1px": 0.9979,
+        "p99Px": 0.519
        }
       },
       "nearFold": {
-       "samples": 1111,
-       "within1px": 0.9757,
-       "p99Px": 3.243
+       "samples": 1082,
+       "within1px": 0.9492,
+       "p99Px": 7.791
       },
       "nearNoData": {
-       "samples": 270,
-       "within1px": 0.5704,
-       "p99Px": 26.333
+       "samples": 475,
+       "within1px": 0.3453,
+       "p99Px": 32.069
       },
-      "invisible": 1462,
+      "invisible": 607,
       "crossingOuterMinute": {
-       "primitives": 257,
-       "longestEdgeAtHalfPx": 41.4,
-       "p99EdgeAtHalfPx": 37.4
+       "primitives": 522,
+       "longestEdgeAtHalfPx": 48.8,
+       "p99EdgeAtHalfPx": 42
       }
      },
      "pass": true
@@ -139,9 +139,16 @@
      "anglesMinPx": 1.46,
      "anglesMaxPx": 1.501,
      "stretched": {
-      "stretch": 1314,
-      "widthPx": 1.816,
+      "stretch": 722.6,
+      "widthPx": 1.814,
       "nominalPx": 1.815
+     },
+     "scaleAware": {
+      "factor": 1,
+      "alpha": 1,
+      "bent": 0.55,
+      "coveragePx": 0.997,
+      "expectedPx": 0.998
      },
      "nominalPx": 1.5,
      "dpr": 1,
@@ -152,7 +159,7 @@
   },
   "c": {
    "kind": "selftest",
-   "at": "2026-11-13T12:21:26.819Z",
+   "at": "2026-11-13T14:18:22.865Z",
    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
    "backend": "c",
    "mode": "cpu",
@@ -186,98 +193,98 @@
      "method": "dots drawn through the line program, centres read back from pixels (phone view)",
      "samples": 300,
      "drawn": 300,
-     "radiusMaxPx": 0.058,
-     "radiusP99Px": 0.054,
+     "radiusMaxPx": 0.06,
+     "radiusP99Px": 0.057,
      "ordinaryMaxPx": 0.061,
      "pass": true
     },
     "G4_chord": {
      "phone": {
-      "samples": 1105,
-      "within1px": 0.9991,
-      "p99Px": 0.213,
-      "maxPx": 1.455,
+      "samples": 1649,
+      "within1px": 1,
+      "p99Px": 0.305,
+      "maxPx": 0.695,
       "byZoom": {
        "10": {
-        "samples": 80,
+        "samples": 53,
         "within1px": 1,
-        "p99Px": 0.145
+        "p99Px": 0.085
        },
        "12": {
-        "samples": 726,
-        "within1px": 0.9986,
-        "p99Px": 0.213
+        "samples": 771,
+        "within1px": 1,
+        "p99Px": 0.292
        },
        "13": {
-        "samples": 141,
+        "samples": 125,
         "within1px": 1,
-        "p99Px": 0.235
+        "p99Px": 0.461
        },
        "14": {
-        "samples": 158,
+        "samples": 700,
         "within1px": 1,
-        "p99Px": 0.234
+        "p99Px": 0.295
        }
       },
       "nearFold": {
-       "samples": 1147,
-       "within1px": 0.9887,
-       "p99Px": 1.264
+       "samples": 1103,
+       "within1px": 0.9728,
+       "p99Px": 3.525
       },
       "nearNoData": {
-       "samples": 289,
-       "within1px": 0.6298,
-       "p99Px": 14.15
+       "samples": 402,
+       "within1px": 0.4403,
+       "p99Px": 13.664
       },
-      "invisible": 1459,
+      "invisible": 846,
       "crossingOuterMinute": {
-       "primitives": 257,
-       "longestEdgeAtHalfPx": 18,
-       "p99EdgeAtHalfPx": 16.2
+       "primitives": 522,
+       "longestEdgeAtHalfPx": 21.1,
+       "p99EdgeAtHalfPx": 18.2
       }
      },
      "desktop": {
-      "samples": 1157,
-      "within1px": 0.9957,
-      "p99Px": 0.511,
-      "maxPx": 3.364,
+      "samples": 1836,
+      "within1px": 0.994,
+      "p99Px": 0.837,
+      "maxPx": 4.092,
       "byZoom": {
        "10": {
-        "samples": 105,
+        "samples": 59,
         "within1px": 1,
-        "p99Px": 0.163
+        "p99Px": 0.536
        },
        "12": {
-        "samples": 768,
-        "within1px": 0.9935,
-        "p99Px": 0.673
+        "samples": 725,
+        "within1px": 0.9903,
+        "p99Px": 0.895
        },
        "13": {
-        "samples": 134,
-        "within1px": 1,
-        "p99Px": 0.429
+        "samples": 107,
+        "within1px": 0.9813,
+        "p99Px": 1.119
        },
        "14": {
-        "samples": 150,
-        "within1px": 1,
-        "p99Px": 0.229
+        "samples": 945,
+        "within1px": 0.9979,
+        "p99Px": 0.519
        }
       },
       "nearFold": {
-       "samples": 1111,
-       "within1px": 0.9757,
-       "p99Px": 3.243
+       "samples": 1082,
+       "within1px": 0.9492,
+       "p99Px": 7.791
       },
       "nearNoData": {
-       "samples": 270,
-       "within1px": 0.5704,
-       "p99Px": 26.333
+       "samples": 475,
+       "within1px": 0.3453,
+       "p99Px": 32.069
       },
-      "invisible": 1462,
+      "invisible": 607,
       "crossingOuterMinute": {
-       "primitives": 257,
-       "longestEdgeAtHalfPx": 41.4,
-       "p99EdgeAtHalfPx": 37.4
+       "primitives": 522,
+       "longestEdgeAtHalfPx": 48.8,
+       "p99EdgeAtHalfPx": 42
       }
      },
      "pass": true
@@ -288,9 +295,16 @@
      "anglesMinPx": 1.46,
      "anglesMaxPx": 1.501,
      "stretched": {
-      "stretch": 1314,
-      "widthPx": 1.816,
+      "stretch": 722.6,
+      "widthPx": 1.814,
       "nominalPx": 1.815
+     },
+     "scaleAware": {
+      "factor": 1,
+      "alpha": 1,
+      "bent": 0.55,
+      "coveragePx": 0.997,
+      "expectedPx": 0.998
      },
      "nominalPx": 1.5,
      "dpr": 1,
@@ -301,7 +315,7 @@
   },
   "a": {
    "kind": "selftest",
-   "at": "2026-11-13T12:19:30.925Z",
+   "at": "2026-11-13T14:18:23.480Z",
    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
    "backend": "a",
    "mode": "deck",
@@ -327,101 +341,101 @@
     },
     "G4_chord": {
      "phone": {
-      "samples": 1157,
-      "within1px": 0.9965,
-      "p99Px": 0.314,
-      "maxPx": 1.923,
+      "samples": 1720,
+      "within1px": 0.9983,
+      "p99Px": 0.253,
+      "maxPx": 1.843,
       "byZoom": {
        "10": {
-        "samples": 78,
+        "samples": 61,
         "within1px": 1,
-        "p99Px": 0.205
+        "p99Px": 0.122
        },
        "12": {
-        "samples": 766,
-        "within1px": 0.9974,
-        "p99Px": 0.277
+        "samples": 807,
+        "within1px": 0.9963,
+        "p99Px": 0.284
        },
        "13": {
-        "samples": 155,
-        "within1px": 0.9871,
-        "p99Px": 1.052
+        "samples": 138,
+        "within1px": 1,
+        "p99Px": 0.24
        },
        "14": {
-        "samples": 158,
+        "samples": 714,
         "within1px": 1,
-        "p99Px": 0.083
+        "p99Px": 0.253
        }
       },
       "nearFold": {
-       "samples": 1170,
-       "within1px": 0.9846,
-       "p99Px": 2.054
+       "samples": 1089,
+       "within1px": 0.9816,
+       "p99Px": 2.173
       },
       "nearNoData": {
-       "samples": 253,
-       "within1px": 0.6482,
-       "p99Px": 12.434
+       "samples": 401,
+       "within1px": 0.4239,
+       "p99Px": 14.926
       },
-      "invisible": 1420,
+      "invisible": 790,
       "crossingOuterMinute": {
-       "primitives": 257,
-       "longestEdgeAtHalfPx": 18,
-       "p99EdgeAtHalfPx": 16.2
+       "primitives": 522,
+       "longestEdgeAtHalfPx": 21.1,
+       "p99EdgeAtHalfPx": 18.2
       }
      },
      "desktop": {
-      "samples": 1181,
-      "within1px": 0.9907,
-      "p99Px": 0.907,
-      "maxPx": 4.434,
+      "samples": 1851,
+      "within1px": 0.9978,
+      "p99Px": 0.542,
+      "maxPx": 2.985,
       "byZoom": {
        "10": {
-        "samples": 99,
+        "samples": 56,
         "within1px": 1,
-        "p99Px": 0.158
+        "p99Px": 0.185
        },
        "12": {
-        "samples": 789,
-        "within1px": 0.9886,
-        "p99Px": 1.243
+        "samples": 768,
+        "within1px": 0.9974,
+        "p99Px": 0.486
        },
        "13": {
-        "samples": 146,
-        "within1px": 0.9863,
-        "p99Px": 1.255
+        "samples": 109,
+        "within1px": 0.9817,
+        "p99Px": 1.353
        },
        "14": {
-        "samples": 147,
+        "samples": 918,
         "within1px": 1,
-        "p99Px": 0.504
+        "p99Px": 0.542
        }
       },
       "nearFold": {
-       "samples": 1125,
-       "within1px": 0.9778,
-       "p99Px": 3.401
+       "samples": 1095,
+       "within1px": 0.9498,
+       "p99Px": 10.27
       },
       "nearNoData": {
-       "samples": 278,
-       "within1px": 0.5468,
-       "p99Px": 27.097
+       "samples": 439,
+       "within1px": 0.3075,
+       "p99Px": 36.969
       },
-      "invisible": 1416,
+      "invisible": 615,
       "crossingOuterMinute": {
-       "primitives": 257,
-       "longestEdgeAtHalfPx": 41.4,
-       "p99EdgeAtHalfPx": 37.4
+       "primitives": 522,
+       "longestEdgeAtHalfPx": 48.8,
+       "p99EdgeAtHalfPx": 42
       }
      },
      "pass": true
     },
     "G5_width": {
      "method": "analytic: the probe's translation-only adapter (stock hook)",
-     "segments": 1624,
-     "medianWidthRatio": 0.94,
-     "under75pct": 0.26,
-     "under25pct": 0.078,
+     "segments": 1678,
+     "medianWidthRatio": 0.893,
+     "under75pct": 0.317,
+     "under25pct": 0.061,
      "pass": false
     }
    }
@@ -430,7 +444,7 @@
  "bench": {
   "b": {
    "kind": "bench",
-   "at": "2026-11-13T12:12:54.108Z",
+   "at": "2026-11-13T14:11:35.937Z",
    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
    "backend": "b",
    "geom": "synthetic",
@@ -473,24 +487,20 @@
      "cold": [
       {
        "origin": "baker-street",
-       "ms": 38.6,
+       "ms": 21.9,
        "failed": null,
-       "fieldMs": 11,
+       "fieldMs": 9.6,
        "tiles": 27,
        "fetched": 0,
        "missing": 0,
-       "shaded": 296838,
-       "bytes": 655263,
+       "shaded": 346195,
+       "bytes": 1552738,
        "overBudget": false,
-       "dropped": {
-        "secondary": 47,
-        "park": 20,
-        "water": 10
-       },
-       "workerMs": 29.9,
-       "tessMs": 11.8,
-       "packMs": 18,
-       "uploadMs": 0.6,
+       "dropped": {},
+       "workerMs": 19.8,
+       "tessMs": 9.1,
+       "packMs": 10.4,
+       "uploadMs": 0.5,
        "peakResident": 241459,
        "rings": [
         1000,
@@ -501,9 +511,9 @@
       },
       {
        "origin": "wembley-park",
-       "ms": 25.4,
+       "ms": 8.9,
        "failed": null,
-       "fieldMs": 6.8,
+       "fieldMs": 8.2,
        "tiles": 28,
        "fetched": 0,
        "missing": 0,
@@ -511,10 +521,10 @@
        "bytes": 998309,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 16.3,
-       "tessMs": 8.7,
-       "packMs": 6.9,
-       "uploadMs": 0.8,
+       "workerMs": 6.7,
+       "tessMs": 4.3,
+       "packMs": 2.2,
+       "uploadMs": 0.6,
        "peakResident": 181307,
        "rings": [
         1000,
@@ -525,23 +535,20 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 25.6,
+       "ms": 12.4,
        "failed": null,
-       "fieldMs": 12.3,
+       "fieldMs": 6.8,
        "tiles": 34,
        "fetched": 0,
        "missing": 0,
-       "shaded": 298848,
-       "bytes": 876834,
+       "shaded": 324823,
+       "bytes": 1515337,
        "overBudget": false,
-       "dropped": {
-        "park": 18,
-        "water": 9
-       },
-       "workerMs": 20.4,
-       "tessMs": 11.6,
-       "packMs": 8.7,
-       "uploadMs": 0.3,
+       "dropped": {},
+       "workerMs": 7.9,
+       "tessMs": 6.4,
+       "packMs": 1.4,
+       "uploadMs": 0.5,
        "peakResident": 236761,
        "rings": [
         1000,
@@ -552,9 +559,9 @@
       },
       {
        "origin": "heathrow",
-       "ms": 14.8,
+       "ms": 10.9,
        "failed": null,
-       "fieldMs": 5.7,
+       "fieldMs": 5.3,
        "tiles": 20,
        "fetched": 0,
        "missing": 0,
@@ -562,9 +569,9 @@
        "bytes": 1168028,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 5.8,
-       "tessMs": 5,
-       "packMs": 0.7,
+       "workerMs": 5.1,
+       "tessMs": 4.2,
+       "packMs": 0.8,
        "uploadMs": 0.2,
        "peakResident": 134507,
        "rings": [
@@ -576,9 +583,9 @@
       },
       {
        "origin": "croydon",
-       "ms": 20.5,
+       "ms": 9.8,
        "failed": null,
-       "fieldMs": 5.4,
+       "fieldMs": 5.5,
        "tiles": 41,
        "fetched": 0,
        "missing": 0,
@@ -586,10 +593,10 @@
        "bytes": 1362802,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 9.5,
-       "tessMs": 7.6,
-       "packMs": 1.9,
-       "uploadMs": 0.7,
+       "workerMs": 5.4,
+       "tessMs": 4.5,
+       "packMs": 0.7,
+       "uploadMs": 0.1,
        "peakResident": 196306,
        "rings": [
         1000,
@@ -602,154 +609,74 @@
      "warm": [
       {
        "origin": "baker-street",
-       "ms": 11,
+       "ms": 16.1,
        "failed": null,
-       "workerMs": 6.1,
-       "uploadMs": 0.5,
+       "workerMs": 3.2,
+       "uploadMs": 0.2,
        "cacheHits": 8
       },
       {
        "origin": "wembley-park",
-       "ms": 17.9,
+       "ms": 10.4,
        "failed": null,
-       "workerMs": 2.5,
-       "uploadMs": 0.6,
+       "workerMs": 1.5,
+       "uploadMs": 0.1,
        "cacheHits": 10
       },
       {
        "origin": "canary-wharf",
-       "ms": 11.2,
+       "ms": 10.5,
        "failed": null,
-       "workerMs": 4.6,
-       "uploadMs": 0.2,
+       "workerMs": 3.7,
+       "uploadMs": 0.3,
        "cacheHits": 13
       },
       {
        "origin": "heathrow",
-       "ms": 14.2,
+       "ms": 11.2,
        "failed": null,
-       "workerMs": 3,
-       "uploadMs": 0.2,
+       "workerMs": 1.8,
+       "uploadMs": 0.1,
        "cacheHits": 9
       },
       {
        "origin": "croydon",
-       "ms": 9,
-       "failed": null,
-       "workerMs": 1.4,
-       "uploadMs": 0.3,
-       "cacheHits": 41
-      },
-      {
-       "origin": "baker-street",
        "ms": 10,
        "failed": null,
-       "workerMs": 0.7,
-       "uploadMs": 0.3,
-       "cacheHits": 27
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 14.4,
-       "failed": null,
-       "workerMs": 0.8,
-       "uploadMs": 0.2,
-       "cacheHits": 28
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 11,
-       "failed": null,
-       "workerMs": 0.7,
-       "uploadMs": 0.2,
-       "cacheHits": 34
-      },
-      {
-       "origin": "heathrow",
-       "ms": 10.3,
-       "failed": null,
-       "workerMs": 1.1,
-       "uploadMs": 0.2,
-       "cacheHits": 20
-      },
-      {
-       "origin": "croydon",
-       "ms": 10.9,
-       "failed": null,
        "workerMs": 0.8,
        "uploadMs": 0.1,
        "cacheHits": 41
       },
       {
        "origin": "baker-street",
-       "ms": 13.4,
+       "ms": 11.9,
        "failed": null,
-       "workerMs": 0.7,
-       "uploadMs": 0.4,
-       "cacheHits": 27
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 9.3,
-       "failed": null,
-       "workerMs": 0.8,
-       "uploadMs": 0.2,
-       "cacheHits": 28
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 13.4,
-       "failed": null,
-       "workerMs": 0.7,
-       "uploadMs": 0.2,
-       "cacheHits": 34
-      },
-      {
-       "origin": "heathrow",
-       "ms": 9.2,
-       "failed": null,
-       "workerMs": 0.6,
+       "workerMs": 0.9,
        "uploadMs": 0.1,
-       "cacheHits": 20
-      },
-      {
-       "origin": "croydon",
-       "ms": 13.9,
-       "failed": null,
-       "workerMs": 0.8,
-       "uploadMs": 0.4,
-       "cacheHits": 41
-      },
-      {
-       "origin": "baker-street",
-       "ms": 9.4,
-       "failed": null,
-       "workerMs": 0.7,
-       "uploadMs": 0.4,
        "cacheHits": 27
       },
       {
        "origin": "wembley-park",
-       "ms": 11.2,
+       "ms": 8.4,
        "failed": null,
-       "workerMs": 0.7,
-       "uploadMs": 0.3,
+       "workerMs": 0.6,
+       "uploadMs": 0,
        "cacheHits": 28
       },
       {
        "origin": "canary-wharf",
-       "ms": 10.5,
+       "ms": 12.6,
        "failed": null,
-       "workerMs": 0.6,
+       "workerMs": 0.9,
        "uploadMs": 0.1,
        "cacheHits": 34
       },
       {
        "origin": "heathrow",
-       "ms": 10.5,
+       "ms": 8.6,
        "failed": null,
-       "workerMs": 0.6,
-       "uploadMs": 0.4,
+       "workerMs": 0.7,
+       "uploadMs": 0.1,
        "cacheHits": 20
       },
       {
@@ -757,6 +684,86 @@
        "ms": 12.5,
        "failed": null,
        "workerMs": 0.8,
+       "uploadMs": 0.3,
+       "cacheHits": 41
+      },
+      {
+       "origin": "baker-street",
+       "ms": 8.7,
+       "failed": null,
+       "workerMs": 1.2,
+       "uploadMs": 0.1,
+       "cacheHits": 27
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 11.6,
+       "failed": null,
+       "workerMs": 1,
+       "uploadMs": 0.3,
+       "cacheHits": 28
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 11.7,
+       "failed": null,
+       "workerMs": 0.9,
+       "uploadMs": 0.2,
+       "cacheHits": 34
+      },
+      {
+       "origin": "heathrow",
+       "ms": 8.2,
+       "failed": null,
+       "workerMs": 0.5,
+       "uploadMs": 0.3,
+       "cacheHits": 20
+      },
+      {
+       "origin": "croydon",
+       "ms": 14.1,
+       "failed": null,
+       "workerMs": 0.7,
+       "uploadMs": 0.4,
+       "cacheHits": 41
+      },
+      {
+       "origin": "baker-street",
+       "ms": 7.9,
+       "failed": null,
+       "workerMs": 0.9,
+       "uploadMs": 0.2,
+       "cacheHits": 27
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 11.9,
+       "failed": null,
+       "workerMs": 0.6,
+       "uploadMs": 0.1,
+       "cacheHits": 28
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 12.3,
+       "failed": null,
+       "workerMs": 0.9,
+       "uploadMs": 0.1,
+       "cacheHits": 34
+      },
+      {
+       "origin": "heathrow",
+       "ms": 10.6,
+       "failed": null,
+       "workerMs": 0.5,
+       "uploadMs": 0.2,
+       "cacheHits": 20
+      },
+      {
+       "origin": "croydon",
+       "ms": 8.9,
+       "failed": null,
+       "workerMs": 0.7,
        "uploadMs": 0.2,
        "cacheHits": 41
       }
@@ -765,47 +772,47 @@
       {
        "origin": "baker-street",
        "morphP50": 16.7,
-       "morphP95": 16.8,
+       "morphP95": 16.7,
+       "panP50": 16.7,
+       "panP95": 16.8,
+       "zoomP95": 16.8,
+       "p50": 16.7,
+       "p95": 16.7,
+       "max": 116.6,
+       "frames": 822,
+       "drawP50Ms": 0.1,
+       "drawP95Ms": 0.2,
+       "gpuFrameMs": 12.1
+      },
+      {
+       "origin": "wembley-park",
+       "morphP50": 16.7,
+       "morphP95": 16.7,
        "panP50": 16.7,
        "panP95": 16.7,
        "zoomP95": 16.8,
        "p50": 16.7,
        "p95": 16.7,
        "max": 16.8,
-       "frames": 832,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.2,
-       "gpuFrameMs": 4.6
-      },
-      {
-       "origin": "wembley-park",
-       "morphP50": 16.7,
-       "morphP95": 16.8,
-       "panP50": 16.7,
-       "panP95": 16.8,
-       "zoomP95": 16.7,
-       "p50": 16.7,
-       "p95": 16.8,
-       "max": 16.8,
-       "frames": 832,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.2,
-       "gpuFrameMs": 5.24
+       "frames": 833,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.1,
+       "gpuFrameMs": 5.56
       },
       {
        "origin": "canary-wharf",
        "morphP50": 16.7,
-       "morphP95": 16.7,
+       "morphP95": 16.8,
        "panP50": 16.7,
-       "panP95": 16.8,
+       "panP95": 16.7,
        "zoomP95": 16.7,
        "p50": 16.7,
        "p95": 16.7,
-       "max": 16.8,
-       "frames": 833,
-       "drawP50Ms": 0.1,
+       "max": 83.4,
+       "frames": 828,
+       "drawP50Ms": 0,
        "drawP95Ms": 0.2,
-       "gpuFrameMs": 3.24
+       "gpuFrameMs": 7.33
       },
       {
        "origin": "heathrow",
@@ -813,14 +820,14 @@
        "morphP95": 16.7,
        "panP50": 16.7,
        "panP95": 16.7,
-       "zoomP95": 16.7,
+       "zoomP95": 16.8,
        "p50": 16.7,
        "p95": 16.7,
        "max": 16.8,
        "frames": 833,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.2,
-       "gpuFrameMs": 3.5
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.1,
+       "gpuFrameMs": 5.92
       },
       {
        "origin": "croydon",
@@ -832,111 +839,111 @@
        "p50": 16.7,
        "p95": 16.7,
        "max": 16.8,
-       "frames": 832,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.2,
-       "gpuFrameMs": 4.41
+       "frames": 833,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.1,
+       "gpuFrameMs": 7.16
       }
      ],
      "chord": [
       {
        "origin": "baker-street",
        "folds": {
-        "foldedShare": 0.19701052363574642,
-        "foldedSheets": 0.28065611136096136,
-        "medianStretch": 5.752070146585066
+        "foldedShare": 0.24826374154855865,
+        "foldedSheets": 0.367040954059592,
+        "medianStretch": 4.8653894454892574
        },
-       "within1px": 1,
-       "p99Px": 0.238,
+       "within1px": 0.9976,
+       "p99Px": 0.268,
        "nearFold": {
-        "samples": 868,
-        "within1px": 0.9931,
-        "p99Px": 0.653
+        "samples": 855,
+        "within1px": 0.9673,
+        "p99Px": 3.917
        },
        "crossing": {
-        "primitives": 257,
-        "longestEdgeAtHalfPx": 18,
-        "p99EdgeAtHalfPx": 16.2
+        "primitives": 522,
+        "longestEdgeAtHalfPx": 21.1,
+        "p99EdgeAtHalfPx": 18.2
        }
       },
       {
        "origin": "wembley-park",
        "folds": {
-        "foldedShare": 0.08502362160174262,
-        "foldedSheets": 0.1270275841927563,
-        "medianStretch": 5.827037504895857
+        "foldedShare": 0.1921518289060511,
+        "foldedSheets": 0.3010435742071445,
+        "medianStretch": 3.151212005640365
        },
        "within1px": 1,
-       "p99Px": 0.227,
+       "p99Px": 0.179,
        "nearFold": {
-        "samples": 757,
-        "within1px": 0.9908,
-        "p99Px": 0.843
+        "samples": 869,
+        "within1px": 0.985,
+        "p99Px": 5.553
        },
        "crossing": {
         "primitives": 333,
-        "longestEdgeAtHalfPx": 15.8,
-        "p99EdgeAtHalfPx": 15.7
+        "longestEdgeAtHalfPx": 18.8,
+        "p99EdgeAtHalfPx": 18.8
        }
       },
       {
        "origin": "canary-wharf",
        "folds": {
-        "foldedShare": 0.19187954397578433,
-        "foldedSheets": 0.2487725523341122,
-        "medianStretch": 5.552097489683034
+        "foldedShare": 0.25386856771054345,
+        "foldedSheets": 0.34917968259190835,
+        "medianStretch": 4.090828797612521
        },
-       "within1px": 0.9946,
-       "p99Px": 0.462,
+       "within1px": 0.9991,
+       "p99Px": 0.258,
        "nearFold": {
-        "samples": 751,
-        "within1px": 0.9241,
-        "p99Px": 7.374
+        "samples": 812,
+        "within1px": 0.9421,
+        "p99Px": 7.685
        },
        "crossing": {
-        "primitives": 196,
-        "longestEdgeAtHalfPx": 25.6,
-        "p99EdgeAtHalfPx": 25.6
+        "primitives": 269,
+        "longestEdgeAtHalfPx": 25.7,
+        "p99EdgeAtHalfPx": 24.8
        }
       },
       {
        "origin": "heathrow",
        "folds": {
-        "foldedShare": 0.12802695974426434,
-        "foldedSheets": 0.1752924406979488,
-        "medianStretch": 4.7804891926042785
+        "foldedShare": 0.24141772044470847,
+        "foldedSheets": 0.3543030770201418,
+        "medianStretch": 3.1436304028108046
        },
        "within1px": 1,
-       "p99Px": 0.074,
+       "p99Px": 0.133,
        "nearFold": {
-        "samples": 674,
-        "within1px": 0.9659,
-        "p99Px": 7.847
+        "samples": 503,
+        "within1px": 0.9583,
+        "p99Px": 8.206
        },
        "crossing": {
         "primitives": 139,
-        "longestEdgeAtHalfPx": 11,
-        "p99EdgeAtHalfPx": 2.3
+        "longestEdgeAtHalfPx": 11.2,
+        "p99EdgeAtHalfPx": 2.5
        }
       },
       {
        "origin": "croydon",
        "folds": {
-        "foldedShare": 0.09267235282469094,
-        "foldedSheets": 0.12674589431568573,
-        "medianStretch": 6.7403926563154
+        "foldedShare": 0.19381736399898158,
+        "foldedSheets": 0.2782124625900398,
+        "medianStretch": 3.5601090718537636
        },
-       "within1px": 0.9989,
-       "p99Px": 0.159,
+       "within1px": 0.9975,
+       "p99Px": 0.616,
        "nearFold": {
-        "samples": 763,
-        "within1px": 0.9581,
-        "p99Px": 8.581
+        "samples": 712,
+        "within1px": 0.9621,
+        "p99Px": 12.411
        },
        "crossing": {
         "primitives": 448,
-        "longestEdgeAtHalfPx": 14.2,
-        "p99EdgeAtHalfPx": 12.4
+        "longestEdgeAtHalfPx": 17.2,
+        "p99EdgeAtHalfPx": 14.8
        }
       }
      ]
@@ -946,9 +953,9 @@
      "cold": [
       {
        "origin": "baker-street",
-       "ms": 10.3,
+       "ms": 31.1,
        "failed": null,
-       "fieldMs": 6.1,
+       "fieldMs": 20.6,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
@@ -956,10 +963,10 @@
        "bytes": 392775,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 4.6,
-       "tessMs": 4.1,
+       "workerMs": 23.1,
+       "tessMs": 22.5,
        "packMs": 0.4,
-       "uploadMs": 0.3,
+       "uploadMs": 2,
        "peakResident": 76104,
        "rings": [
         1000,
@@ -970,9 +977,9 @@
       },
       {
        "origin": "wembley-park",
-       "ms": 15.9,
+       "ms": 2.9,
        "failed": null,
-       "fieldMs": 7,
+       "fieldMs": 8.5,
        "tiles": 16,
        "fetched": 0,
        "missing": 0,
@@ -980,8 +987,8 @@
        "bytes": 102508,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 2,
-       "tessMs": 1.5,
+       "workerMs": 1,
+       "tessMs": 0.8,
        "packMs": 0.1,
        "uploadMs": 0.2,
        "peakResident": 20866,
@@ -994,9 +1001,9 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 9.4,
+       "ms": 19.1,
        "failed": null,
-       "fieldMs": 5,
+       "fieldMs": 5.8,
        "tiles": 14,
        "fetched": 0,
        "missing": 0,
@@ -1004,10 +1011,10 @@
        "bytes": 262966,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 2.8,
-       "tessMs": 2.5,
-       "packMs": 0.1,
-       "uploadMs": 0.4,
+       "workerMs": 2.7,
+       "tessMs": 2.3,
+       "packMs": 0.4,
+       "uploadMs": 0.1,
        "peakResident": 46666,
        "rings": [
         1000,
@@ -1018,9 +1025,9 @@
       },
       {
        "origin": "heathrow",
-       "ms": 11.4,
+       "ms": 4.9,
        "failed": null,
-       "fieldMs": 5.1,
+       "fieldMs": 5.5,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
@@ -1029,9 +1036,9 @@
        "overBudget": false,
        "dropped": {},
        "workerMs": 0.7,
-       "tessMs": 0.5,
+       "tessMs": 0.6,
        "packMs": 0.1,
-       "uploadMs": 0.1,
+       "uploadMs": 0.2,
        "peakResident": 7801,
        "rings": [
         1000,
@@ -1042,9 +1049,9 @@
       },
       {
        "origin": "croydon",
-       "ms": 18.3,
+       "ms": 14.9,
        "failed": null,
-       "fieldMs": 5.2,
+       "fieldMs": 5.6,
        "tiles": 24,
        "fetched": 0,
        "missing": 0,
@@ -1052,10 +1059,10 @@
        "bytes": 80904,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 0.9,
-       "tessMs": 0.8,
+       "workerMs": 0.7,
+       "tessMs": 0.6,
        "packMs": 0.1,
-       "uploadMs": 0.3,
+       "uploadMs": 0.2,
        "peakResident": 19485,
        "rings": [
         1000,
@@ -1068,15 +1075,15 @@
      "warm": [
       {
        "origin": "baker-street",
-       "ms": 18.6,
+       "ms": 16.4,
        "failed": null,
-       "workerMs": 2.6,
-       "uploadMs": 0.2,
+       "workerMs": 3.2,
+       "uploadMs": 0.1,
        "cacheHits": 0
       },
       {
        "origin": "wembley-park",
-       "ms": 9.6,
+       "ms": 8.5,
        "failed": null,
        "workerMs": 0.7,
        "uploadMs": 0.2,
@@ -1084,138 +1091,58 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 12,
+       "ms": 11.7,
        "failed": null,
-       "workerMs": 2.5,
-       "uploadMs": 0.2,
+       "workerMs": 1.9,
+       "uploadMs": 0.1,
        "cacheHits": 0
       },
       {
        "origin": "heathrow",
+       "ms": 11.7,
+       "failed": null,
+       "workerMs": 0.4,
+       "uploadMs": 0.1,
+       "cacheHits": 0
+      },
+      {
+       "origin": "croydon",
+       "ms": 11.5,
+       "failed": null,
+       "workerMs": 0.1,
+       "uploadMs": 0,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
        "ms": 12.6,
        "failed": null,
-       "workerMs": 0.5,
-       "uploadMs": 0,
-       "cacheHits": 0
-      },
-      {
-       "origin": "croydon",
-       "ms": 10.9,
-       "failed": null,
-       "workerMs": 0.2,
-       "uploadMs": 0.2,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 14.3,
-       "failed": null,
        "workerMs": 0.4,
        "uploadMs": 0.1,
        "cacheHits": 10
       },
       {
        "origin": "wembley-park",
-       "ms": 10.2,
+       "ms": 11.3,
        "failed": null,
-       "workerMs": 0.1,
-       "uploadMs": 0,
+       "workerMs": 0.2,
+       "uploadMs": 0.1,
        "cacheHits": 16
       },
       {
        "origin": "canary-wharf",
-       "ms": 13.8,
+       "ms": 11.6,
        "failed": null,
        "workerMs": 0.3,
-       "uploadMs": 0.1,
+       "uploadMs": 0.2,
        "cacheHits": 14
       },
       {
        "origin": "heathrow",
-       "ms": 8.5,
+       "ms": 11.2,
        "failed": null,
        "workerMs": 0.2,
-       "uploadMs": 0.2,
-       "cacheHits": 10
-      },
-      {
-       "origin": "croydon",
-       "ms": 15.4,
-       "failed": null,
-       "workerMs": 0.1,
-       "uploadMs": 0.2,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 9.3,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.3,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 14.5,
-       "failed": null,
-       "workerMs": 0.1,
        "uploadMs": 0.1,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 12.1,
-       "failed": null,
-       "workerMs": 0.3,
-       "uploadMs": 0.3,
-       "cacheHits": 14
-      },
-      {
-       "origin": "heathrow",
-       "ms": 10.8,
-       "failed": null,
-       "workerMs": 0.2,
-       "uploadMs": 0,
-       "cacheHits": 10
-      },
-      {
-       "origin": "croydon",
-       "ms": 13.8,
-       "failed": null,
-       "workerMs": 0.1,
-       "uploadMs": 0,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 10.8,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.5,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 10.9,
-       "failed": null,
-       "workerMs": 0.1,
-       "uploadMs": 0.1,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 12.9,
-       "failed": null,
-       "workerMs": 0.2,
-       "uploadMs": 0.3,
-       "cacheHits": 14
-      },
-      {
-       "origin": "heathrow",
-       "ms": 13.1,
-       "failed": null,
-       "workerMs": 0.2,
-       "uploadMs": 0.2,
        "cacheHits": 10
       },
       {
@@ -1223,7 +1150,87 @@
        "ms": 11.7,
        "failed": null,
        "workerMs": 0.1,
+       "uploadMs": 0,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 10.7,
+       "failed": null,
+       "workerMs": 0.5,
        "uploadMs": 0.2,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 11.4,
+       "failed": null,
+       "workerMs": 0.1,
+       "uploadMs": 0,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 11.9,
+       "failed": null,
+       "workerMs": 0.2,
+       "uploadMs": 0.2,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 10.8,
+       "failed": null,
+       "workerMs": 0.1,
+       "uploadMs": 0.1,
+       "cacheHits": 10
+      },
+      {
+       "origin": "croydon",
+       "ms": 10.9,
+       "failed": null,
+       "workerMs": 0.1,
+       "uploadMs": 0.1,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 12,
+       "failed": null,
+       "workerMs": 0.4,
+       "uploadMs": 0.2,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 10.7,
+       "failed": null,
+       "workerMs": 0.2,
+       "uploadMs": 0.1,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 12.4,
+       "failed": null,
+       "workerMs": 0.2,
+       "uploadMs": 0.2,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 14.4,
+       "failed": null,
+       "workerMs": 0.2,
+       "uploadMs": 0.2,
+       "cacheHits": 10
+      },
+      {
+       "origin": "croydon",
+       "ms": 5.7,
+       "failed": null,
+       "workerMs": 0.2,
+       "uploadMs": 0.1,
        "cacheHits": 24
       }
      ],
@@ -1234,10 +1241,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
-       "p99Px": 0.081,
+       "p99Px": 0.095,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -1254,7 +1261,7 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
        "p99Px": 0.035,
@@ -1274,10 +1281,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
-       "p99Px": 0.063,
+       "p99Px": 0.073,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -1294,7 +1301,7 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
        "p99Px": 0.036,
@@ -1314,10 +1321,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
-       "p99Px": 0.036,
+       "p99Px": 0.034,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -1325,8 +1332,8 @@
        },
        "crossing": {
         "primitives": 8,
-        "longestEdgeAtHalfPx": 2.9,
-        "p99EdgeAtHalfPx": 2.9
+        "longestEdgeAtHalfPx": 2.8,
+        "p99EdgeAtHalfPx": 2.8
        }
       }
      ]
@@ -1336,9 +1343,9 @@
      "cold": [
       {
        "origin": "baker-street",
-       "ms": 14.9,
+       "ms": 8.5,
        "failed": null,
-       "fieldMs": 5.6,
+       "fieldMs": 9.5,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
@@ -1346,10 +1353,10 @@
        "bytes": 392775,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 2.9,
+       "workerMs": 2.7,
        "tessMs": 2.2,
        "packMs": 0.4,
-       "uploadMs": 0.1,
+       "uploadMs": 0.2,
        "peakResident": 76104,
        "rings": [
         1000,
@@ -1360,9 +1367,9 @@
       },
       {
        "origin": "wembley-park",
-       "ms": 10.1,
+       "ms": 19.2,
        "failed": null,
-       "fieldMs": 6.6,
+       "fieldMs": 6.5,
        "tiles": 16,
        "fetched": 0,
        "missing": 0,
@@ -1370,10 +1377,10 @@
        "bytes": 102508,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 0.8,
+       "workerMs": 0.7,
        "tessMs": 0.6,
        "packMs": 0,
-       "uploadMs": 0.2,
+       "uploadMs": 0,
        "peakResident": 20866,
        "rings": [
         1000,
@@ -1384,9 +1391,9 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 16.7,
+       "ms": 8.6,
        "failed": null,
-       "fieldMs": 5.2,
+       "fieldMs": 6,
        "tiles": 14,
        "fetched": 0,
        "missing": 0,
@@ -1394,10 +1401,10 @@
        "bytes": 262966,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 2.3,
-       "tessMs": 1.9,
-       "packMs": 0.3,
-       "uploadMs": 0.1,
+       "workerMs": 2.1,
+       "tessMs": 2,
+       "packMs": 0.1,
+       "uploadMs": 0.2,
        "peakResident": 46666,
        "rings": [
         1000,
@@ -1408,9 +1415,9 @@
       },
       {
        "origin": "heathrow",
-       "ms": 12.8,
+       "ms": 7,
        "failed": null,
-       "fieldMs": 5.3,
+       "fieldMs": 6.1,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
@@ -1421,7 +1428,7 @@
        "workerMs": 0.5,
        "tessMs": 0.4,
        "packMs": 0.1,
-       "uploadMs": 0.3,
+       "uploadMs": 0.2,
        "peakResident": 7801,
        "rings": [
         1000,
@@ -1432,9 +1439,9 @@
       },
       {
        "origin": "croydon",
-       "ms": 20.2,
+       "ms": 9.4,
        "failed": null,
-       "fieldMs": 5.2,
+       "fieldMs": 5.9,
        "tiles": 24,
        "fetched": 0,
        "missing": 0,
@@ -1443,7 +1450,7 @@
        "overBudget": false,
        "dropped": {},
        "workerMs": 0.7,
-       "tessMs": 0.4,
+       "tessMs": 0.6,
        "packMs": 0.1,
        "uploadMs": 0.2,
        "peakResident": 19485,
@@ -1458,162 +1465,162 @@
      "warm": [
       {
        "origin": "baker-street",
-       "ms": 16.7,
+       "ms": 11.8,
        "failed": null,
-       "workerMs": 2.7,
-       "uploadMs": 0.1,
+       "workerMs": 2.3,
+       "uploadMs": 0,
        "cacheHits": 0
       },
       {
        "origin": "wembley-park",
-       "ms": 9.5,
+       "ms": 10.4,
        "failed": null,
        "workerMs": 0.7,
-       "uploadMs": 0.2,
+       "uploadMs": 0.3,
        "cacheHits": 1
       },
       {
        "origin": "canary-wharf",
-       "ms": 10.8,
+       "ms": 9.8,
        "failed": null,
-       "workerMs": 2,
-       "uploadMs": 0.2,
+       "workerMs": 1.9,
+       "uploadMs": 0.1,
        "cacheHits": 0
       },
       {
        "origin": "heathrow",
-       "ms": 13,
+       "ms": 11,
        "failed": null,
-       "workerMs": 0.6,
-       "uploadMs": 0.3,
+       "workerMs": 1,
+       "uploadMs": 0.2,
        "cacheHits": 0
       },
       {
        "origin": "croydon",
-       "ms": 10.2,
-       "failed": null,
-       "workerMs": 0.1,
-       "uploadMs": 0.1,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 11.6,
-       "failed": null,
-       "workerMs": 0.5,
-       "uploadMs": 0.2,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 12.4,
-       "failed": null,
-       "workerMs": 0.2,
-       "uploadMs": 0.1,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 10.3,
-       "failed": null,
-       "workerMs": 0.3,
-       "uploadMs": 0.3,
-       "cacheHits": 14
-      },
-      {
-       "origin": "heathrow",
-       "ms": 10.8,
-       "failed": null,
-       "workerMs": 0.1,
-       "uploadMs": 0.2,
-       "cacheHits": 10
-      },
-      {
-       "origin": "croydon",
-       "ms": 12.6,
-       "failed": null,
-       "workerMs": 0.2,
-       "uploadMs": 0,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 11.4,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.2,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 7.8,
-       "failed": null,
-       "workerMs": 0.2,
-       "uploadMs": 0.1,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 14.3,
-       "failed": null,
-       "workerMs": 0.3,
-       "uploadMs": 0.2,
-       "cacheHits": 14
-      },
-      {
-       "origin": "heathrow",
-       "ms": 9.7,
-       "failed": null,
-       "workerMs": 0.1,
-       "uploadMs": 0.1,
-       "cacheHits": 10
-      },
-      {
-       "origin": "croydon",
-       "ms": 12.4,
-       "failed": null,
-       "workerMs": 0.2,
-       "uploadMs": 0,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 12.9,
-       "failed": null,
-       "workerMs": 0.5,
-       "uploadMs": 0.1,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 7.7,
-       "failed": null,
-       "workerMs": 0.2,
-       "uploadMs": 0.1,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 14.7,
-       "failed": null,
-       "workerMs": 0.2,
-       "uploadMs": 0.2,
-       "cacheHits": 14
-      },
-      {
-       "origin": "heathrow",
        "ms": 10.6,
        "failed": null,
+       "workerMs": 0.2,
+       "uploadMs": 0.1,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 12.5,
+       "failed": null,
+       "workerMs": 0.3,
+       "uploadMs": 0.1,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 10,
+       "failed": null,
+       "workerMs": 0.2,
+       "uploadMs": 0.2,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 11.1,
+       "failed": null,
+       "workerMs": 0.2,
+       "uploadMs": 0.2,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 10.5,
+       "failed": null,
        "workerMs": 0.1,
+       "uploadMs": 0.2,
+       "cacheHits": 10
+      },
+      {
+       "origin": "croydon",
+       "ms": 10.4,
+       "failed": null,
+       "workerMs": 0.2,
+       "uploadMs": 0.2,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 11.2,
+       "failed": null,
+       "workerMs": 0.5,
+       "uploadMs": 0,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 11.1,
+       "failed": null,
+       "workerMs": 0.1,
+       "uploadMs": 0.2,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 9.6,
+       "failed": null,
+       "workerMs": 0.3,
+       "uploadMs": 0,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 10.9,
+       "failed": null,
+       "workerMs": 0.2,
        "uploadMs": 0.1,
        "cacheHits": 10
       },
       {
        "origin": "croydon",
-       "ms": 9.6,
+       "ms": 11,
        "failed": null,
        "workerMs": 0.2,
+       "uploadMs": 0.1,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 11.3,
+       "failed": null,
+       "workerMs": 0.4,
+       "uploadMs": 0.1,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 10.8,
+       "failed": null,
+       "workerMs": 0.1,
+       "uploadMs": 0.2,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 10.6,
+       "failed": null,
+       "workerMs": 0.2,
+       "uploadMs": 0.1,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 10.9,
+       "failed": null,
+       "workerMs": 0.1,
        "uploadMs": 0,
+       "cacheHits": 10
+      },
+      {
+       "origin": "croydon",
+       "ms": 10.9,
+       "failed": null,
+       "workerMs": 0.1,
+       "uploadMs": 0.1,
        "cacheHits": 24
       }
      ],
@@ -1624,10 +1631,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
-       "within1px": 0.9991,
-       "p99Px": 0.097,
+       "within1px": 0.9996,
+       "p99Px": 0.135,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -1644,10 +1651,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
-       "within1px": 0.9419,
-       "p99Px": 2.199,
+       "within1px": 0.9492,
+       "p99Px": 2.117,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -1664,10 +1671,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
        "within1px": 0.9985,
-       "p99Px": 0.059,
+       "p99Px": 0.091,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -1675,8 +1682,8 @@
        },
        "crossing": {
         "primitives": 88,
-        "longestEdgeAtHalfPx": 8.2,
-        "p99EdgeAtHalfPx": 8.2
+        "longestEdgeAtHalfPx": 8.3,
+        "p99EdgeAtHalfPx": 8.3
        }
       },
       {
@@ -1684,10 +1691,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
-       "within1px": 0.9984,
-       "p99Px": 0.233,
+       "within1px": 1,
+       "p99Px": 0.298,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -1695,8 +1702,8 @@
        },
        "crossing": {
         "primitives": 4,
-        "longestEdgeAtHalfPx": 8.3,
-        "p99EdgeAtHalfPx": 8.3
+        "longestEdgeAtHalfPx": 8.5,
+        "p99EdgeAtHalfPx": 8.5
        }
       },
       {
@@ -1704,10 +1711,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
        "within1px": 1,
-       "p99Px": 0.049,
+       "p99Px": 0.071,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -1715,8 +1722,8 @@
        },
        "crossing": {
         "primitives": 7,
-        "longestEdgeAtHalfPx": 12.5,
-        "p99EdgeAtHalfPx": 12.5
+        "longestEdgeAtHalfPx": 12.6,
+        "p99EdgeAtHalfPx": 12.6
        }
       }
      ]
@@ -1729,153 +1736,153 @@
      "fillVerts": 15307,
      "segments": 13576,
      "bytes": 607687,
-     "tessMs": 5.8,
+     "tessMs": 4.4,
      "chord": {
-      "samples": 2591,
-      "within1px": 0.9915,
-      "p99Px": 0.939,
-      "maxPx": 3.032,
+      "samples": 2529,
+      "within1px": 0.9905,
+      "p99Px": 0.916,
+      "maxPx": 7.045,
       "byZoom": {
        "10": {
-        "samples": 83,
+        "samples": 82,
         "within1px": 1,
-        "p99Px": 0.21
+        "p99Px": 0.171
        },
        "12": {
-        "samples": 1019,
-        "within1px": 0.9872,
-        "p99Px": 1.138
+        "samples": 1113,
+        "within1px": 0.9802,
+        "p99Px": 1.846
        },
        "13": {
-        "samples": 227,
-        "within1px": 0.9648,
-        "p99Px": 1.527
+        "samples": 209,
+        "within1px": 0.9904,
+        "p99Px": 0.916
        },
        "14": {
-        "samples": 1262,
-        "within1px": 0.9992,
-        "p99Px": 0.57
+        "samples": 1125,
+        "within1px": 1,
+        "p99Px": 0.596
        }
       },
       "nearFold": {
-       "samples": 1499,
-       "within1px": 0.9633,
-       "p99Px": 2.948
+       "samples": 1735,
+       "within1px": 0.9527,
+       "p99Px": 5.266
       },
       "nearNoData": {
-       "samples": 602,
-       "within1px": 0.3455,
-       "p99Px": 19.11
+       "samples": 552,
+       "within1px": 0.346,
+       "p99Px": 18.493
       },
-      "invisible": 1308,
+      "invisible": 1184,
       "crossingOuterMinute": {
        "primitives": 326,
-       "longestEdgeAtHalfPx": 25.5,
-       "p99EdgeAtHalfPx": 24.7
+       "longestEdgeAtHalfPx": 26.8,
+       "p99EdgeAtHalfPx": 25.7
       }
      }
     },
     {
      "spacingDiv": 128,
-     "shaded": 296838,
-     "fillVerts": 5352,
-     "segments": 26023,
-     "bytes": 655263,
-     "tessMs": 4.6,
+     "shaded": 346195,
+     "fillVerts": 42733,
+     "segments": 27021,
+     "bytes": 1552738,
+     "tessMs": 5,
      "chord": {
-      "samples": 1690,
-      "within1px": 0.997,
-      "p99Px": 0.268,
-      "maxPx": 1.97,
+      "samples": 2494,
+      "within1px": 0.9992,
+      "p99Px": 0.281,
+      "maxPx": 1.377,
       "byZoom": {
        "10": {
-        "samples": 126,
+        "samples": 71,
         "within1px": 1,
-        "p99Px": 0.113
+        "p99Px": 0.146
        },
        "12": {
-        "samples": 1128,
-        "within1px": 0.9956,
-        "p99Px": 0.268
+        "samples": 1119,
+        "within1px": 0.9982,
+        "p99Px": 0.271
        },
        "13": {
-        "samples": 224,
+        "samples": 211,
         "within1px": 1,
-        "p99Px": 0.3
+        "p99Px": 0.533
        },
        "14": {
-        "samples": 212,
+        "samples": 1093,
         "within1px": 1,
-        "p99Px": 0.11
+        "p99Px": 0.281
        }
       },
       "nearFold": {
-       "samples": 1763,
-       "within1px": 0.9892,
-       "p99Px": 1.016
+       "samples": 1724,
+       "within1px": 0.9826,
+       "p99Px": 1.864
       },
       "nearNoData": {
-       "samples": 406,
-       "within1px": 0.6281,
-       "p99Px": 12.225
+       "samples": 608,
+       "within1px": 0.4161,
+       "p99Px": 16.426
       },
-      "invisible": 2141,
+      "invisible": 1174,
       "crossingOuterMinute": {
-       "primitives": 257,
-       "longestEdgeAtHalfPx": 18,
-       "p99EdgeAtHalfPx": 16.2
+       "primitives": 522,
+       "longestEdgeAtHalfPx": 21.1,
+       "p99EdgeAtHalfPx": 18.2
       }
      }
     },
     {
      "spacingDiv": 256,
-     "shaded": 298824,
-     "fillVerts": 0,
-     "segments": 28119,
-     "bytes": 590499,
-     "tessMs": 13.3,
+     "shaded": 728250,
+     "fillVerts": 125364,
+     "segments": 53673,
+     "bytes": 4364937,
+     "tessMs": 13.2,
      "chord": {
-      "samples": 2037,
+      "samples": 2457,
       "within1px": 1,
-      "p99Px": 0.081,
-      "maxPx": 0.523,
+      "p99Px": 0.088,
+      "maxPx": 0.364,
       "byZoom": {
        "10": {
-        "samples": 99,
+        "samples": 77,
         "within1px": 1,
-        "p99Px": 0.048
+        "p99Px": 0.037
        },
        "12": {
-        "samples": 1268,
+        "samples": 1094,
         "within1px": 1,
-        "p99Px": 0.083
+        "p99Px": 0.076
        },
        "13": {
-        "samples": 347,
+        "samples": 193,
         "within1px": 1,
-        "p99Px": 0.162
+        "p99Px": 0.093
        },
        "14": {
-        "samples": 323,
+        "samples": 1093,
         "within1px": 1,
-        "p99Px": 0.026
+        "p99Px": 0.1
        }
       },
       "nearFold": {
-       "samples": 1930,
-       "within1px": 0.9943,
-       "p99Px": 0.334
+       "samples": 1745,
+       "within1px": 0.9891,
+       "p99Px": 1.112
       },
       "nearNoData": {
-       "samples": 456,
-       "within1px": 0.7434,
-       "p99Px": 7.729
+       "samples": 649,
+       "within1px": 0.641,
+       "p99Px": 7.242
       },
-      "invisible": 1577,
+      "invisible": 1149,
       "crossingOuterMinute": {
-       "primitives": 85,
-       "longestEdgeAtHalfPx": 12.9,
-       "p99EdgeAtHalfPx": 12.9
+       "primitives": 897,
+       "longestEdgeAtHalfPx": 13.7,
+       "p99EdgeAtHalfPx": 13.3
       }
      }
     }
@@ -1888,37 +1895,37 @@
     "geom": "synthetic",
     "G6_frames": {
      "worstP50": 16.7,
-     "worstP95": 16.8,
+     "worstP95": 16.7,
      "drawP95Ms": 0.2,
-     "gpuFrameMs": 5.24,
+     "gpuFrameMs": 12.1,
      "note": "frame intervals are capped by vsync; the gate is judged on the phones"
     },
     "G7_originChange": {
-     "p50": 11.2,
-     "p95": 16.7,
+     "p50": 11.1,
+     "p95": 14.4,
      "pass": true
     },
     "G8_newOrigin": {
-     "p95NoNetwork": 38.6,
+     "p95NoNetwork": 31.1,
      "pass": null,
      "note": "not measured: synthetic geometry makes no request"
     },
     "G9_budget": {
-     "maxShaded": 298848,
+     "maxShaded": 346195,
      "maxTiles": 41,
      "overBudget": false
     },
     "failures": 0,
     "spacing": [
-     "spacing 64: 167641 shaded, 99.15% \u2264 1 px, p99 0.939 px",
-     "spacing 128: 296838 shaded, 99.70% \u2264 1 px, p99 0.268 px",
-     "spacing 256: 298824 shaded, 100.00% \u2264 1 px, p99 0.081 px"
+     "spacing 64: 167641 shaded, 99.05% \u2264 1 px, p99 0.916 px",
+     "spacing 128: 346195 shaded, 99.92% \u2264 1 px, p99 0.281 px",
+     "spacing 256: 728250 shaded, 100.00% \u2264 1 px, p99 0.088 px"
     ]
    }
   },
   "c": {
    "kind": "bench",
-   "at": "2026-11-13T12:14:12.978Z",
+   "at": "2026-11-13T14:12:57.524Z",
    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
    "backend": "c",
    "geom": "synthetic",
@@ -1961,24 +1968,20 @@
      "cold": [
       {
        "origin": "baker-street",
-       "ms": 38.9,
+       "ms": 43.6,
        "failed": null,
-       "fieldMs": 8.7,
+       "fieldMs": 9.3,
        "tiles": 27,
        "fetched": 0,
        "missing": 0,
-       "shaded": 296838,
-       "bytes": 1344039,
+       "shaded": 346195,
+       "bytes": 3146374,
        "overBudget": false,
-       "dropped": {
-        "secondary": 47,
-        "park": 20,
-        "water": 10
-       },
-       "workerMs": 24.8,
-       "tessMs": 11.3,
-       "packMs": 13.2,
-       "uploadMs": 0.3,
+       "dropped": {},
+       "workerMs": 40.6,
+       "tessMs": 8.1,
+       "packMs": 32,
+       "uploadMs": 0.8,
        "peakResident": 241459,
        "rings": [
         1000,
@@ -1989,20 +1992,20 @@
       },
       {
        "origin": "wembley-park",
-       "ms": 20.1,
+       "ms": 25,
        "failed": null,
-       "fieldMs": 8,
+       "fieldMs": 7.3,
        "tiles": 28,
        "fetched": 0,
        "missing": 0,
        "shaded": 231149,
-       "bytes": 1779641,
+       "bytes": 2074073,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 15.6,
-       "tessMs": 5,
-       "packMs": 10.4,
-       "uploadMs": 0.5,
+       "workerMs": 21.2,
+       "tessMs": 4.6,
+       "packMs": 16.6,
+       "uploadMs": 1.5,
        "peakResident": 181307,
        "rings": [
         1000,
@@ -2013,22 +2016,19 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 33.5,
+       "ms": 30.5,
        "failed": null,
-       "fieldMs": 7.4,
+       "fieldMs": 6.6,
        "tiles": 34,
        "fetched": 0,
        "missing": 0,
-       "shaded": 298848,
-       "bytes": 1683690,
+       "shaded": 324823,
+       "bytes": 3037733,
        "overBudget": false,
-       "dropped": {
-        "park": 18,
-        "water": 9
-       },
-       "workerMs": 16.1,
-       "tessMs": 6.9,
-       "packMs": 9,
+       "dropped": {},
+       "workerMs": 20.4,
+       "tessMs": 5.6,
+       "packMs": 14.8,
        "uploadMs": 0.3,
        "peakResident": 236761,
        "rings": [
@@ -2040,20 +2040,20 @@
       },
       {
        "origin": "heathrow",
-       "ms": 27.3,
+       "ms": 21.9,
        "failed": null,
-       "fieldMs": 5.2,
+       "fieldMs": 5.6,
        "tiles": 20,
        "fetched": 0,
        "missing": 0,
        "shaded": 216455,
-       "bytes": 1985168,
+       "bytes": 2250816,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 11.5,
-       "tessMs": 6.8,
-       "packMs": 4.4,
-       "uploadMs": 0.4,
+       "workerMs": 13.6,
+       "tessMs": 3.7,
+       "packMs": 9.9,
+       "uploadMs": 0.2,
        "peakResident": 134507,
        "rings": [
         1000,
@@ -2064,20 +2064,20 @@
       },
       {
        "origin": "croydon",
-       "ms": 27.1,
+       "ms": 33.1,
        "failed": null,
-       "fieldMs": 6.7,
+       "fieldMs": 6.4,
        "tiles": 41,
        "fetched": 0,
        "missing": 0,
        "shaded": 287842,
-       "bytes": 2362114,
+       "bytes": 2718690,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 8.8,
-       "tessMs": 4.6,
-       "packMs": 3.9,
-       "uploadMs": 0.2,
+       "workerMs": 17.6,
+       "tessMs": 4.7,
+       "packMs": 12.8,
+       "uploadMs": 0.3,
        "peakResident": 196306,
        "rings": [
         1000,
@@ -2090,162 +2090,162 @@
      "warm": [
       {
        "origin": "baker-street",
-       "ms": 18.7,
+       "ms": 35.8,
        "failed": null,
-       "workerMs": 6,
-       "uploadMs": 0.5,
+       "workerMs": 19.5,
+       "uploadMs": 0.2,
        "cacheHits": 8
       },
       {
        "origin": "wembley-park",
-       "ms": 9.7,
+       "ms": 27.2,
        "failed": null,
-       "workerMs": 5.1,
-       "uploadMs": 0.2,
+       "workerMs": 12.3,
+       "uploadMs": 0,
        "cacheHits": 10
       },
       {
        "origin": "canary-wharf",
-       "ms": 11.5,
+       "ms": 27.2,
        "failed": null,
-       "workerMs": 7.4,
+       "workerMs": 19.5,
        "uploadMs": 0.2,
        "cacheHits": 13
       },
       {
        "origin": "heathrow",
-       "ms": 10.1,
+       "ms": 27,
        "failed": null,
-       "workerMs": 4.6,
+       "workerMs": 11,
        "uploadMs": 0.2,
        "cacheHits": 9
       },
       {
        "origin": "croydon",
-       "ms": 14.5,
+       "ms": 27.7,
        "failed": null,
-       "workerMs": 4,
-       "uploadMs": 0.3,
-       "cacheHits": 41
-      },
-      {
-       "origin": "baker-street",
-       "ms": 9.7,
-       "failed": null,
-       "workerMs": 3,
-       "uploadMs": 0.1,
-       "cacheHits": 27
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 12.2,
-       "failed": null,
-       "workerMs": 3.1,
-       "uploadMs": 0.1,
-       "cacheHits": 28
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 11,
-       "failed": null,
-       "workerMs": 5.3,
-       "uploadMs": 0.1,
-       "cacheHits": 34
-      },
-      {
-       "origin": "heathrow",
-       "ms": 9.6,
-       "failed": null,
-       "workerMs": 3.2,
-       "uploadMs": 0.3,
-       "cacheHits": 20
-      },
-      {
-       "origin": "croydon",
-       "ms": 12.2,
-       "failed": null,
-       "workerMs": 4.2,
-       "uploadMs": 0.3,
-       "cacheHits": 41
-      },
-      {
-       "origin": "baker-street",
-       "ms": 11.6,
-       "failed": null,
-       "workerMs": 3.2,
-       "uploadMs": 0.2,
-       "cacheHits": 27
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 9.1,
-       "failed": null,
-       "workerMs": 3.4,
-       "uploadMs": 0.3,
-       "cacheHits": 28
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 15,
-       "failed": null,
-       "workerMs": 3.8,
-       "uploadMs": 1.5,
-       "cacheHits": 34
-      },
-      {
-       "origin": "heathrow",
-       "ms": 22.1,
-       "failed": null,
-       "workerMs": 4.3,
-       "uploadMs": 0.1,
-       "cacheHits": 20
-      },
-      {
-       "origin": "croydon",
-       "ms": 10.9,
-       "failed": null,
-       "workerMs": 3.9,
+       "workerMs": 12.4,
        "uploadMs": 0.2,
        "cacheHits": 41
       },
       {
        "origin": "baker-street",
-       "ms": 12.8,
+       "ms": 27.1,
        "failed": null,
-       "workerMs": 3.2,
+       "workerMs": 16,
        "uploadMs": 0.1,
        "cacheHits": 27
       },
       {
        "origin": "wembley-park",
-       "ms": 11.2,
+       "ms": 11.5,
        "failed": null,
-       "workerMs": 3.6,
-       "uploadMs": 0.2,
+       "workerMs": 10.3,
+       "uploadMs": 0.1,
        "cacheHits": 28
       },
       {
        "origin": "canary-wharf",
-       "ms": 11.3,
+       "ms": 27,
        "failed": null,
-       "workerMs": 3.5,
-       "uploadMs": 0.1,
+       "workerMs": 14.8,
+       "uploadMs": 0.2,
        "cacheHits": 34
       },
       {
        "origin": "heathrow",
-       "ms": 9.4,
+       "ms": 27.6,
        "failed": null,
-       "workerMs": 3.6,
-       "uploadMs": 0.2,
+       "workerMs": 10.9,
+       "uploadMs": 0.3,
        "cacheHits": 20
       },
       {
        "origin": "croydon",
-       "ms": 10.6,
+       "ms": 27.2,
        "failed": null,
-       "workerMs": 4.3,
+       "workerMs": 13.8,
        "uploadMs": 0.2,
+       "cacheHits": 41
+      },
+      {
+       "origin": "baker-street",
+       "ms": 26.4,
+       "failed": null,
+       "workerMs": 17.4,
+       "uploadMs": 0.4,
+       "cacheHits": 27
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 27.5,
+       "failed": null,
+       "workerMs": 10.8,
+       "uploadMs": 0.3,
+       "cacheHits": 28
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 26.3,
+       "failed": null,
+       "workerMs": 16.5,
+       "uploadMs": 0.4,
+       "cacheHits": 34
+      },
+      {
+       "origin": "heathrow",
+       "ms": 30.2,
+       "failed": null,
+       "workerMs": 10.2,
+       "uploadMs": 0.3,
+       "cacheHits": 20
+      },
+      {
+       "origin": "croydon",
+       "ms": 22.5,
+       "failed": null,
+       "workerMs": 13,
+       "uploadMs": 0.2,
+       "cacheHits": 41
+      },
+      {
+       "origin": "baker-street",
+       "ms": 28.2,
+       "failed": null,
+       "workerMs": 16.8,
+       "uploadMs": 0.2,
+       "cacheHits": 27
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 27.7,
+       "failed": null,
+       "workerMs": 10.7,
+       "uploadMs": 0.1,
+       "cacheHits": 28
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 27.5,
+       "failed": null,
+       "workerMs": 15.5,
+       "uploadMs": 0.2,
+       "cacheHits": 34
+      },
+      {
+       "origin": "heathrow",
+       "ms": 11.1,
+       "failed": null,
+       "workerMs": 9.5,
+       "uploadMs": 0.1,
+       "cacheHits": 20
+      },
+      {
+       "origin": "croydon",
+       "ms": 27.4,
+       "failed": null,
+       "workerMs": 13.4,
+       "uploadMs": 0.1,
        "cacheHits": 41
       }
      ],
@@ -2255,63 +2255,18 @@
        "morphP50": 16.7,
        "morphP95": 16.8,
        "panP50": 16.7,
-       "panP95": 16.7,
+       "panP95": 16.8,
        "zoomP95": 16.7,
        "p50": 16.7,
        "p95": 16.8,
-       "max": 16.8,
-       "frames": 833,
+       "max": 33.3,
+       "frames": 830,
        "drawP50Ms": 0,
-       "drawP95Ms": 0.1,
-       "gpuFrameMs": 2.95
+       "drawP95Ms": 0.2,
+       "gpuFrameMs": 4.84
       },
       {
        "origin": "wembley-park",
-       "morphP50": 16.7,
-       "morphP95": 16.8,
-       "panP50": 16.7,
-       "panP95": 16.8,
-       "zoomP95": 16.8,
-       "p50": 16.7,
-       "p95": 16.8,
-       "max": 16.8,
-       "frames": 833,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.1,
-       "gpuFrameMs": 4.3
-      },
-      {
-       "origin": "canary-wharf",
-       "morphP50": 16.7,
-       "morphP95": 16.8,
-       "panP50": 16.7,
-       "panP95": 16.7,
-       "zoomP95": 16.8,
-       "p50": 16.7,
-       "p95": 16.7,
-       "max": 16.8,
-       "frames": 832,
-       "drawP50Ms": 0,
-       "drawP95Ms": 0.1,
-       "gpuFrameMs": 4.53
-      },
-      {
-       "origin": "heathrow",
-       "morphP50": 16.7,
-       "morphP95": 16.8,
-       "panP50": 16.7,
-       "panP95": 16.7,
-       "zoomP95": 16.8,
-       "p50": 16.7,
-       "p95": 16.8,
-       "max": 16.8,
-       "frames": 832,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.2,
-       "gpuFrameMs": 2.82
-      },
-      {
-       "origin": "croydon",
        "morphP50": 16.7,
        "morphP95": 16.7,
        "panP50": 16.7,
@@ -2321,110 +2276,155 @@
        "p95": 16.7,
        "max": 16.8,
        "frames": 832,
-       "drawP50Ms": 0.1,
+       "drawP50Ms": 0,
        "drawP95Ms": 0.1,
-       "gpuFrameMs": 4.31
+       "gpuFrameMs": 4.14
+      },
+      {
+       "origin": "canary-wharf",
+       "morphP50": 16.7,
+       "morphP95": 16.8,
+       "panP50": 16.7,
+       "panP95": 16.8,
+       "zoomP95": 16.8,
+       "p50": 16.7,
+       "p95": 16.8,
+       "max": 16.8,
+       "frames": 833,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.1,
+       "gpuFrameMs": 4.96
+      },
+      {
+       "origin": "heathrow",
+       "morphP50": 16.7,
+       "morphP95": 16.7,
+       "panP50": 16.7,
+       "panP95": 16.8,
+       "zoomP95": 16.7,
+       "p50": 16.7,
+       "p95": 16.8,
+       "max": 16.8,
+       "frames": 832,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.1,
+       "gpuFrameMs": 4.74
+      },
+      {
+       "origin": "croydon",
+       "morphP50": 16.7,
+       "morphP95": 16.8,
+       "panP50": 16.7,
+       "panP95": 16.7,
+       "zoomP95": 16.7,
+       "p50": 16.7,
+       "p95": 16.7,
+       "max": 16.8,
+       "frames": 833,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.1,
+       "gpuFrameMs": 4.2
       }
      ],
      "chord": [
       {
        "origin": "baker-street",
        "folds": {
-        "foldedShare": 0.19701052363574642,
-        "foldedSheets": 0.28065611136096136,
-        "medianStretch": 5.752070146585066
+        "foldedShare": 0.24826374154855865,
+        "foldedSheets": 0.367040954059592,
+        "medianStretch": 4.8653894454892574
        },
-       "within1px": 1,
-       "p99Px": 0.238,
+       "within1px": 0.9976,
+       "p99Px": 0.268,
        "nearFold": {
-        "samples": 868,
-        "within1px": 0.9931,
-        "p99Px": 0.653
+        "samples": 855,
+        "within1px": 0.9673,
+        "p99Px": 3.917
        },
        "crossing": {
-        "primitives": 257,
-        "longestEdgeAtHalfPx": 18,
-        "p99EdgeAtHalfPx": 16.2
+        "primitives": 522,
+        "longestEdgeAtHalfPx": 21.1,
+        "p99EdgeAtHalfPx": 18.2
        }
       },
       {
        "origin": "wembley-park",
        "folds": {
-        "foldedShare": 0.08502362160174262,
-        "foldedSheets": 0.1270275841927563,
-        "medianStretch": 5.827037504895857
+        "foldedShare": 0.1921518289060511,
+        "foldedSheets": 0.3010435742071445,
+        "medianStretch": 3.151212005640365
        },
        "within1px": 1,
-       "p99Px": 0.227,
+       "p99Px": 0.179,
        "nearFold": {
-        "samples": 757,
-        "within1px": 0.9908,
-        "p99Px": 0.843
+        "samples": 869,
+        "within1px": 0.985,
+        "p99Px": 5.553
        },
        "crossing": {
         "primitives": 333,
-        "longestEdgeAtHalfPx": 15.8,
-        "p99EdgeAtHalfPx": 15.7
+        "longestEdgeAtHalfPx": 18.8,
+        "p99EdgeAtHalfPx": 18.8
        }
       },
       {
        "origin": "canary-wharf",
        "folds": {
-        "foldedShare": 0.19187954397578433,
-        "foldedSheets": 0.2487725523341122,
-        "medianStretch": 5.552097489683034
+        "foldedShare": 0.25386856771054345,
+        "foldedSheets": 0.34917968259190835,
+        "medianStretch": 4.090828797612521
        },
-       "within1px": 0.9946,
-       "p99Px": 0.462,
+       "within1px": 0.9991,
+       "p99Px": 0.258,
        "nearFold": {
-        "samples": 751,
-        "within1px": 0.9241,
-        "p99Px": 7.374
+        "samples": 812,
+        "within1px": 0.9421,
+        "p99Px": 7.685
        },
        "crossing": {
-        "primitives": 196,
-        "longestEdgeAtHalfPx": 25.6,
-        "p99EdgeAtHalfPx": 25.6
+        "primitives": 269,
+        "longestEdgeAtHalfPx": 25.7,
+        "p99EdgeAtHalfPx": 24.8
        }
       },
       {
        "origin": "heathrow",
        "folds": {
-        "foldedShare": 0.12802695974426434,
-        "foldedSheets": 0.1752924406979488,
-        "medianStretch": 4.7804891926042785
+        "foldedShare": 0.24141772044470847,
+        "foldedSheets": 0.3543030770201418,
+        "medianStretch": 3.1436304028108046
        },
        "within1px": 1,
-       "p99Px": 0.074,
+       "p99Px": 0.133,
        "nearFold": {
-        "samples": 674,
-        "within1px": 0.9659,
-        "p99Px": 7.847
+        "samples": 503,
+        "within1px": 0.9583,
+        "p99Px": 8.206
        },
        "crossing": {
         "primitives": 139,
-        "longestEdgeAtHalfPx": 11,
-        "p99EdgeAtHalfPx": 2.3
+        "longestEdgeAtHalfPx": 11.2,
+        "p99EdgeAtHalfPx": 2.5
        }
       },
       {
        "origin": "croydon",
        "folds": {
-        "foldedShare": 0.09267235282469094,
-        "foldedSheets": 0.12674589431568573,
-        "medianStretch": 6.7403926563154
+        "foldedShare": 0.19381736399898158,
+        "foldedSheets": 0.2782124625900398,
+        "medianStretch": 3.5601090718537636
        },
-       "within1px": 0.9989,
-       "p99Px": 0.159,
+       "within1px": 0.9975,
+       "p99Px": 0.616,
        "nearFold": {
-        "samples": 763,
-        "within1px": 0.9581,
-        "p99Px": 8.581
+        "samples": 712,
+        "within1px": 0.9621,
+        "p99Px": 12.411
        },
        "crossing": {
         "primitives": 448,
-        "longestEdgeAtHalfPx": 14.2,
-        "p99EdgeAtHalfPx": 12.4
+        "longestEdgeAtHalfPx": 17.2,
+        "p99EdgeAtHalfPx": 14.8
        }
       }
      ]
@@ -2434,20 +2434,20 @@
      "cold": [
       {
        "origin": "baker-street",
-       "ms": 29.8,
+       "ms": 17.8,
        "failed": null,
-       "fieldMs": 6.7,
+       "fieldMs": 14.7,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
        "shaded": 86994,
-       "bytes": 696015,
+       "bytes": 807551,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 8.5,
-       "tessMs": 6.4,
-       "packMs": 1.9,
-       "uploadMs": 0.5,
+       "workerMs": 9.7,
+       "tessMs": 4.4,
+       "packMs": 5.2,
+       "uploadMs": 0.1,
        "peakResident": 76104,
        "rings": [
         1000,
@@ -2458,20 +2458,20 @@
       },
       {
        "origin": "wembley-park",
-       "ms": 15.4,
+       "ms": 12.7,
        "failed": null,
-       "fieldMs": 5.9,
+       "fieldMs": 7.2,
        "tiles": 16,
        "fetched": 0,
        "missing": 0,
        "shaded": 36070,
-       "bytes": 198052,
+       "bytes": 249668,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 2.3,
-       "tessMs": 1.3,
-       "packMs": 0.6,
-       "uploadMs": 0.1,
+       "workerMs": 3.2,
+       "tessMs": 1,
+       "packMs": 2.2,
+       "uploadMs": 0.2,
        "peakResident": 20866,
        "rings": [
         1000,
@@ -2482,19 +2482,19 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 23.4,
+       "ms": 7.3,
        "failed": null,
-       "fieldMs": 5.5,
+       "fieldMs": 6.7,
        "tiles": 14,
        "fetched": 0,
        "missing": 0,
        "shaded": 54622,
-       "bytes": 466198,
+       "bytes": 535030,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 3.3,
-       "tessMs": 2.5,
-       "packMs": 0.8,
+       "workerMs": 5.4,
+       "tessMs": 2.4,
+       "packMs": 3,
        "uploadMs": 0.1,
        "peakResident": 46666,
        "rings": [
@@ -2506,20 +2506,20 @@
       },
       {
        "origin": "heathrow",
-       "ms": 12.3,
+       "ms": 7.3,
        "failed": null,
-       "fieldMs": 5.8,
+       "fieldMs": 5.5,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
        "shaded": 11401,
-       "bytes": 118582,
+       "bytes": 133798,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 1,
-       "tessMs": 0.7,
-       "packMs": 0.2,
-       "uploadMs": 0.3,
+       "workerMs": 1.4,
+       "tessMs": 0.6,
+       "packMs": 0.8,
+       "uploadMs": 0.1,
        "peakResident": 7801,
        "rings": [
         1000,
@@ -2530,19 +2530,19 @@
       },
       {
        "origin": "croydon",
-       "ms": 18.4,
+       "ms": 13.9,
        "failed": null,
-       "fieldMs": 4.5,
+       "fieldMs": 5.4,
        "tiles": 24,
        "fetched": 0,
        "missing": 0,
        "shaded": 35877,
-       "bytes": 164148,
+       "bytes": 214340,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 1.5,
+       "workerMs": 2.9,
        "tessMs": 0.9,
-       "packMs": 0.6,
+       "packMs": 2,
        "uploadMs": 0.1,
        "peakResident": 19485,
        "rings": [
@@ -2556,162 +2556,162 @@
      "warm": [
       {
        "origin": "baker-street",
-       "ms": 19.4,
+       "ms": 13.3,
        "failed": null,
-       "workerMs": 4,
-       "uploadMs": 0.2,
+       "workerMs": 7.1,
+       "uploadMs": 0.1,
        "cacheHits": 0
       },
       {
        "origin": "wembley-park",
-       "ms": 5.9,
+       "ms": 11.1,
        "failed": null,
-       "workerMs": 1,
-       "uploadMs": 0.1,
+       "workerMs": 2.2,
+       "uploadMs": 0.2,
        "cacheHits": 1
       },
       {
        "origin": "canary-wharf",
-       "ms": 11.9,
+       "ms": 11.7,
        "failed": null,
-       "workerMs": 3,
-       "uploadMs": 0.1,
-       "cacheHits": 0
-      },
-      {
-       "origin": "heathrow",
-       "ms": 14.1,
-       "failed": null,
-       "workerMs": 5.6,
-       "uploadMs": 0.1,
-       "cacheHits": 0
-      },
-      {
-       "origin": "croydon",
-       "ms": 12.5,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.1,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 11.9,
-       "failed": null,
-       "workerMs": 1.6,
+       "workerMs": 4.8,
        "uploadMs": 0,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 13,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.2,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 9.7,
-       "failed": null,
-       "workerMs": 1.2,
-       "uploadMs": 0.1,
-       "cacheHits": 14
+       "cacheHits": 0
       },
       {
        "origin": "heathrow",
-       "ms": 11.6,
-       "failed": null,
-       "workerMs": 0.3,
-       "uploadMs": 0.1,
-       "cacheHits": 10
-      },
-      {
-       "origin": "croydon",
-       "ms": 13.4,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.1,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 14.9,
+       "ms": 10.5,
        "failed": null,
        "workerMs": 2,
        "uploadMs": 0.1,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 10.3,
-       "failed": null,
-       "workerMs": 0.3,
-       "uploadMs": 0,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 10.1,
-       "failed": null,
-       "workerMs": 1.1,
-       "uploadMs": 0.1,
-       "cacheHits": 14
-      },
-      {
-       "origin": "heathrow",
-       "ms": 15.2,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.1,
-       "cacheHits": 10
+       "cacheHits": 0
       },
       {
        "origin": "croydon",
-       "ms": 9.4,
+       "ms": 11.6,
        "failed": null,
-       "workerMs": 0.4,
+       "workerMs": 1.5,
        "uploadMs": 0.1,
        "cacheHits": 24
       },
       {
        "origin": "baker-street",
-       "ms": 10.2,
+       "ms": 10.8,
        "failed": null,
-       "workerMs": 2.2,
+       "workerMs": 4.9,
        "uploadMs": 0.1,
        "cacheHits": 10
       },
       {
        "origin": "wembley-park",
-       "ms": 17.3,
+       "ms": 13.1,
        "failed": null,
-       "workerMs": 0.4,
+       "workerMs": 1.8,
        "uploadMs": 0.1,
        "cacheHits": 16
       },
       {
        "origin": "canary-wharf",
-       "ms": 8.7,
+       "ms": 11.1,
        "failed": null,
-       "workerMs": 1.1,
-       "uploadMs": 0.1,
+       "workerMs": 3,
+       "uploadMs": 0,
        "cacheHits": 14
       },
       {
        "origin": "heathrow",
-       "ms": 15.1,
+       "ms": 11.3,
        "failed": null,
-       "workerMs": 0.3,
+       "workerMs": 1.1,
        "uploadMs": 0.1,
        "cacheHits": 10
       },
       {
        "origin": "croydon",
-       "ms": 7.4,
+       "ms": 8.3,
        "failed": null,
-       "workerMs": 0.4,
+       "workerMs": 1.6,
        "uploadMs": 0.1,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 13.1,
+       "failed": null,
+       "workerMs": 5,
+       "uploadMs": 0.1,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 10.6,
+       "failed": null,
+       "workerMs": 1.8,
+       "uploadMs": 0.1,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 10.9,
+       "failed": null,
+       "workerMs": 3.1,
+       "uploadMs": 0,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 14.2,
+       "failed": null,
+       "workerMs": 1,
+       "uploadMs": 0.1,
+       "cacheHits": 10
+      },
+      {
+       "origin": "croydon",
+       "ms": 8.1,
+       "failed": null,
+       "workerMs": 1.2,
+       "uploadMs": 0.1,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 12.1,
+       "failed": null,
+       "workerMs": 5.2,
+       "uploadMs": 0.2,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 15,
+       "failed": null,
+       "workerMs": 1.8,
+       "uploadMs": 0.1,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 10.6,
+       "failed": null,
+       "workerMs": 3.1,
+       "uploadMs": 0,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 8.7,
+       "failed": null,
+       "workerMs": 0.7,
+       "uploadMs": 0.1,
+       "cacheHits": 10
+      },
+      {
+       "origin": "croydon",
+       "ms": 14.8,
+       "failed": null,
+       "workerMs": 1.4,
+       "uploadMs": 0,
        "cacheHits": 24
       }
      ],
@@ -2722,10 +2722,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
-       "p99Px": 0.081,
+       "p99Px": 0.095,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -2742,7 +2742,7 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
        "p99Px": 0.035,
@@ -2762,10 +2762,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
-       "p99Px": 0.063,
+       "p99Px": 0.073,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -2782,7 +2782,7 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
        "p99Px": 0.036,
@@ -2802,10 +2802,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
-       "p99Px": 0.036,
+       "p99Px": 0.034,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -2813,8 +2813,8 @@
        },
        "crossing": {
         "primitives": 8,
-        "longestEdgeAtHalfPx": 2.9,
-        "p99EdgeAtHalfPx": 2.9
+        "longestEdgeAtHalfPx": 2.8,
+        "p99EdgeAtHalfPx": 2.8
        }
       }
      ]
@@ -2824,20 +2824,20 @@
      "cold": [
       {
        "origin": "baker-street",
-       "ms": 9.4,
+       "ms": 11.9,
        "failed": null,
-       "fieldMs": 5.5,
+       "fieldMs": 6,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
        "shaded": 86994,
-       "bytes": 696015,
+       "bytes": 807551,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 4.1,
-       "tessMs": 2.7,
-       "packMs": 1.4,
-       "uploadMs": 0,
+       "workerMs": 7.2,
+       "tessMs": 2.4,
+       "packMs": 4.7,
+       "uploadMs": 0.1,
        "peakResident": 76104,
        "rings": [
         1000,
@@ -2848,20 +2848,20 @@
       },
       {
        "origin": "wembley-park",
-       "ms": 14.4,
+       "ms": 17.9,
        "failed": null,
-       "fieldMs": 6,
+       "fieldMs": 6.5,
        "tiles": 16,
        "fetched": 0,
        "missing": 0,
        "shaded": 36070,
-       "bytes": 198052,
+       "bytes": 249668,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 1.1,
-       "tessMs": 0.6,
-       "packMs": 0.4,
-       "uploadMs": 0.1,
+       "workerMs": 2.5,
+       "tessMs": 1,
+       "packMs": 1.5,
+       "uploadMs": 0,
        "peakResident": 20866,
        "rings": [
         1000,
@@ -2872,20 +2872,20 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 15.7,
+       "ms": 13.2,
        "failed": null,
-       "fieldMs": 6.1,
+       "fieldMs": 5.7,
        "tiles": 14,
        "fetched": 0,
        "missing": 0,
        "shaded": 54622,
-       "bytes": 466198,
+       "bytes": 535030,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 3,
-       "tessMs": 1.8,
-       "packMs": 0.9,
-       "uploadMs": 0.1,
+       "workerMs": 5.1,
+       "tessMs": 1.9,
+       "packMs": 3.1,
+       "uploadMs": 0,
        "peakResident": 46666,
        "rings": [
         1000,
@@ -2896,20 +2896,20 @@
       },
       {
        "origin": "heathrow",
-       "ms": 15.1,
+       "ms": 9.8,
        "failed": null,
-       "fieldMs": 5.3,
+       "fieldMs": 5.8,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
        "shaded": 11401,
-       "bytes": 118582,
+       "bytes": 133798,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 0.7,
-       "tessMs": 0.5,
-       "packMs": 0.2,
-       "uploadMs": 0.2,
+       "workerMs": 1.6,
+       "tessMs": 0.7,
+       "packMs": 0.7,
+       "uploadMs": 0,
        "peakResident": 7801,
        "rings": [
         1000,
@@ -2920,20 +2920,20 @@
       },
       {
        "origin": "croydon",
-       "ms": 21.3,
+       "ms": 12.7,
        "failed": null,
-       "fieldMs": 5.3,
+       "fieldMs": 5.9,
        "tiles": 24,
        "fetched": 0,
        "missing": 0,
        "shaded": 35877,
-       "bytes": 164148,
+       "bytes": 214340,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 1.4,
-       "tessMs": 0.9,
-       "packMs": 0.4,
-       "uploadMs": 0,
+       "workerMs": 2.1,
+       "tessMs": 0.6,
+       "packMs": 1.5,
+       "uploadMs": 0.1,
        "peakResident": 19485,
        "rings": [
         1000,
@@ -2946,162 +2946,162 @@
      "warm": [
       {
        "origin": "baker-street",
-       "ms": 18.5,
+       "ms": 10.7,
        "failed": null,
-       "workerMs": 4.6,
+       "workerMs": 6.9,
        "uploadMs": 0.1,
        "cacheHits": 0
       },
       {
        "origin": "wembley-park",
-       "ms": 6.2,
+       "ms": 12.6,
        "failed": null,
-       "workerMs": 1.1,
-       "uploadMs": 0,
+       "workerMs": 3.2,
+       "uploadMs": 0.1,
        "cacheHits": 1
       },
       {
        "origin": "canary-wharf",
-       "ms": 16.2,
+       "ms": 9.2,
        "failed": null,
-       "workerMs": 3.7,
+       "workerMs": 4.8,
        "uploadMs": 0,
        "cacheHits": 0
       },
       {
        "origin": "heathrow",
-       "ms": 5.2,
+       "ms": 12.6,
        "failed": null,
-       "workerMs": 0.7,
+       "workerMs": 2,
        "uploadMs": 0.1,
        "cacheHits": 0
       },
       {
        "origin": "croydon",
-       "ms": 17.8,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.1,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 7.4,
-       "failed": null,
-       "workerMs": 1.7,
-       "uploadMs": 0.2,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 12.2,
-       "failed": null,
-       "workerMs": 0.5,
-       "uploadMs": 0.1,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 12.7,
-       "failed": null,
-       "workerMs": 0.9,
-       "uploadMs": 0.1,
-       "cacheHits": 14
-      },
-      {
-       "origin": "heathrow",
-       "ms": 9.5,
-       "failed": null,
-       "workerMs": 0.3,
-       "uploadMs": 0.1,
-       "cacheHits": 10
-      },
-      {
-       "origin": "croydon",
-       "ms": 12.1,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.1,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 10.7,
-       "failed": null,
-       "workerMs": 1.6,
-       "uploadMs": 0.2,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 11,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.1,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 11.3,
-       "failed": null,
-       "workerMs": 0.9,
-       "uploadMs": 0.1,
-       "cacheHits": 14
-      },
-      {
-       "origin": "heathrow",
-       "ms": 7.3,
-       "failed": null,
-       "workerMs": 0.3,
-       "uploadMs": 0.4,
-       "cacheHits": 10
-      },
-      {
-       "origin": "croydon",
-       "ms": 13.6,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.2,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 15.3,
-       "failed": null,
-       "workerMs": 1.8,
-       "uploadMs": 0.1,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 10,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 6.1,
+       "ms": 9,
        "failed": null,
        "workerMs": 1.3,
        "uploadMs": 0.1,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 14,
+       "failed": null,
+       "workerMs": 4.9,
+       "uploadMs": 0.2,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 9.7,
+       "failed": null,
+       "workerMs": 2.1,
+       "uploadMs": 0,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 10.4,
+       "failed": null,
+       "workerMs": 3.1,
+       "uploadMs": 0.1,
        "cacheHits": 14
       },
       {
        "origin": "heathrow",
-       "ms": 17.7,
+       "ms": 11.6,
        "failed": null,
-       "workerMs": 0.2,
-       "uploadMs": 0,
+       "workerMs": 1.4,
+       "uploadMs": 0.2,
        "cacheHits": 10
       },
       {
        "origin": "croydon",
-       "ms": 8.1,
+       "ms": 7,
        "failed": null,
-       "workerMs": 0.4,
+       "workerMs": 1.2,
+       "uploadMs": 0.1,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 12.1,
+       "failed": null,
+       "workerMs": 4.6,
+       "uploadMs": 0.1,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 11.1,
+       "failed": null,
+       "workerMs": 1.6,
        "uploadMs": 0,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 10.5,
+       "failed": null,
+       "workerMs": 3.5,
+       "uploadMs": 0.1,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 10.9,
+       "failed": null,
+       "workerMs": 0.7,
+       "uploadMs": 0.1,
+       "cacheHits": 10
+      },
+      {
+       "origin": "croydon",
+       "ms": 10.1,
+       "failed": null,
+       "workerMs": 1.3,
+       "uploadMs": 0.1,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 8.9,
+       "failed": null,
+       "workerMs": 4.6,
+       "uploadMs": 0.1,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 9.3,
+       "failed": null,
+       "workerMs": 2.1,
+       "uploadMs": 0.1,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 14.6,
+       "failed": null,
+       "workerMs": 2.9,
+       "uploadMs": 0,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 10.1,
+       "failed": null,
+       "workerMs": 0.9,
+       "uploadMs": 0.1,
+       "cacheHits": 10
+      },
+      {
+       "origin": "croydon",
+       "ms": 11,
+       "failed": null,
+       "workerMs": 1.2,
+       "uploadMs": 0.1,
        "cacheHits": 24
       }
      ],
@@ -3112,10 +3112,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
-       "within1px": 0.9991,
-       "p99Px": 0.097,
+       "within1px": 0.9996,
+       "p99Px": 0.135,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -3132,10 +3132,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
-       "within1px": 0.9419,
-       "p99Px": 2.199,
+       "within1px": 0.9492,
+       "p99Px": 2.117,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -3152,10 +3152,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
        "within1px": 0.9985,
-       "p99Px": 0.059,
+       "p99Px": 0.091,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -3163,8 +3163,8 @@
        },
        "crossing": {
         "primitives": 88,
-        "longestEdgeAtHalfPx": 8.2,
-        "p99EdgeAtHalfPx": 8.2
+        "longestEdgeAtHalfPx": 8.3,
+        "p99EdgeAtHalfPx": 8.3
        }
       },
       {
@@ -3172,10 +3172,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
-       "within1px": 0.9984,
-       "p99Px": 0.233,
+       "within1px": 1,
+       "p99Px": 0.298,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -3183,8 +3183,8 @@
        },
        "crossing": {
         "primitives": 4,
-        "longestEdgeAtHalfPx": 8.3,
-        "p99EdgeAtHalfPx": 8.3
+        "longestEdgeAtHalfPx": 8.5,
+        "p99EdgeAtHalfPx": 8.5
        }
       },
       {
@@ -3192,10 +3192,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
        "within1px": 1,
-       "p99Px": 0.049,
+       "p99Px": 0.071,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -3203,8 +3203,8 @@
        },
        "crossing": {
         "primitives": 7,
-        "longestEdgeAtHalfPx": 12.5,
-        "p99EdgeAtHalfPx": 12.5
+        "longestEdgeAtHalfPx": 12.6,
+        "p99EdgeAtHalfPx": 12.6
        }
       }
      ]
@@ -3216,154 +3216,154 @@
      "shaded": 167641,
      "fillVerts": 15307,
      "segments": 13576,
-     "bytes": 1117195,
-     "tessMs": 4.3,
+     "bytes": 1334411,
+     "tessMs": 4.4,
      "chord": {
-      "samples": 2591,
-      "within1px": 0.9915,
-      "p99Px": 0.939,
-      "maxPx": 3.032,
+      "samples": 2529,
+      "within1px": 0.9905,
+      "p99Px": 0.916,
+      "maxPx": 7.045,
       "byZoom": {
        "10": {
-        "samples": 83,
+        "samples": 82,
         "within1px": 1,
-        "p99Px": 0.21
+        "p99Px": 0.171
        },
        "12": {
-        "samples": 1019,
-        "within1px": 0.9872,
-        "p99Px": 1.138
+        "samples": 1113,
+        "within1px": 0.9802,
+        "p99Px": 1.846
        },
        "13": {
-        "samples": 227,
-        "within1px": 0.9648,
-        "p99Px": 1.527
+        "samples": 209,
+        "within1px": 0.9904,
+        "p99Px": 0.916
        },
        "14": {
-        "samples": 1262,
-        "within1px": 0.9992,
-        "p99Px": 0.57
+        "samples": 1125,
+        "within1px": 1,
+        "p99Px": 0.596
        }
       },
       "nearFold": {
-       "samples": 1499,
-       "within1px": 0.9633,
-       "p99Px": 2.948
+       "samples": 1735,
+       "within1px": 0.9527,
+       "p99Px": 5.266
       },
       "nearNoData": {
-       "samples": 602,
-       "within1px": 0.3455,
-       "p99Px": 19.11
+       "samples": 552,
+       "within1px": 0.346,
+       "p99Px": 18.493
       },
-      "invisible": 1308,
+      "invisible": 1184,
       "crossingOuterMinute": {
        "primitives": 326,
-       "longestEdgeAtHalfPx": 25.5,
-       "p99EdgeAtHalfPx": 24.7
+       "longestEdgeAtHalfPx": 26.8,
+       "p99EdgeAtHalfPx": 25.7
       }
      }
     },
     {
      "spacingDiv": 128,
-     "shaded": 296838,
-     "fillVerts": 5352,
-     "segments": 26023,
-     "bytes": 1344039,
-     "tessMs": 4.3,
+     "shaded": 346195,
+     "fillVerts": 42733,
+     "segments": 27021,
+     "bytes": 3146374,
+     "tessMs": 3.6,
      "chord": {
-      "samples": 1690,
-      "within1px": 0.997,
-      "p99Px": 0.268,
-      "maxPx": 1.97,
+      "samples": 2494,
+      "within1px": 0.9992,
+      "p99Px": 0.281,
+      "maxPx": 1.377,
       "byZoom": {
        "10": {
-        "samples": 126,
+        "samples": 71,
         "within1px": 1,
-        "p99Px": 0.113
+        "p99Px": 0.146
        },
        "12": {
-        "samples": 1128,
-        "within1px": 0.9956,
-        "p99Px": 0.268
+        "samples": 1119,
+        "within1px": 0.9982,
+        "p99Px": 0.271
        },
        "13": {
-        "samples": 224,
+        "samples": 211,
         "within1px": 1,
-        "p99Px": 0.3
+        "p99Px": 0.533
        },
        "14": {
-        "samples": 212,
+        "samples": 1093,
         "within1px": 1,
-        "p99Px": 0.11
+        "p99Px": 0.281
        }
       },
       "nearFold": {
-       "samples": 1763,
-       "within1px": 0.9892,
-       "p99Px": 1.016
+       "samples": 1724,
+       "within1px": 0.9826,
+       "p99Px": 1.864
       },
       "nearNoData": {
-       "samples": 406,
-       "within1px": 0.6281,
-       "p99Px": 12.225
+       "samples": 608,
+       "within1px": 0.4161,
+       "p99Px": 16.426
       },
-      "invisible": 2141,
+      "invisible": 1174,
       "crossingOuterMinute": {
-       "primitives": 257,
-       "longestEdgeAtHalfPx": 18,
-       "p99EdgeAtHalfPx": 16.2
+       "primitives": 522,
+       "longestEdgeAtHalfPx": 21.1,
+       "p99EdgeAtHalfPx": 18.2
       }
      }
     },
     {
      "spacingDiv": 256,
-     "shaded": 298824,
-     "fillVerts": 0,
-     "segments": 28119,
-     "bytes": 1265355,
-     "tessMs": 15.4,
+     "shaded": 728250,
+     "fillVerts": 125364,
+     "segments": 53673,
+     "bytes": 8016225,
+     "tessMs": 15.2,
      "chord": {
-      "samples": 2037,
+      "samples": 2457,
       "within1px": 1,
-      "p99Px": 0.081,
-      "maxPx": 0.523,
+      "p99Px": 0.088,
+      "maxPx": 0.364,
       "byZoom": {
        "10": {
-        "samples": 99,
+        "samples": 77,
         "within1px": 1,
-        "p99Px": 0.048
+        "p99Px": 0.037
        },
        "12": {
-        "samples": 1268,
+        "samples": 1094,
         "within1px": 1,
-        "p99Px": 0.083
+        "p99Px": 0.076
        },
        "13": {
-        "samples": 347,
+        "samples": 193,
         "within1px": 1,
-        "p99Px": 0.162
+        "p99Px": 0.093
        },
        "14": {
-        "samples": 323,
+        "samples": 1093,
         "within1px": 1,
-        "p99Px": 0.026
+        "p99Px": 0.1
        }
       },
       "nearFold": {
-       "samples": 1930,
-       "within1px": 0.9943,
-       "p99Px": 0.334
+       "samples": 1745,
+       "within1px": 0.9891,
+       "p99Px": 1.112
       },
       "nearNoData": {
-       "samples": 456,
-       "within1px": 0.7434,
-       "p99Px": 7.729
+       "samples": 649,
+       "within1px": 0.641,
+       "p99Px": 7.242
       },
-      "invisible": 1577,
+      "invisible": 1149,
       "crossingOuterMinute": {
-       "primitives": 85,
-       "longestEdgeAtHalfPx": 12.9,
-       "p99EdgeAtHalfPx": 12.9
+       "primitives": 897,
+       "longestEdgeAtHalfPx": 13.7,
+       "p99EdgeAtHalfPx": 13.3
       }
      }
     }
@@ -3378,35 +3378,35 @@
      "worstP50": 16.7,
      "worstP95": 16.8,
      "drawP95Ms": 0.2,
-     "gpuFrameMs": 4.53,
+     "gpuFrameMs": 4.96,
      "note": "frame intervals are capped by vsync; the gate is judged on the phones"
     },
     "G7_originChange": {
-     "p50": 11.5,
-     "p95": 18.7,
+     "p50": 12.1,
+     "p95": 28.2,
      "pass": true
     },
     "G8_newOrigin": {
-     "p95NoNetwork": 38.9,
+     "p95NoNetwork": 43.6,
      "pass": null,
      "note": "not measured: synthetic geometry makes no request"
     },
     "G9_budget": {
-     "maxShaded": 298848,
+     "maxShaded": 346195,
      "maxTiles": 41,
      "overBudget": false
     },
     "failures": 0,
     "spacing": [
-     "spacing 64: 167641 shaded, 99.15% \u2264 1 px, p99 0.939 px",
-     "spacing 128: 296838 shaded, 99.70% \u2264 1 px, p99 0.268 px",
-     "spacing 256: 298824 shaded, 100.00% \u2264 1 px, p99 0.081 px"
+     "spacing 64: 167641 shaded, 99.05% \u2264 1 px, p99 0.916 px",
+     "spacing 128: 346195 shaded, 99.92% \u2264 1 px, p99 0.281 px",
+     "spacing 256: 728250 shaded, 100.00% \u2264 1 px, p99 0.088 px"
     ]
    }
   },
   "a": {
    "kind": "bench",
-   "at": "2026-11-13T12:15:32.223Z",
+   "at": "2026-11-13T14:14:18.405Z",
    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
    "backend": "a",
    "geom": "synthetic",
@@ -3429,24 +3429,20 @@
      "cold": [
       {
        "origin": "baker-street",
-       "ms": 42,
+       "ms": 58.3,
        "failed": null,
-       "fieldMs": 11.9,
+       "fieldMs": 9,
        "tiles": 27,
        "fetched": 0,
        "missing": 0,
-       "shaded": 296838,
-       "bytes": 1344039,
+       "shaded": 346195,
+       "bytes": 3146374,
        "overBudget": false,
-       "dropped": {
-        "secondary": 47,
-        "park": 20,
-        "water": 10
-       },
-       "workerMs": 28.2,
-       "tessMs": 9.7,
-       "packMs": 18.1,
-       "uploadMs": 8.7,
+       "dropped": {},
+       "workerMs": 40.9,
+       "tessMs": 8.1,
+       "packMs": 32.6,
+       "uploadMs": 11.9,
        "peakResident": 241459,
        "rings": [
         1000,
@@ -3457,20 +3453,20 @@
       },
       {
        "origin": "wembley-park",
-       "ms": 39.4,
+       "ms": 40.5,
        "failed": null,
-       "fieldMs": 8.1,
+       "fieldMs": 7.3,
        "tiles": 28,
        "fetched": 0,
        "missing": 0,
        "shaded": 231149,
-       "bytes": 1779641,
+       "bytes": 2074073,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 25.8,
-       "tessMs": 6.7,
-       "packMs": 18.7,
-       "uploadMs": 8.8,
+       "workerMs": 21.9,
+       "tessMs": 3.7,
+       "packMs": 17.8,
+       "uploadMs": 5.7,
        "peakResident": 181307,
        "rings": [
         1000,
@@ -3481,23 +3477,20 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 38.4,
+       "ms": 35.6,
        "failed": null,
-       "fieldMs": 6.2,
+       "fieldMs": 6.7,
        "tiles": 34,
        "fetched": 0,
        "missing": 0,
-       "shaded": 298848,
-       "bytes": 1683690,
+       "shaded": 324823,
+       "bytes": 3037733,
        "overBudget": false,
-       "dropped": {
-        "park": 18,
-        "water": 9
-       },
-       "workerMs": 18.6,
-       "tessMs": 10.6,
-       "packMs": 7.9,
-       "uploadMs": 6.9,
+       "dropped": {},
+       "workerMs": 21.1,
+       "tessMs": 5.5,
+       "packMs": 15.5,
+       "uploadMs": 8.1,
        "peakResident": 236761,
        "rings": [
         1000,
@@ -3508,20 +3501,20 @@
       },
       {
        "origin": "heathrow",
-       "ms": 25.3,
+       "ms": 24.3,
        "failed": null,
-       "fieldMs": 5.7,
+       "fieldMs": 5.6,
        "tiles": 20,
        "fetched": 0,
        "missing": 0,
        "shaded": 216455,
-       "bytes": 1985168,
+       "bytes": 2250816,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 14.5,
-       "tessMs": 4.2,
+       "workerMs": 14.2,
+       "tessMs": 3.8,
        "packMs": 10.3,
-       "uploadMs": 6.2,
+       "uploadMs": 6.3,
        "peakResident": 134507,
        "rings": [
         1000,
@@ -3532,20 +3525,20 @@
       },
       {
        "origin": "croydon",
-       "ms": 32.5,
+       "ms": 30.8,
        "failed": null,
-       "fieldMs": 5.2,
+       "fieldMs": 5.8,
        "tiles": 41,
        "fetched": 0,
        "missing": 0,
        "shaded": 287842,
-       "bytes": 2362114,
+       "bytes": 2718690,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 12.4,
-       "tessMs": 8.4,
-       "packMs": 3.6,
-       "uploadMs": 8.2,
+       "workerMs": 19,
+       "tessMs": 4.9,
+       "packMs": 14.1,
+       "uploadMs": 7.3,
        "peakResident": 196306,
        "rings": [
         1000,
@@ -3558,162 +3551,162 @@
      "warm": [
       {
        "origin": "baker-street",
-       "ms": 19.9,
+       "ms": 34.7,
        "failed": null,
-       "workerMs": 8.2,
-       "uploadMs": 4.6,
+       "workerMs": 19.4,
+       "uploadMs": 8.2,
        "cacheHits": 8
       },
       {
        "origin": "wembley-park",
-       "ms": 14.4,
+       "ms": 29.4,
        "failed": null,
-       "workerMs": 5,
-       "uploadMs": 5.3,
+       "workerMs": 12.6,
+       "uploadMs": 5,
        "cacheHits": 10
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 30.6,
+       "failed": null,
+       "workerMs": 18.4,
+       "uploadMs": 7.9,
+       "cacheHits": 13
+      },
+      {
+       "origin": "heathrow",
+       "ms": 22.1,
+       "failed": null,
+       "workerMs": 11.6,
+       "uploadMs": 6.1,
+       "cacheHits": 9
+      },
+      {
+       "origin": "croydon",
+       "ms": 30.6,
+       "failed": null,
+       "workerMs": 12.9,
+       "uploadMs": 7.4,
+       "cacheHits": 41
+      },
+      {
+       "origin": "baker-street",
+       "ms": 30.1,
+       "failed": null,
+       "workerMs": 17.5,
+       "uploadMs": 8.3,
+       "cacheHits": 27
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 20,
+       "failed": null,
+       "workerMs": 10.9,
+       "uploadMs": 5.1,
+       "cacheHits": 28
       },
       {
        "origin": "canary-wharf",
        "ms": 31.9,
        "failed": null,
-       "workerMs": 7.1,
-       "uploadMs": 5.2,
-       "cacheHits": 13
+       "workerMs": 15.4,
+       "uploadMs": 7.9,
+       "cacheHits": 34
       },
       {
        "origin": "heathrow",
-       "ms": 27.1,
+       "ms": 24.8,
        "failed": null,
-       "workerMs": 4.8,
-       "uploadMs": 6.7,
-       "cacheHits": 9
+       "workerMs": 10.2,
+       "uploadMs": 6,
+       "cacheHits": 20
       },
       {
        "origin": "croydon",
-       "ms": 19.6,
+       "ms": 27.9,
        "failed": null,
-       "workerMs": 3.9,
-       "uploadMs": 8.2,
+       "workerMs": 13.3,
+       "uploadMs": 7.2,
        "cacheHits": 41
       },
       {
        "origin": "baker-street",
-       "ms": 21.9,
+       "ms": 28.8,
        "failed": null,
-       "workerMs": 3.1,
-       "uploadMs": 8.8,
+       "workerMs": 16.7,
+       "uploadMs": 8,
        "cacheHits": 27
       },
       {
        "origin": "wembley-park",
-       "ms": 25.9,
+       "ms": 27.3,
        "failed": null,
-       "workerMs": 3,
+       "workerMs": 11.1,
+       "uploadMs": 5.2,
+       "cacheHits": 28
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 27.3,
+       "failed": null,
+       "workerMs": 15.6,
+       "uploadMs": 7.7,
+       "cacheHits": 34
+      },
+      {
+       "origin": "heathrow",
+       "ms": 25.7,
+       "failed": null,
+       "workerMs": 10.6,
+       "uploadMs": 6,
+       "cacheHits": 20
+      },
+      {
+       "origin": "croydon",
+       "ms": 28.6,
+       "failed": null,
+       "workerMs": 13.4,
+       "uploadMs": 7.3,
+       "cacheHits": 41
+      },
+      {
+       "origin": "baker-street",
+       "ms": 28.7,
+       "failed": null,
+       "workerMs": 16.6,
+       "uploadMs": 8,
+       "cacheHits": 27
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 27.5,
+       "failed": null,
+       "workerMs": 11.3,
+       "uploadMs": 5.3,
+       "cacheHits": 28
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 29.1,
+       "failed": null,
+       "workerMs": 16.7,
+       "uploadMs": 8.3,
+       "cacheHits": 34
+      },
+      {
+       "origin": "heathrow",
+       "ms": 26,
+       "failed": null,
+       "workerMs": 10.5,
        "uploadMs": 6.4,
-       "cacheHits": 28
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 15.3,
-       "failed": null,
-       "workerMs": 3,
-       "uploadMs": 5.6,
-       "cacheHits": 34
-      },
-      {
-       "origin": "heathrow",
-       "ms": 13.1,
-       "failed": null,
-       "workerMs": 3.1,
-       "uploadMs": 6.6,
        "cacheHits": 20
       },
       {
        "origin": "croydon",
-       "ms": 19.7,
+       "ms": 27.7,
        "failed": null,
-       "workerMs": 4.1,
-       "uploadMs": 8.2,
-       "cacheHits": 41
-      },
-      {
-       "origin": "baker-street",
-       "ms": 20.7,
-       "failed": null,
-       "workerMs": 3.1,
-       "uploadMs": 4.4,
-       "cacheHits": 27
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 20.7,
-       "failed": null,
-       "workerMs": 6.2,
-       "uploadMs": 5.6,
-       "cacheHits": 28
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 16.3,
-       "failed": null,
-       "workerMs": 3.3,
-       "uploadMs": 5.2,
-       "cacheHits": 34
-      },
-      {
-       "origin": "heathrow",
-       "ms": 19.9,
-       "failed": null,
-       "workerMs": 3.2,
-       "uploadMs": 6.6,
-       "cacheHits": 20
-      },
-      {
-       "origin": "croydon",
-       "ms": 21.6,
-       "failed": null,
-       "workerMs": 3.9,
-       "uploadMs": 8.7,
-       "cacheHits": 41
-      },
-      {
-       "origin": "baker-street",
-       "ms": 30.6,
-       "failed": null,
-       "workerMs": 9.5,
-       "uploadMs": 4.7,
-       "cacheHits": 27
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 24.9,
-       "failed": null,
-       "workerMs": 7.2,
-       "uploadMs": 5.4,
-       "cacheHits": 28
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 18.3,
-       "failed": null,
-       "workerMs": 3.3,
-       "uploadMs": 5.4,
-       "cacheHits": 34
-      },
-      {
-       "origin": "heathrow",
-       "ms": 15.9,
-       "failed": null,
-       "workerMs": 3.5,
-       "uploadMs": 7.4,
-       "cacheHits": 20
-      },
-      {
-       "origin": "croydon",
-       "ms": 20.7,
-       "failed": null,
-       "workerMs": 4,
-       "uploadMs": 7.6,
+       "workerMs": 14.1,
+       "uploadMs": 7.2,
        "cacheHits": 41
       }
      ],
@@ -3721,46 +3714,46 @@
       {
        "origin": "baker-street",
        "morphP50": 16.7,
-       "morphP95": 16.7,
+       "morphP95": 16.8,
        "panP50": 16.7,
-       "panP95": 16.8,
+       "panP95": 16.7,
        "zoomP95": 16.7,
        "p50": 16.7,
        "p95": 16.7,
-       "max": 16.8,
-       "frames": 832,
-       "drawP50Ms": 2.8,
-       "drawP95Ms": 3.1,
+       "max": 83.3,
+       "frames": 829,
+       "drawP50Ms": 2.6,
+       "drawP95Ms": 3,
        "gpuFrameMs": null
       },
       {
        "origin": "wembley-park",
        "morphP50": 16.7,
-       "morphP95": 16.7,
+       "morphP95": 16.8,
        "panP50": 16.7,
        "panP95": 16.8,
        "zoomP95": 16.7,
        "p50": 16.7,
-       "p95": 16.7,
-       "max": 16.8,
-       "frames": 833,
-       "drawP50Ms": 2.2,
-       "drawP95Ms": 2.4,
+       "p95": 16.8,
+       "max": 33.4,
+       "frames": 832,
+       "drawP50Ms": 1.9,
+       "drawP95Ms": 2.3,
        "gpuFrameMs": null
       },
       {
        "origin": "canary-wharf",
        "morphP50": 16.7,
-       "morphP95": 16.7,
+       "morphP95": 16.8,
        "panP50": 16.7,
-       "panP95": 16.8,
+       "panP95": 16.7,
        "zoomP95": 16.7,
        "p50": 16.7,
-       "p95": 16.7,
-       "max": 16.8,
-       "frames": 833,
-       "drawP50Ms": 2.7,
-       "drawP95Ms": 3.2,
+       "p95": 16.8,
+       "max": 83.3,
+       "frames": 828,
+       "drawP50Ms": 2.4,
+       "drawP95Ms": 3.1,
        "gpuFrameMs": null
       },
       {
@@ -3768,29 +3761,29 @@
        "morphP50": 16.7,
        "morphP95": 16.7,
        "panP50": 16.7,
-       "panP95": 16.8,
-       "zoomP95": 16.7,
+       "panP95": 16.7,
+       "zoomP95": 16.8,
        "p50": 16.7,
        "p95": 16.7,
-       "max": 16.8,
-       "frames": 833,
-       "drawP50Ms": 2,
-       "drawP95Ms": 2.2,
+       "max": 50,
+       "frames": 831,
+       "drawP50Ms": 1.7,
+       "drawP95Ms": 2.1,
        "gpuFrameMs": null
       },
       {
        "origin": "croydon",
        "morphP50": 16.7,
-       "morphP95": 16.7,
+       "morphP95": 16.8,
        "panP50": 16.7,
        "panP95": 16.8,
        "zoomP95": 16.7,
        "p50": 16.7,
-       "p95": 16.7,
-       "max": 16.8,
-       "frames": 832,
-       "drawP50Ms": 2.5,
-       "drawP95Ms": 2.7,
+       "p95": 16.8,
+       "max": 50.1,
+       "frames": 826,
+       "drawP50Ms": 2.2,
+       "drawP95Ms": 2.6,
        "gpuFrameMs": null
       }
      ],
@@ -3798,101 +3791,101 @@
       {
        "origin": "baker-street",
        "folds": {
-        "foldedShare": 0.19701052363574642,
-        "foldedSheets": 0.28065611136096136,
-        "medianStretch": 5.752070146585066
+        "foldedShare": 0.24826374154855865,
+        "foldedSheets": 0.367040954059592,
+        "medianStretch": 4.8653894454892574
        },
-       "within1px": 1,
-       "p99Px": 0.238,
+       "within1px": 0.9976,
+       "p99Px": 0.268,
        "nearFold": {
-        "samples": 868,
-        "within1px": 0.9931,
-        "p99Px": 0.653
+        "samples": 855,
+        "within1px": 0.9673,
+        "p99Px": 3.917
        },
        "crossing": {
-        "primitives": 257,
-        "longestEdgeAtHalfPx": 18,
-        "p99EdgeAtHalfPx": 16.2
+        "primitives": 522,
+        "longestEdgeAtHalfPx": 21.1,
+        "p99EdgeAtHalfPx": 18.2
        }
       },
       {
        "origin": "wembley-park",
        "folds": {
-        "foldedShare": 0.08502362160174262,
-        "foldedSheets": 0.1270275841927563,
-        "medianStretch": 5.827037504895857
+        "foldedShare": 0.1921518289060511,
+        "foldedSheets": 0.3010435742071445,
+        "medianStretch": 3.151212005640365
        },
        "within1px": 1,
-       "p99Px": 0.227,
+       "p99Px": 0.179,
        "nearFold": {
-        "samples": 757,
-        "within1px": 0.9908,
-        "p99Px": 0.843
+        "samples": 869,
+        "within1px": 0.985,
+        "p99Px": 5.553
        },
        "crossing": {
         "primitives": 333,
-        "longestEdgeAtHalfPx": 15.8,
-        "p99EdgeAtHalfPx": 15.7
+        "longestEdgeAtHalfPx": 18.8,
+        "p99EdgeAtHalfPx": 18.8
        }
       },
       {
        "origin": "canary-wharf",
        "folds": {
-        "foldedShare": 0.19187954397578433,
-        "foldedSheets": 0.2487725523341122,
-        "medianStretch": 5.552097489683034
+        "foldedShare": 0.25386856771054345,
+        "foldedSheets": 0.34917968259190835,
+        "medianStretch": 4.090828797612521
        },
-       "within1px": 0.9946,
-       "p99Px": 0.462,
+       "within1px": 0.9991,
+       "p99Px": 0.258,
        "nearFold": {
-        "samples": 751,
-        "within1px": 0.9241,
-        "p99Px": 7.374
+        "samples": 812,
+        "within1px": 0.9421,
+        "p99Px": 7.685
        },
        "crossing": {
-        "primitives": 196,
-        "longestEdgeAtHalfPx": 25.6,
-        "p99EdgeAtHalfPx": 25.6
+        "primitives": 269,
+        "longestEdgeAtHalfPx": 25.7,
+        "p99EdgeAtHalfPx": 24.8
        }
       },
       {
        "origin": "heathrow",
        "folds": {
-        "foldedShare": 0.12802695974426434,
-        "foldedSheets": 0.1752924406979488,
-        "medianStretch": 4.7804891926042785
+        "foldedShare": 0.24141772044470847,
+        "foldedSheets": 0.3543030770201418,
+        "medianStretch": 3.1436304028108046
        },
        "within1px": 1,
-       "p99Px": 0.074,
+       "p99Px": 0.133,
        "nearFold": {
-        "samples": 674,
-        "within1px": 0.9659,
-        "p99Px": 7.847
+        "samples": 503,
+        "within1px": 0.9583,
+        "p99Px": 8.206
        },
        "crossing": {
         "primitives": 139,
-        "longestEdgeAtHalfPx": 11,
-        "p99EdgeAtHalfPx": 2.3
+        "longestEdgeAtHalfPx": 11.2,
+        "p99EdgeAtHalfPx": 2.5
        }
       },
       {
        "origin": "croydon",
        "folds": {
-        "foldedShare": 0.09267235282469094,
-        "foldedSheets": 0.12674589431568573,
-        "medianStretch": 6.7403926563154
+        "foldedShare": 0.19381736399898158,
+        "foldedSheets": 0.2782124625900398,
+        "medianStretch": 3.5601090718537636
        },
-       "within1px": 0.9989,
-       "p99Px": 0.159,
+       "within1px": 0.9975,
+       "p99Px": 0.616,
        "nearFold": {
-        "samples": 763,
-        "within1px": 0.9581,
-        "p99Px": 8.581
+        "samples": 712,
+        "within1px": 0.9621,
+        "p99Px": 12.411
        },
        "crossing": {
         "primitives": 448,
-        "longestEdgeAtHalfPx": 14.2,
-        "p99EdgeAtHalfPx": 12.4
+        "longestEdgeAtHalfPx": 17.2,
+        "p99EdgeAtHalfPx": 14.8
        }
       }
      ]
@@ -3902,19 +3895,19 @@
      "cold": [
       {
        "origin": "baker-street",
-       "ms": 13,
+       "ms": 15.2,
        "failed": null,
-       "fieldMs": 5.2,
+       "fieldMs": 5.7,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
        "shaded": 86994,
-       "bytes": 696015,
+       "bytes": 807551,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 6,
-       "tessMs": 4,
-       "packMs": 1.9,
+       "workerMs": 11,
+       "tessMs": 4.6,
+       "packMs": 6.3,
        "uploadMs": 2.2,
        "peakResident": 76104,
        "rings": [
@@ -3926,20 +3919,20 @@
       },
       {
        "origin": "wembley-park",
-       "ms": 19.7,
+       "ms": 16.6,
        "failed": null,
        "fieldMs": 5.3,
        "tiles": 16,
        "fetched": 0,
        "missing": 0,
        "shaded": 36070,
-       "bytes": 198052,
+       "bytes": 249668,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 2.9,
-       "tessMs": 1.7,
-       "packMs": 0.9,
-       "uploadMs": 0.7,
+       "workerMs": 2.6,
+       "tessMs": 0.7,
+       "packMs": 1.9,
+       "uploadMs": 0.6,
        "peakResident": 20866,
        "rings": [
         1000,
@@ -3950,20 +3943,20 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 15.7,
+       "ms": 8.1,
        "failed": null,
-       "fieldMs": 4.9,
+       "fieldMs": 6.1,
        "tiles": 14,
        "fetched": 0,
        "missing": 0,
        "shaded": 54622,
-       "bytes": 466198,
+       "bytes": 535030,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 4.4,
-       "tessMs": 3.2,
-       "packMs": 1.2,
-       "uploadMs": 1.5,
+       "workerMs": 5.1,
+       "tessMs": 2,
+       "packMs": 3,
+       "uploadMs": 1.2,
        "peakResident": 46666,
        "rings": [
         1000,
@@ -3974,20 +3967,20 @@
       },
       {
        "origin": "heathrow",
-       "ms": 5.1,
+       "ms": 5,
        "failed": null,
-       "fieldMs": 4.8,
+       "fieldMs": 5,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
        "shaded": 11401,
-       "bytes": 118582,
+       "bytes": 133798,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 0.9,
+       "workerMs": 1.2,
        "tessMs": 0.5,
-       "packMs": 0.4,
-       "uploadMs": 0.4,
+       "packMs": 0.6,
+       "uploadMs": 0.5,
        "peakResident": 7801,
        "rings": [
         1000,
@@ -3998,19 +3991,19 @@
       },
       {
        "origin": "croydon",
-       "ms": 20.3,
+       "ms": 20.1,
        "failed": null,
-       "fieldMs": 5.4,
+       "fieldMs": 5,
        "tiles": 24,
        "fetched": 0,
        "missing": 0,
        "shaded": 35877,
-       "bytes": 164148,
+       "bytes": 214340,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 1.3,
-       "tessMs": 0.8,
-       "packMs": 0.4,
+       "workerMs": 2.5,
+       "tessMs": 0.7,
+       "packMs": 1.6,
        "uploadMs": 0.5,
        "peakResident": 19485,
        "rings": [
@@ -4024,161 +4017,161 @@
      "warm": [
       {
        "origin": "baker-street",
-       "ms": 19.1,
+       "ms": 14,
        "failed": null,
-       "workerMs": 8.5,
-       "uploadMs": 2.3,
+       "workerMs": 7.1,
+       "uploadMs": 2.1,
        "cacheHits": 0
       },
       {
        "origin": "wembley-park",
-       "ms": 11.8,
+       "ms": 10.7,
        "failed": null,
-       "workerMs": 1.3,
-       "uploadMs": 0.8,
+       "workerMs": 2.1,
+       "uploadMs": 0.6,
        "cacheHits": 1
       },
       {
        "origin": "canary-wharf",
-       "ms": 12,
+       "ms": 11,
        "failed": null,
-       "workerMs": 2.8,
-       "uploadMs": 1.5,
+       "workerMs": 4.5,
+       "uploadMs": 1.3,
        "cacheHits": 0
       },
       {
        "origin": "heathrow",
-       "ms": 11.1,
+       "ms": 12.6,
        "failed": null,
-       "workerMs": 1.2,
-       "uploadMs": 0.4,
+       "workerMs": 1.5,
+       "uploadMs": 0.3,
        "cacheHits": 0
       },
       {
        "origin": "croydon",
-       "ms": 12.7,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.5,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 12.2,
-       "failed": null,
-       "workerMs": 1.6,
-       "uploadMs": 2.2,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 17,
-       "failed": null,
-       "workerMs": 0.5,
-       "uploadMs": 0.6,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 5.9,
+       "ms": 8.5,
        "failed": null,
        "workerMs": 1.4,
-       "uploadMs": 1.5,
-       "cacheHits": 14
-      },
-      {
-       "origin": "heathrow",
-       "ms": 12,
-       "failed": null,
-       "workerMs": 0.3,
        "uploadMs": 0.5,
-       "cacheHits": 10
-      },
-      {
-       "origin": "croydon",
-       "ms": 16.4,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.6,
        "cacheHits": 24
       },
       {
        "origin": "baker-street",
-       "ms": 8.3,
+       "ms": 13.3,
        "failed": null,
-       "workerMs": 1.9,
-       "uploadMs": 2.1,
+       "workerMs": 4.7,
+       "uploadMs": 2,
        "cacheHits": 10
       },
       {
        "origin": "wembley-park",
-       "ms": 11.9,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.7,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 16.5,
-       "failed": null,
-       "workerMs": 1,
-       "uploadMs": 2,
-       "cacheHits": 14
-      },
-      {
-       "origin": "heathrow",
-       "ms": 6,
-       "failed": null,
-       "workerMs": 0.3,
-       "uploadMs": 0.5,
-       "cacheHits": 10
-      },
-      {
-       "origin": "croydon",
-       "ms": 13.1,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.6,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 12.4,
+       "ms": 11.3,
        "failed": null,
        "workerMs": 1.6,
-       "uploadMs": 2.2,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 16.3,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.7,
+       "uploadMs": 0.6,
        "cacheHits": 16
       },
       {
        "origin": "canary-wharf",
-       "ms": 7.6,
+       "ms": 14.4,
        "failed": null,
-       "workerMs": 1,
+       "workerMs": 3,
        "uploadMs": 1.4,
        "cacheHits": 14
       },
       {
        "origin": "heathrow",
-       "ms": 11.6,
+       "ms": 11.7,
        "failed": null,
-       "workerMs": 0.3,
+       "workerMs": 0.8,
        "uploadMs": 0.4,
        "cacheHits": 10
       },
       {
        "origin": "croydon",
-       "ms": 12.1,
+       "ms": 10.3,
        "failed": null,
-       "workerMs": 0.5,
+       "workerMs": 1.5,
+       "uploadMs": 0.5,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 13,
+       "failed": null,
+       "workerMs": 4.9,
+       "uploadMs": 2,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 10.4,
+       "failed": null,
+       "workerMs": 1.5,
+       "uploadMs": 0.6,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 11.6,
+       "failed": null,
+       "workerMs": 3.2,
+       "uploadMs": 1.4,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 11.4,
+       "failed": null,
+       "workerMs": 0.7,
+       "uploadMs": 0.3,
+       "cacheHits": 10
+      },
+      {
+       "origin": "croydon",
+       "ms": 14.4,
+       "failed": null,
+       "workerMs": 1.4,
+       "uploadMs": 0.5,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 10.3,
+       "failed": null,
+       "workerMs": 4.7,
+       "uploadMs": 1.9,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 13.3,
+       "failed": null,
+       "workerMs": 1.5,
+       "uploadMs": 0.7,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 9,
+       "failed": null,
+       "workerMs": 3.3,
+       "uploadMs": 1.3,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 13.3,
+       "failed": null,
+       "workerMs": 0.7,
+       "uploadMs": 0.4,
+       "cacheHits": 10
+      },
+      {
+       "origin": "croydon",
+       "ms": 12.2,
+       "failed": null,
+       "workerMs": 1.5,
        "uploadMs": 0.6,
        "cacheHits": 24
       }
@@ -4190,10 +4183,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
-       "p99Px": 0.081,
+       "p99Px": 0.095,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -4210,7 +4203,7 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
        "p99Px": 0.035,
@@ -4230,10 +4223,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
-       "p99Px": 0.063,
+       "p99Px": 0.073,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -4250,7 +4243,7 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
        "p99Px": 0.036,
@@ -4270,10 +4263,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003402659459
+        "medianStretch": 1.0145645203937146
        },
        "within1px": 1,
-       "p99Px": 0.036,
+       "p99Px": 0.034,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -4281,8 +4274,8 @@
        },
        "crossing": {
         "primitives": 8,
-        "longestEdgeAtHalfPx": 2.9,
-        "p99EdgeAtHalfPx": 2.9
+        "longestEdgeAtHalfPx": 2.8,
+        "p99EdgeAtHalfPx": 2.8
        }
       }
      ]
@@ -4292,20 +4285,20 @@
      "cold": [
       {
        "origin": "baker-street",
-       "ms": 12.5,
+       "ms": 11.9,
        "failed": null,
-       "fieldMs": 5.6,
+       "fieldMs": 5.7,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
        "shaded": 86994,
-       "bytes": 696015,
+       "bytes": 807551,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 4.4,
-       "tessMs": 3,
-       "packMs": 1.3,
-       "uploadMs": 2.1,
+       "workerMs": 7,
+       "tessMs": 2.4,
+       "packMs": 4.6,
+       "uploadMs": 2,
        "peakResident": 76104,
        "rings": [
         1000,
@@ -4316,19 +4309,19 @@
       },
       {
        "origin": "wembley-park",
-       "ms": 6.3,
+       "ms": 5.1,
        "failed": null,
-       "fieldMs": 5.9,
+       "fieldMs": 6.4,
        "tiles": 16,
        "fetched": 0,
        "missing": 0,
        "shaded": 36070,
-       "bytes": 198052,
+       "bytes": 249668,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 1.2,
+       "workerMs": 2.3,
        "tessMs": 0.6,
-       "packMs": 0.5,
+       "packMs": 1.7,
        "uploadMs": 0.7,
        "peakResident": 20866,
        "rings": [
@@ -4340,19 +4333,19 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 21.3,
+       "ms": 10.1,
        "failed": null,
-       "fieldMs": 5.3,
+       "fieldMs": 6.2,
        "tiles": 14,
        "fetched": 0,
        "missing": 0,
        "shaded": 54622,
-       "bytes": 466198,
+       "bytes": 535030,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 2.7,
-       "tessMs": 1.8,
-       "packMs": 0.9,
+       "workerMs": 5.3,
+       "tessMs": 2.1,
+       "packMs": 3,
        "uploadMs": 1.3,
        "peakResident": 46666,
        "rings": [
@@ -4364,19 +4357,19 @@
       },
       {
        "origin": "heathrow",
-       "ms": 5,
+       "ms": 4.2,
        "failed": null,
-       "fieldMs": 5.9,
+       "fieldMs": 6,
        "tiles": 10,
        "fetched": 0,
        "missing": 0,
        "shaded": 11401,
-       "bytes": 118582,
+       "bytes": 133798,
        "overBudget": false,
        "dropped": {},
        "workerMs": 1.1,
        "tessMs": 0.4,
-       "packMs": 0.5,
+       "packMs": 0.7,
        "uploadMs": 0.4,
        "peakResident": 7801,
        "rings": [
@@ -4388,20 +4381,20 @@
       },
       {
        "origin": "croydon",
-       "ms": 3.1,
+       "ms": 15.9,
        "failed": null,
-       "fieldMs": 5.2,
+       "fieldMs": 6,
        "tiles": 24,
        "fetched": 0,
        "missing": 0,
        "shaded": 35877,
-       "bytes": 164148,
+       "bytes": 214340,
        "overBudget": false,
        "dropped": {},
-       "workerMs": 1,
-       "tessMs": 0.7,
-       "packMs": 0.3,
-       "uploadMs": 0.6,
+       "workerMs": 2.2,
+       "tessMs": 0.6,
+       "packMs": 1.6,
+       "uploadMs": 0.8,
        "peakResident": 19485,
        "rings": [
         1000,
@@ -4414,161 +4407,161 @@
      "warm": [
       {
        "origin": "baker-street",
-       "ms": 10.6,
+       "ms": 11.5,
        "failed": null,
-       "workerMs": 6,
+       "workerMs": 7.3,
        "uploadMs": 2.2,
        "cacheHits": 0
       },
       {
        "origin": "wembley-park",
-       "ms": 10.6,
+       "ms": 7.2,
        "failed": null,
-       "workerMs": 1.1,
+       "workerMs": 3.1,
        "uploadMs": 0.6,
        "cacheHits": 1
       },
       {
        "origin": "canary-wharf",
-       "ms": 11.3,
+       "ms": 11.7,
        "failed": null,
-       "workerMs": 2.8,
-       "uploadMs": 1.4,
+       "workerMs": 5.2,
+       "uploadMs": 1.3,
        "cacheHits": 0
       },
       {
        "origin": "heathrow",
-       "ms": 11.3,
+       "ms": 13,
        "failed": null,
-       "workerMs": 0.9,
+       "workerMs": 1.5,
        "uploadMs": 0.4,
        "cacheHits": 0
       },
       {
        "origin": "croydon",
-       "ms": 11.5,
+       "ms": 9.9,
        "failed": null,
-       "workerMs": 0.4,
+       "workerMs": 1.3,
        "uploadMs": 0.5,
        "cacheHits": 24
       },
       {
        "origin": "baker-street",
-       "ms": 11.8,
+       "ms": 11.3,
        "failed": null,
-       "workerMs": 1.6,
-       "uploadMs": 4.1,
-       "cacheHits": 10
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 11.2,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.8,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 11.4,
-       "failed": null,
-       "workerMs": 0.9,
-       "uploadMs": 1.8,
-       "cacheHits": 14
-      },
-      {
-       "origin": "heathrow",
-       "ms": 11,
-       "failed": null,
-       "workerMs": 0.3,
-       "uploadMs": 0.6,
-       "cacheHits": 10
-      },
-      {
-       "origin": "croydon",
-       "ms": 15,
-       "failed": null,
-       "workerMs": 0.4,
-       "uploadMs": 0.5,
-       "cacheHits": 24
-      },
-      {
-       "origin": "baker-street",
-       "ms": 6.1,
-       "failed": null,
-       "workerMs": 1.4,
+       "workerMs": 5.1,
        "uploadMs": 2.2,
        "cacheHits": 10
       },
       {
        "origin": "wembley-park",
+       "ms": 8.2,
+       "failed": null,
+       "workerMs": 2.1,
+       "uploadMs": 0.6,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
        "ms": 12.7,
        "failed": null,
-       "workerMs": 0.5,
-       "uploadMs": 0.6,
-       "cacheHits": 16
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 11.6,
-       "failed": null,
-       "workerMs": 0.9,
+       "workerMs": 4.4,
        "uploadMs": 1.4,
        "cacheHits": 14
       },
       {
        "origin": "heathrow",
-       "ms": 10.6,
+       "ms": 8.2,
        "failed": null,
-       "workerMs": 0.2,
+       "workerMs": 0.8,
        "uploadMs": 0.4,
        "cacheHits": 10
       },
       {
        "origin": "croydon",
-       "ms": 11.4,
+       "ms": 13.6,
        "failed": null,
-       "workerMs": 0.5,
+       "workerMs": 1.7,
        "uploadMs": 0.6,
        "cacheHits": 24
       },
       {
        "origin": "baker-street",
-       "ms": 12,
+       "ms": 9.8,
        "failed": null,
-       "workerMs": 1.2,
-       "uploadMs": 2.2,
+       "workerMs": 4.9,
+       "uploadMs": 1.9,
        "cacheHits": 10
       },
       {
        "origin": "wembley-park",
-       "ms": 11.2,
+       "ms": 8.6,
        "failed": null,
-       "workerMs": 0.5,
+       "workerMs": 1.6,
+       "uploadMs": 0.6,
+       "cacheHits": 16
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 12.8,
+       "failed": null,
+       "workerMs": 4.7,
+       "uploadMs": 1.2,
+       "cacheHits": 14
+      },
+      {
+       "origin": "heathrow",
+       "ms": 10.4,
+       "failed": null,
+       "workerMs": 0.7,
+       "uploadMs": 0.4,
+       "cacheHits": 10
+      },
+      {
+       "origin": "croydon",
+       "ms": 10.6,
+       "failed": null,
+       "workerMs": 1.4,
+       "uploadMs": 0.7,
+       "cacheHits": 24
+      },
+      {
+       "origin": "baker-street",
+       "ms": 10.9,
+       "failed": null,
+       "workerMs": 5.4,
+       "uploadMs": 1.9,
+       "cacheHits": 10
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 10.6,
+       "failed": null,
+       "workerMs": 1.7,
        "uploadMs": 0.7,
        "cacheHits": 16
       },
       {
        "origin": "canary-wharf",
-       "ms": 11.4,
+       "ms": 11.2,
        "failed": null,
-       "workerMs": 1,
+       "workerMs": 3.1,
        "uploadMs": 1.4,
        "cacheHits": 14
       },
       {
        "origin": "heathrow",
-       "ms": 11.1,
+       "ms": 10.4,
        "failed": null,
-       "workerMs": 0.3,
+       "workerMs": 0.8,
        "uploadMs": 0.4,
        "cacheHits": 10
       },
       {
        "origin": "croydon",
-       "ms": 16.7,
+       "ms": 11.2,
        "failed": null,
-       "workerMs": 0.3,
+       "workerMs": 1.6,
        "uploadMs": 0.5,
        "cacheHits": 24
       }
@@ -4580,10 +4573,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
-       "within1px": 0.9991,
-       "p99Px": 0.097,
+       "within1px": 0.9996,
+       "p99Px": 0.135,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -4600,10 +4593,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
-       "within1px": 0.9419,
-       "p99Px": 2.199,
+       "within1px": 0.9492,
+       "p99Px": 2.117,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -4620,10 +4613,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
        "within1px": 0.9985,
-       "p99Px": 0.059,
+       "p99Px": 0.091,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -4631,8 +4624,8 @@
        },
        "crossing": {
         "primitives": 88,
-        "longestEdgeAtHalfPx": 8.2,
-        "p99EdgeAtHalfPx": 8.2
+        "longestEdgeAtHalfPx": 8.3,
+        "p99EdgeAtHalfPx": 8.3
        }
       },
       {
@@ -4640,10 +4633,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
-       "within1px": 0.9984,
-       "p99Px": 0.233,
+       "within1px": 1,
+       "p99Px": 0.298,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -4651,8 +4644,8 @@
        },
        "crossing": {
         "primitives": 4,
-        "longestEdgeAtHalfPx": 8.3,
-        "p99EdgeAtHalfPx": 8.3
+        "longestEdgeAtHalfPx": 8.5,
+        "p99EdgeAtHalfPx": 8.5
        }
       },
       {
@@ -4660,10 +4653,10 @@
        "folds": {
         "foldedShare": 0,
         "foldedSheets": 0,
-        "medianStretch": 1.0000003603142378
+        "medianStretch": 1.0647280923559934
        },
        "within1px": 1,
-       "p99Px": 0.049,
+       "p99Px": 0.071,
        "nearFold": {
         "samples": 0,
         "within1px": 1,
@@ -4671,8 +4664,8 @@
        },
        "crossing": {
         "primitives": 7,
-        "longestEdgeAtHalfPx": 12.5,
-        "p99EdgeAtHalfPx": 12.5
+        "longestEdgeAtHalfPx": 12.6,
+        "p99EdgeAtHalfPx": 12.6
        }
       }
      ]
@@ -4684,154 +4677,154 @@
      "shaded": 167641,
      "fillVerts": 15307,
      "segments": 13576,
-     "bytes": 1117195,
-     "tessMs": 4.3,
+     "bytes": 1334411,
+     "tessMs": 5,
      "chord": {
-      "samples": 2591,
-      "within1px": 0.9915,
-      "p99Px": 0.939,
-      "maxPx": 3.032,
+      "samples": 2529,
+      "within1px": 0.9905,
+      "p99Px": 0.916,
+      "maxPx": 7.045,
       "byZoom": {
        "10": {
-        "samples": 83,
+        "samples": 82,
         "within1px": 1,
-        "p99Px": 0.21
+        "p99Px": 0.171
        },
        "12": {
-        "samples": 1019,
-        "within1px": 0.9872,
-        "p99Px": 1.138
+        "samples": 1113,
+        "within1px": 0.9802,
+        "p99Px": 1.846
        },
        "13": {
-        "samples": 227,
-        "within1px": 0.9648,
-        "p99Px": 1.527
+        "samples": 209,
+        "within1px": 0.9904,
+        "p99Px": 0.916
        },
        "14": {
-        "samples": 1262,
-        "within1px": 0.9992,
-        "p99Px": 0.57
+        "samples": 1125,
+        "within1px": 1,
+        "p99Px": 0.596
        }
       },
       "nearFold": {
-       "samples": 1499,
-       "within1px": 0.9633,
-       "p99Px": 2.948
+       "samples": 1735,
+       "within1px": 0.9527,
+       "p99Px": 5.266
       },
       "nearNoData": {
-       "samples": 602,
-       "within1px": 0.3455,
-       "p99Px": 19.11
+       "samples": 552,
+       "within1px": 0.346,
+       "p99Px": 18.493
       },
-      "invisible": 1308,
+      "invisible": 1184,
       "crossingOuterMinute": {
        "primitives": 326,
-       "longestEdgeAtHalfPx": 25.5,
-       "p99EdgeAtHalfPx": 24.7
+       "longestEdgeAtHalfPx": 26.8,
+       "p99EdgeAtHalfPx": 25.7
       }
      }
     },
     {
      "spacingDiv": 128,
-     "shaded": 296838,
-     "fillVerts": 5352,
-     "segments": 26023,
-     "bytes": 1344039,
-     "tessMs": 4.6,
+     "shaded": 346195,
+     "fillVerts": 42733,
+     "segments": 27021,
+     "bytes": 3146374,
+     "tessMs": 5.6,
      "chord": {
-      "samples": 1690,
-      "within1px": 0.997,
-      "p99Px": 0.268,
-      "maxPx": 1.97,
+      "samples": 2494,
+      "within1px": 0.9992,
+      "p99Px": 0.281,
+      "maxPx": 1.377,
       "byZoom": {
        "10": {
-        "samples": 126,
+        "samples": 71,
         "within1px": 1,
-        "p99Px": 0.113
+        "p99Px": 0.146
        },
        "12": {
-        "samples": 1128,
-        "within1px": 0.9956,
-        "p99Px": 0.268
+        "samples": 1119,
+        "within1px": 0.9982,
+        "p99Px": 0.271
        },
        "13": {
-        "samples": 224,
+        "samples": 211,
         "within1px": 1,
-        "p99Px": 0.3
+        "p99Px": 0.533
        },
        "14": {
-        "samples": 212,
+        "samples": 1093,
         "within1px": 1,
-        "p99Px": 0.11
+        "p99Px": 0.281
        }
       },
       "nearFold": {
-       "samples": 1763,
-       "within1px": 0.9892,
-       "p99Px": 1.016
+       "samples": 1724,
+       "within1px": 0.9826,
+       "p99Px": 1.864
       },
       "nearNoData": {
-       "samples": 406,
-       "within1px": 0.6281,
-       "p99Px": 12.225
+       "samples": 608,
+       "within1px": 0.4161,
+       "p99Px": 16.426
       },
-      "invisible": 2141,
+      "invisible": 1174,
       "crossingOuterMinute": {
-       "primitives": 257,
-       "longestEdgeAtHalfPx": 18,
-       "p99EdgeAtHalfPx": 16.2
+       "primitives": 522,
+       "longestEdgeAtHalfPx": 21.1,
+       "p99EdgeAtHalfPx": 18.2
       }
      }
     },
     {
      "spacingDiv": 256,
-     "shaded": 298824,
-     "fillVerts": 0,
-     "segments": 28119,
-     "bytes": 1265355,
-     "tessMs": 13,
+     "shaded": 728250,
+     "fillVerts": 125364,
+     "segments": 53673,
+     "bytes": 8016225,
+     "tessMs": 23.2,
      "chord": {
-      "samples": 2037,
+      "samples": 2457,
       "within1px": 1,
-      "p99Px": 0.081,
-      "maxPx": 0.523,
+      "p99Px": 0.088,
+      "maxPx": 0.364,
       "byZoom": {
        "10": {
-        "samples": 99,
+        "samples": 77,
         "within1px": 1,
-        "p99Px": 0.048
+        "p99Px": 0.037
        },
        "12": {
-        "samples": 1268,
+        "samples": 1094,
         "within1px": 1,
-        "p99Px": 0.083
+        "p99Px": 0.076
        },
        "13": {
-        "samples": 347,
+        "samples": 193,
         "within1px": 1,
-        "p99Px": 0.162
+        "p99Px": 0.093
        },
        "14": {
-        "samples": 323,
+        "samples": 1093,
         "within1px": 1,
-        "p99Px": 0.026
+        "p99Px": 0.1
        }
       },
       "nearFold": {
-       "samples": 1930,
-       "within1px": 0.9943,
-       "p99Px": 0.334
+       "samples": 1745,
+       "within1px": 0.9891,
+       "p99Px": 1.112
       },
       "nearNoData": {
-       "samples": 456,
-       "within1px": 0.7434,
-       "p99Px": 7.729
+       "samples": 649,
+       "within1px": 0.641,
+       "p99Px": 7.242
       },
-      "invisible": 1577,
+      "invisible": 1149,
       "crossingOuterMinute": {
-       "primitives": 85,
-       "longestEdgeAtHalfPx": 12.9,
-       "p99EdgeAtHalfPx": 12.9
+       "primitives": 897,
+       "longestEdgeAtHalfPx": 13.7,
+       "p99EdgeAtHalfPx": 13.3
       }
      }
     }
@@ -4844,31 +4837,31 @@
     "geom": "synthetic",
     "G6_frames": {
      "worstP50": 16.7,
-     "worstP95": 16.7,
-     "drawP95Ms": 3.2,
+     "worstP95": 16.8,
+     "drawP95Ms": 3.1,
      "gpuFrameMs": 0,
      "note": "frame intervals are capped by vsync; the gate is judged on the phones"
     },
     "G7_originChange": {
-     "p50": 12.7,
-     "p95": 27.1,
+     "p50": 12.8,
+     "p95": 30.6,
      "pass": true
     },
     "G8_newOrigin": {
-     "p95NoNetwork": 42,
+     "p95NoNetwork": 58.3,
      "pass": null,
      "note": "not measured: synthetic geometry makes no request"
     },
     "G9_budget": {
-     "maxShaded": 298848,
+     "maxShaded": 346195,
      "maxTiles": 41,
      "overBudget": false
     },
     "failures": 0,
     "spacing": [
-     "spacing 64: 167641 shaded, 99.15% \u2264 1 px, p99 0.939 px",
-     "spacing 128: 296838 shaded, 99.70% \u2264 1 px, p99 0.268 px",
-     "spacing 256: 298824 shaded, 100.00% \u2264 1 px, p99 0.081 px"
+     "spacing 64: 167641 shaded, 99.05% \u2264 1 px, p99 0.916 px",
+     "spacing 128: 346195 shaded, 99.92% \u2264 1 px, p99 0.281 px",
+     "spacing 256: 728250 shaded, 100.00% \u2264 1 px, p99 0.088 px"
     ]
    }
   }
@@ -4876,7 +4869,7 @@
  "stress": {
   "b": {
    "kind": "bench",
-   "at": "2026-11-13T12:16:51.085Z",
+   "at": "2026-11-13T14:15:37.633Z",
    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
    "backend": "b",
    "geom": "synthetic",
@@ -4919,26 +4912,20 @@
      "cold": [
       {
        "origin": "baker-street",
-       "ms": 39.6,
+       "ms": 61.5,
        "failed": null,
-       "fieldMs": 36,
+       "fieldMs": 32.9,
        "tiles": 27,
        "fetched": 0,
        "missing": 0,
-       "shaded": 298824,
-       "bytes": 590499,
+       "shaded": 728250,
+       "bytes": 4364937,
        "overBudget": false,
-       "dropped": {
-        "secondary": 47,
-        "park": 20,
-        "water": 11,
-        "minor_rail": 3,
-        "primary": 103
-       },
-       "workerMs": 34.3,
-       "tessMs": 19.8,
-       "packMs": 14.2,
-       "uploadMs": 1.5,
+       "dropped": {},
+       "workerMs": 39.1,
+       "tessMs": 11.3,
+       "packMs": 27.8,
+       "uploadMs": 3.7,
        "peakResident": 520422,
        "rings": [
         1000,
@@ -4949,25 +4936,20 @@
       },
       {
        "origin": "wembley-park",
-       "ms": 38,
+       "ms": 47.3,
        "failed": null,
-       "fieldMs": 32.1,
+       "fieldMs": 34.4,
        "tiles": 28,
        "fetched": 0,
        "missing": 0,
-       "shaded": 297876,
-       "bytes": 579138,
+       "shaded": 483546,
+       "bytes": 2701842,
        "overBudget": false,
-       "dropped": {
-        "park": 16,
-        "water": 9,
-        "minor_rail": 3,
-        "primary": 25
-       },
-       "workerMs": 24.2,
-       "tessMs": 9.7,
-       "packMs": 14.3,
-       "uploadMs": 0.8,
+       "dropped": {},
+       "workerMs": 31.4,
+       "tessMs": 8.7,
+       "packMs": 22.6,
+       "uploadMs": 5.3,
        "peakResident": 384576,
        "rings": [
         1000,
@@ -4978,25 +4960,20 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 40,
+       "ms": 43.6,
        "failed": null,
-       "fieldMs": 28.7,
+       "fieldMs": 30.2,
        "tiles": 34,
        "fetched": 0,
        "missing": 0,
-       "shaded": 298824,
-       "bytes": 590499,
+       "shaded": 685950,
+       "bytes": 4290933,
        "overBudget": false,
-       "dropped": {
-        "park": 18,
-        "water": 13,
-        "minor_rail": 7,
-        "primary": 84
-       },
-       "workerMs": 18.6,
-       "tessMs": 12.5,
-       "packMs": 6,
-       "uploadMs": 1.1,
+       "dropped": {},
+       "workerMs": 25.9,
+       "tessMs": 12,
+       "packMs": 13.8,
+       "uploadMs": 3.2,
        "peakResident": 511182,
        "rings": [
         1000,
@@ -5007,25 +4984,20 @@
       },
       {
        "origin": "heathrow",
-       "ms": 19.7,
+       "ms": 18.5,
        "failed": null,
-       "fieldMs": 21.5,
+       "fieldMs": 24.5,
        "tiles": 20,
        "fetched": 0,
        "missing": 0,
-       "shaded": 296082,
-       "bytes": 575022,
+       "shaded": 464395,
+       "bytes": 3413998,
        "overBudget": false,
-       "dropped": {
-        "park": 14,
-        "water": 9,
-        "minor_rail": 2,
-        "primary": 11
-       },
-       "workerMs": 9.1,
+       "dropped": {},
+       "workerMs": 10.5,
        "tessMs": 8.1,
-       "packMs": 0.7,
-       "uploadMs": 0.5,
+       "packMs": 2.4,
+       "uploadMs": 2.2,
        "peakResident": 301447,
        "rings": [
         1000,
@@ -5036,25 +5008,20 @@
       },
       {
        "origin": "croydon",
-       "ms": 27.9,
+       "ms": 56.5,
        "failed": null,
-       "fieldMs": 24,
+       "fieldMs": 48.6,
        "tiles": 41,
        "fetched": 0,
        "missing": 0,
-       "shaded": 298014,
-       "bytes": 580482,
+       "shaded": 609362,
+       "bytes": 3876314,
        "overBudget": false,
-       "dropped": {
-        "park": 16,
-        "water": 9,
-        "minor_rail": 2,
-        "primary": 45
-       },
-       "workerMs": 10.4,
-       "tessMs": 9.3,
-       "packMs": 1,
-       "uploadMs": 1.4,
+       "dropped": {},
+       "workerMs": 24.7,
+       "tessMs": 19.2,
+       "packMs": 5.1,
+       "uploadMs": 10,
        "peakResident": 427376,
        "rings": [
         1000,
@@ -5067,198 +5034,183 @@
      "warm": [
       {
        "origin": "baker-street",
-       "ms": 16.4,
+       "ms": 43.6,
        "failed": null,
-       "workerMs": 7.5,
-       "uploadMs": 0.2,
+       "workerMs": 12.4,
+       "uploadMs": 7.5,
        "cacheHits": 8
       },
       {
        "origin": "wembley-park",
-       "ms": 18.7,
+       "ms": 27.5,
        "failed": null,
-       "workerMs": 2.5,
-       "uploadMs": 1,
+       "workerMs": 6.1,
+       "uploadMs": 3.6,
        "cacheHits": 10
       },
       {
        "origin": "canary-wharf",
-       "ms": 19.5,
+       "ms": 20.3,
        "failed": null,
-       "workerMs": 9.4,
-       "uploadMs": 0.2,
-       "cacheHits": 10
+       "workerMs": 9.2,
+       "uploadMs": 1.4,
+       "cacheHits": 13
       },
       {
        "origin": "heathrow",
-       "ms": 26.6,
-       "failed": null,
-       "workerMs": 11.3,
-       "uploadMs": 1.3,
-       "cacheHits": 0
-      },
-      {
-       "origin": "croydon",
-       "ms": 13,
+       "ms": 25.1,
        "failed": null,
        "workerMs": 4.6,
-       "uploadMs": 1.1,
+       "uploadMs": 1.8,
        "cacheHits": 9
-      },
-      {
-       "origin": "baker-street",
-       "ms": 16.3,
-       "failed": null,
-       "workerMs": 5,
-       "uploadMs": 0,
-       "cacheHits": 13
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 11.2,
-       "failed": null,
-       "workerMs": 2.3,
-       "uploadMs": 1.5,
-       "cacheHits": 10
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 28.3,
-       "failed": null,
-       "workerMs": 8.5,
-       "uploadMs": 0.8,
-       "cacheHits": 10
-      },
-      {
-       "origin": "heathrow",
-       "ms": 24.1,
-       "failed": null,
-       "workerMs": 8.1,
-       "uploadMs": 0.6,
-       "cacheHits": 0
       },
       {
        "origin": "croydon",
-       "ms": 9,
+       "ms": 8.1,
        "failed": null,
-       "workerMs": 5.1,
-       "uploadMs": 0.2,
-       "cacheHits": 9
+       "workerMs": 1.7,
+       "uploadMs": 1.9,
+       "cacheHits": 41
       },
       {
        "origin": "baker-street",
-       "ms": 24.7,
+       "ms": 25.3,
        "failed": null,
-       "workerMs": 5.2,
-       "uploadMs": 0.1,
-       "cacheHits": 13
+       "workerMs": 2.1,
+       "uploadMs": 1,
+       "cacheHits": 27
       },
       {
        "origin": "wembley-park",
-       "ms": 9.8,
+       "ms": 7.3,
+       "failed": null,
+       "workerMs": 1.6,
+       "uploadMs": 1,
+       "cacheHits": 28
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 21.7,
        "failed": null,
        "workerMs": 2.2,
-       "uploadMs": 1,
-       "cacheHits": 10
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 13.5,
-       "failed": null,
-       "workerMs": 8.4,
-       "uploadMs": 0.7,
-       "cacheHits": 10
+       "uploadMs": 3.3,
+       "cacheHits": 34
       },
       {
        "origin": "heathrow",
-       "ms": 27.7,
+       "ms": 24.8,
        "failed": null,
-       "workerMs": 9.7,
-       "uploadMs": 0.3,
-       "cacheHits": 0
+       "workerMs": 1.4,
+       "uploadMs": 2.1,
+       "cacheHits": 20
       },
       {
        "origin": "croydon",
-       "ms": 11.9,
+       "ms": 15.9,
        "failed": null,
-       "workerMs": 4.5,
-       "uploadMs": 0.2,
-       "cacheHits": 9
+       "workerMs": 2.3,
+       "uploadMs": 3.5,
+       "cacheHits": 41
       },
       {
        "origin": "baker-street",
-       "ms": 11.1,
+       "ms": 22.7,
        "failed": null,
-       "workerMs": 4.8,
-       "uploadMs": 0.6,
-       "cacheHits": 13
+       "workerMs": 2,
+       "uploadMs": 1.6,
+       "cacheHits": 27
       },
       {
        "origin": "wembley-park",
-       "ms": 8.7,
+       "ms": 7.5,
        "failed": null,
-       "workerMs": 2.4,
-       "uploadMs": 0.2,
-       "cacheHits": 10
+       "workerMs": 1.4,
+       "uploadMs": 1,
+       "cacheHits": 28
       },
       {
        "origin": "canary-wharf",
-       "ms": 28.5,
+       "ms": 22.4,
        "failed": null,
-       "workerMs": 12.8,
-       "uploadMs": 0.1,
-       "cacheHits": 10
+       "workerMs": 2,
+       "uploadMs": 2.1,
+       "cacheHits": 34
       },
       {
        "origin": "heathrow",
-       "ms": 12.9,
+       "ms": 8.8,
        "failed": null,
-       "workerMs": 9.4,
-       "uploadMs": 0.2,
-       "cacheHits": 0
+       "workerMs": 1.7,
+       "uploadMs": 1.6,
+       "cacheHits": 20
       },
       {
        "origin": "croydon",
-       "ms": 24.4,
+       "ms": 6.6,
        "failed": null,
-       "workerMs": 5.6,
-       "uploadMs": 1,
-       "cacheHits": 9
+       "workerMs": 1.8,
+       "uploadMs": 0.3,
+       "cacheHits": 41
+      },
+      {
+       "origin": "baker-street",
+       "ms": 12.5,
+       "failed": null,
+       "workerMs": 2,
+       "uploadMs": 2.5,
+       "cacheHits": 27
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 5.9,
+       "failed": null,
+       "workerMs": 1.3,
+       "uploadMs": 0.2,
+       "cacheHits": 28
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 6.3,
+       "failed": null,
+       "workerMs": 1.9,
+       "uploadMs": 2,
+       "cacheHits": 34
+      },
+      {
+       "origin": "heathrow",
+       "ms": 6.9,
+       "failed": null,
+       "workerMs": 1.4,
+       "uploadMs": 2.7,
+       "cacheHits": 20
+      },
+      {
+       "origin": "croydon",
+       "ms": 15.2,
+       "failed": null,
+       "workerMs": 1.8,
+       "uploadMs": 0.9,
+       "cacheHits": 41
       }
      ],
      "motion": [
       {
        "origin": "baker-street",
        "morphP50": 16.7,
-       "morphP95": 16.8,
-       "panP50": 16.7,
-       "panP95": 16.8,
-       "zoomP95": 16.8,
-       "p50": 16.7,
-       "p95": 16.8,
-       "max": 16.8,
-       "frames": 833,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.8,
-       "gpuFrameMs": 3.5
-      },
-      {
-       "origin": "wembley-park",
-       "morphP50": 16.7,
        "morphP95": 16.7,
        "panP50": 16.7,
        "panP95": 16.8,
-       "zoomP95": 16.8,
+       "zoomP95": 16.7,
        "p50": 16.7,
-       "p95": 16.7,
-       "max": 16.8,
-       "frames": 833,
+       "p95": 16.8,
+       "max": 50,
+       "frames": 831,
        "drawP50Ms": 0.1,
-       "drawP95Ms": 0.8,
-       "gpuFrameMs": 5.08
+       "drawP95Ms": 0.7,
+       "gpuFrameMs": 7.31
       },
       {
-       "origin": "canary-wharf",
+       "origin": "wembley-park",
        "morphP50": 16.7,
        "morphP95": 16.8,
        "panP50": 16.7,
@@ -5266,14 +5218,14 @@
        "zoomP95": 16.7,
        "p50": 16.7,
        "p95": 16.8,
-       "max": 16.8,
-       "frames": 833,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.7,
-       "gpuFrameMs": 2.62
+       "max": 250,
+       "frames": 810,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.8,
+       "gpuFrameMs": 6.2
       },
       {
-       "origin": "heathrow",
+       "origin": "canary-wharf",
        "morphP50": 16.7,
        "morphP95": 16.7,
        "panP50": 16.7,
@@ -5281,127 +5233,142 @@
        "zoomP95": 16.7,
        "p50": 16.7,
        "p95": 16.7,
-       "max": 16.8,
-       "frames": 833,
+       "max": 33.3,
+       "frames": 832,
        "drawP50Ms": 0.1,
        "drawP95Ms": 0.8,
-       "gpuFrameMs": 6.08
+       "gpuFrameMs": 7.89
+      },
+      {
+       "origin": "heathrow",
+       "morphP50": 16.7,
+       "morphP95": 16.8,
+       "panP50": 16.7,
+       "panP95": 16.7,
+       "zoomP95": 16.8,
+       "p50": 16.7,
+       "p95": 16.8,
+       "max": 50,
+       "frames": 823,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.7,
+       "gpuFrameMs": 7.17
       },
       {
        "origin": "croydon",
        "morphP50": 16.7,
-       "morphP95": 16.7,
+       "morphP95": 16.8,
        "panP50": 16.7,
        "panP95": 16.8,
-       "zoomP95": 16.7,
+       "zoomP95": 16.8,
        "p50": 16.7,
-       "p95": 16.7,
-       "max": 16.8,
-       "frames": 833,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.8,
-       "gpuFrameMs": 2.41
+       "p95": 16.8,
+       "max": 83.4,
+       "frames": 824,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.6,
+       "gpuFrameMs": 7.03
       }
      ],
      "chord": [
       {
        "origin": "baker-street",
        "folds": {
-        "foldedShare": 0.19701052363574642,
-        "foldedSheets": 0.28065611136096136,
-        "medianStretch": 5.752070146585066
+        "foldedShare": 0.24826374154855865,
+        "foldedSheets": 0.367040954059592,
+        "medianStretch": 4.8653894454892574
        },
        "within1px": 1,
-       "p99Px": 0.048,
+       "p99Px": 0.137,
        "nearFold": {
-        "samples": 969,
-        "within1px": 0.9938,
-        "p99Px": 0.4
+        "samples": 851,
+        "within1px": 0.9929,
+        "p99Px": 0.526
        },
        "crossing": {
-        "primitives": 85,
-        "longestEdgeAtHalfPx": 12.9,
-        "p99EdgeAtHalfPx": 12.9
+        "primitives": 897,
+        "longestEdgeAtHalfPx": 13.7,
+        "p99EdgeAtHalfPx": 13.3
        }
       },
       {
        "origin": "wembley-park",
        "folds": {
-        "foldedShare": 0.08502362160174262,
-        "foldedSheets": 0.1270275841927563,
-        "medianStretch": 5.827037504895857
+        "foldedShare": 0.1921518289060511,
+        "foldedSheets": 0.3010435742071445,
+        "medianStretch": 3.151212005640365
        },
        "within1px": 1,
-       "p99Px": 0.046,
+       "p99Px": 0.154,
        "nearFold": {
-        "samples": 871,
-        "within1px": 0.9954,
-        "p99Px": 0.282
+        "samples": 858,
+        "within1px": 0.9918,
+        "p99Px": 0.7
        },
        "crossing": {
-        "primitives": 76,
-        "longestEdgeAtHalfPx": 14,
-        "p99EdgeAtHalfPx": 14
+        "primitives": 559,
+        "longestEdgeAtHalfPx": 17.8,
+        "p99EdgeAtHalfPx": 17.3
        }
       },
       {
        "origin": "canary-wharf",
        "folds": {
-        "foldedShare": 0.19187954397578433,
-        "foldedSheets": 0.2487725523341122,
-        "medianStretch": 5.552097489683034
+        "foldedShare": 0.25386856771054345,
+        "foldedSheets": 0.34917968259190835,
+        "medianStretch": 4.090828797612521
        },
        "within1px": 1,
-       "p99Px": 0.051,
+       "p99Px": 0.077,
        "nearFold": {
-        "samples": 900,
-        "within1px": 0.9744,
-        "p99Px": 4.812
+        "samples": 837,
+        "within1px": 0.9546,
+        "p99Px": 5.638
        },
        "crossing": {
-        "primitives": 89,
-        "longestEdgeAtHalfPx": 14.5,
-        "p99EdgeAtHalfPx": 14.5
+        "primitives": 409,
+        "longestEdgeAtHalfPx": 22.2,
+        "p99EdgeAtHalfPx": 16.2
        }
       },
       {
        "origin": "heathrow",
        "folds": {
-        "foldedShare": 0.12802695974426434,
-        "foldedSheets": 0.1752924406979488,
-        "medianStretch": 4.7804891926042785
+        "foldedShare": 0.24141772044470847,
+        "foldedSheets": 0.3543030770201418,
+        "medianStretch": 3.1436304028108046
        },
        "within1px": 1,
-       "p99Px": 0.022,
+       "p99Px": 0.065,
        "nearFold": {
-        "samples": 741,
-        "within1px": 0.9811,
-        "p99Px": 1.754
+        "samples": 537,
+        "within1px": 0.9814,
+        "p99Px": 1.449
        },
        "crossing": {
-        "primitives": 60,
-        "longestEdgeAtHalfPx": 11,
-        "p99EdgeAtHalfPx": 11
+        "primitives": 215,
+        "longestEdgeAtHalfPx": 11.1,
+        "p99EdgeAtHalfPx": 1.2
        }
       },
       {
        "origin": "croydon",
        "folds": {
-        "foldedShare": 0.09267235282469094,
-        "foldedSheets": 0.12674589431568573,
-        "medianStretch": 6.7403926563154
+        "foldedShare": 0.19381736399898158,
+        "foldedSheets": 0.2782124625900398,
+        "medianStretch": 3.5601090718537636
        },
        "within1px": 1,
-       "p99Px": 0.06,
+       "p99Px": 0.099,
        "nearFold": {
-        "samples": 889,
-        "within1px": 0.9325,
-        "p99Px": 11.324
+        "samples": 713,
+        "within1px": 0.9677,
+        "p99Px": 7.382
        },
        "crossing": {
-        "primitives": 87,
-        "longestEdgeAtHalfPx": 13.6,
-        "p99EdgeAtHalfPx": 13.6
+        "primitives": 758,
+        "longestEdgeAtHalfPx": 15.6,
+        "p99EdgeAtHalfPx": 11.3
        }
       }
      ]
@@ -5410,53 +5377,53 @@
    "spacingSweep": [
     {
      "spacingDiv": 256,
-     "shaded": 298824,
-     "fillVerts": 0,
-     "segments": 28119,
-     "bytes": 590499,
-     "tessMs": 6.1,
+     "shaded": 728250,
+     "fillVerts": 125364,
+     "segments": 53673,
+     "bytes": 4364937,
+     "tessMs": 0,
      "chord": {
-      "samples": 2037,
+      "samples": 2457,
       "within1px": 1,
-      "p99Px": 0.081,
-      "maxPx": 0.523,
+      "p99Px": 0.088,
+      "maxPx": 0.364,
       "byZoom": {
        "10": {
-        "samples": 99,
+        "samples": 77,
         "within1px": 1,
-        "p99Px": 0.048
+        "p99Px": 0.037
        },
        "12": {
-        "samples": 1268,
+        "samples": 1094,
         "within1px": 1,
-        "p99Px": 0.083
+        "p99Px": 0.076
        },
        "13": {
-        "samples": 347,
+        "samples": 193,
         "within1px": 1,
-        "p99Px": 0.162
+        "p99Px": 0.093
        },
        "14": {
-        "samples": 323,
+        "samples": 1093,
         "within1px": 1,
-        "p99Px": 0.026
+        "p99Px": 0.1
        }
       },
       "nearFold": {
-       "samples": 1930,
-       "within1px": 0.9943,
-       "p99Px": 0.334
+       "samples": 1745,
+       "within1px": 0.9891,
+       "p99Px": 1.112
       },
       "nearNoData": {
-       "samples": 456,
-       "within1px": 0.7434,
-       "p99Px": 7.729
+       "samples": 649,
+       "within1px": 0.641,
+       "p99Px": 7.242
       },
-      "invisible": 1577,
+      "invisible": 1149,
       "crossingOuterMinute": {
-       "primitives": 85,
-       "longestEdgeAtHalfPx": 12.9,
-       "p99EdgeAtHalfPx": 12.9
+       "primitives": 897,
+       "longestEdgeAtHalfPx": 13.7,
+       "p99EdgeAtHalfPx": 13.3
       }
      }
     }
@@ -5471,33 +5438,33 @@
      "worstP50": 16.7,
      "worstP95": 16.8,
      "drawP95Ms": 0.8,
-     "gpuFrameMs": 6.08,
+     "gpuFrameMs": 7.89,
      "note": "frame intervals are capped by vsync; the gate is judged on the phones"
     },
     "G7_originChange": {
-     "p50": 16.4,
-     "p95": 28.5,
+     "p50": 15.9,
+     "p95": 43.6,
      "pass": true
     },
     "G8_newOrigin": {
-     "p95NoNetwork": 40,
+     "p95NoNetwork": 61.5,
      "pass": null,
      "note": "not measured: synthetic geometry makes no request"
     },
     "G9_budget": {
-     "maxShaded": 298824,
+     "maxShaded": 728250,
      "maxTiles": 41,
      "overBudget": false
     },
     "failures": 0,
     "spacing": [
-     "spacing 256: 298824 shaded, 100.00% \u2264 1 px, p99 0.081 px"
+     "spacing 256: 728250 shaded, 100.00% \u2264 1 px, p99 0.088 px"
     ]
    }
   },
   "c": {
    "kind": "bench",
-   "at": "2026-11-13T12:18:10.512Z",
+   "at": "2026-11-13T14:17:00.333Z",
    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
    "backend": "c",
    "geom": "synthetic",
@@ -5540,26 +5507,20 @@
      "cold": [
       {
        "origin": "baker-street",
-       "ms": 39.9,
+       "ms": 89.1,
        "failed": null,
-       "fieldMs": 35.1,
+       "fieldMs": 34.5,
        "tiles": 27,
        "fetched": 0,
        "missing": 0,
-       "shaded": 298824,
-       "bytes": 1265355,
+       "shaded": 728250,
+       "bytes": 8016225,
        "overBudget": false,
-       "dropped": {
-        "secondary": 47,
-        "park": 20,
-        "water": 11,
-        "minor_rail": 3,
-        "primary": 103
-       },
-       "workerMs": 26.5,
-       "tessMs": 14.4,
-       "packMs": 11.7,
-       "uploadMs": 1.5,
+       "dropped": {},
+       "workerMs": 70.7,
+       "tessMs": 10.8,
+       "packMs": 59.6,
+       "uploadMs": 3.7,
        "peakResident": 520422,
        "rings": [
         1000,
@@ -5570,25 +5531,20 @@
       },
       {
        "origin": "wembley-park",
-       "ms": 32.9,
+       "ms": 61,
        "failed": null,
-       "fieldMs": 32.3,
+       "fieldMs": 32.9,
        "tiles": 28,
        "fetched": 0,
        "missing": 0,
-       "shaded": 297876,
-       "bytes": 1241010,
+       "shaded": 483546,
+       "bytes": 5126786,
        "overBudget": false,
-       "dropped": {
-        "park": 16,
-        "water": 9,
-        "minor_rail": 3,
-        "primary": 25
-       },
-       "workerMs": 24.9,
-       "tessMs": 8.5,
-       "packMs": 16.3,
-       "uploadMs": 1.5,
+       "dropped": {},
+       "workerMs": 52,
+       "tessMs": 7.8,
+       "packMs": 44.1,
+       "uploadMs": 2,
        "peakResident": 384576,
        "rings": [
         1000,
@@ -5599,25 +5555,20 @@
       },
       {
        "origin": "canary-wharf",
-       "ms": 27.9,
+       "ms": 95.8,
        "failed": null,
-       "fieldMs": 26.7,
+       "fieldMs": 27.8,
        "tiles": 34,
        "fetched": 0,
        "missing": 0,
-       "shaded": 298824,
-       "bytes": 1265355,
+       "shaded": 685950,
+       "bytes": 7801261,
        "overBudget": false,
-       "dropped": {
-        "park": 18,
-        "water": 13,
-        "minor_rail": 7,
-        "primary": 84
-       },
-       "workerMs": 21.7,
-       "tessMs": 11.4,
-       "packMs": 9.9,
-       "uploadMs": 0.5,
+       "dropped": {},
+       "workerMs": 82.2,
+       "tessMs": 14.2,
+       "packMs": 67.8,
+       "uploadMs": 7,
        "peakResident": 511182,
        "rings": [
         1000,
@@ -5628,25 +5579,20 @@
       },
       {
        "origin": "heathrow",
-       "ms": 29.7,
+       "ms": 46.2,
        "failed": null,
-       "fieldMs": 21.1,
+       "fieldMs": 24.8,
        "tiles": 20,
        "fetched": 0,
        "missing": 0,
-       "shaded": 296082,
-       "bytes": 1232190,
+       "shaded": 464395,
+       "bytes": 5975202,
        "overBudget": false,
-       "dropped": {
-        "park": 14,
-        "water": 9,
-        "minor_rail": 2,
-        "primary": 11
-       },
-       "workerMs": 16.3,
-       "tessMs": 13.9,
-       "packMs": 2.3,
-       "uploadMs": 0.2,
+       "dropped": {},
+       "workerMs": 37.8,
+       "tessMs": 7.4,
+       "packMs": 30.2,
+       "uploadMs": 1.5,
        "peakResident": 301447,
        "rings": [
         1000,
@@ -5657,25 +5603,20 @@
       },
       {
        "origin": "croydon",
-       "ms": 19.9,
+       "ms": 62,
        "failed": null,
-       "fieldMs": 24.3,
+       "fieldMs": 27.3,
        "tiles": 41,
        "fetched": 0,
        "missing": 0,
-       "shaded": 298014,
-       "bytes": 1243890,
+       "shaded": 609362,
+       "bytes": 7013994,
        "overBudget": false,
-       "dropped": {
-        "park": 16,
-        "water": 9,
-        "minor_rail": 2,
-        "primary": 45
-       },
-       "workerMs": 12,
-       "tessMs": 9.2,
-       "packMs": 2.6,
-       "uploadMs": 0.1,
+       "dropped": {},
+       "workerMs": 43.2,
+       "tessMs": 8.8,
+       "packMs": 34.1,
+       "uploadMs": 3.2,
        "peakResident": 427376,
        "rings": [
         1000,
@@ -5688,163 +5629,163 @@
      "warm": [
       {
        "origin": "baker-street",
-       "ms": 28.2,
+       "ms": 60.3,
        "failed": null,
-       "workerMs": 10,
-       "uploadMs": 0.8,
+       "workerMs": 44,
+       "uploadMs": 1.7,
        "cacheHits": 8
       },
       {
        "origin": "wembley-park",
-       "ms": 17,
+       "ms": 41.8,
        "failed": null,
-       "workerMs": 4.7,
-       "uploadMs": 0.9,
+       "workerMs": 26.5,
+       "uploadMs": 0.8,
        "cacheHits": 10
       },
       {
        "origin": "canary-wharf",
-       "ms": 37.3,
+       "ms": 58.7,
        "failed": null,
-       "workerMs": 15,
-       "uploadMs": 1.3,
-       "cacheHits": 10
-      },
-      {
-       "origin": "heathrow",
-       "ms": 27.2,
-       "failed": null,
-       "workerMs": 10.2,
-       "uploadMs": 0.2,
-       "cacheHits": 0
-      },
-      {
-       "origin": "croydon",
-       "ms": 31,
-       "failed": null,
-       "workerMs": 6.7,
-       "uploadMs": 1,
-       "cacheHits": 9
-      },
-      {
-       "origin": "baker-street",
-       "ms": 24.1,
-       "failed": null,
-       "workerMs": 6.7,
-       "uploadMs": 0.1,
+       "workerMs": 42.4,
+       "uploadMs": 2.6,
        "cacheHits": 13
       },
       {
-       "origin": "wembley-park",
-       "ms": 22.2,
-       "failed": null,
-       "workerMs": 15.6,
-       "uploadMs": 0.1,
-       "cacheHits": 10
-      },
-      {
-       "origin": "canary-wharf",
-       "ms": 32.8,
-       "failed": null,
-       "workerMs": 18.1,
-       "uploadMs": 0.3,
-       "cacheHits": 10
-      },
-      {
        "origin": "heathrow",
-       "ms": 28.5,
+       "ms": 43.8,
        "failed": null,
-       "workerMs": 10.1,
-       "uploadMs": 0.2,
-       "cacheHits": 0
+       "workerMs": 26.5,
+       "uploadMs": 0.8,
+       "cacheHits": 9
       },
       {
        "origin": "croydon",
-       "ms": 27.4,
+       "ms": 44.2,
        "failed": null,
-       "workerMs": 6.9,
+       "workerMs": 34.6,
+       "uploadMs": 3.8,
+       "cacheHits": 41
+      },
+      {
+       "origin": "baker-street",
+       "ms": 56.2,
+       "failed": null,
+       "workerMs": 42.3,
+       "uploadMs": 2.1,
+       "cacheHits": 27
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 41,
+       "failed": null,
+       "workerMs": 24.4,
+       "uploadMs": 0.9,
+       "cacheHits": 28
+      },
+      {
+       "origin": "canary-wharf",
+       "ms": 42,
+       "failed": null,
+       "workerMs": 36.4,
+       "uploadMs": 1.5,
+       "cacheHits": 34
+      },
+      {
+       "origin": "heathrow",
+       "ms": 44,
+       "failed": null,
+       "workerMs": 25.5,
+       "uploadMs": 1.5,
+       "cacheHits": 20
+      },
+      {
+       "origin": "croydon",
+       "ms": 43.4,
+       "failed": null,
+       "workerMs": 34.5,
+       "uploadMs": 1.9,
+       "cacheHits": 41
+      },
+      {
+       "origin": "baker-street",
+       "ms": 47,
+       "failed": null,
+       "workerMs": 40.6,
+       "uploadMs": 1.7,
+       "cacheHits": 27
+      },
+      {
+       "origin": "wembley-park",
+       "ms": 40.2,
+       "failed": null,
+       "workerMs": 24.5,
        "uploadMs": 1.2,
-       "cacheHits": 9
-      },
-      {
-       "origin": "baker-street",
-       "ms": 27.7,
-       "failed": null,
-       "workerMs": 6.6,
-       "uploadMs": 0.1,
-       "cacheHits": 13
-      },
-      {
-       "origin": "wembley-park",
-       "ms": 23.7,
-       "failed": null,
-       "workerMs": 6.2,
-       "uploadMs": 0.5,
-       "cacheHits": 10
+       "cacheHits": 28
       },
       {
        "origin": "canary-wharf",
-       "ms": 30.8,
+       "ms": 44.7,
        "failed": null,
-       "workerMs": 13.5,
-       "uploadMs": 1.1,
-       "cacheHits": 10
+       "workerMs": 36.5,
+       "uploadMs": 4.1,
+       "cacheHits": 34
       },
       {
        "origin": "heathrow",
-       "ms": 27.5,
+       "ms": 42,
        "failed": null,
-       "workerMs": 13.9,
-       "uploadMs": 0,
-       "cacheHits": 0
+       "workerMs": 24.8,
+       "uploadMs": 0.8,
+       "cacheHits": 20
       },
       {
        "origin": "croydon",
-       "ms": 10.5,
+       "ms": 42.9,
        "failed": null,
-       "workerMs": 6.4,
-       "uploadMs": 1.1,
-       "cacheHits": 9
+       "workerMs": 31.6,
+       "uploadMs": 1.4,
+       "cacheHits": 41
       },
       {
        "origin": "baker-street",
-       "ms": 23.9,
+       "ms": 56.5,
        "failed": null,
-       "workerMs": 7.4,
-       "uploadMs": 1.1,
-       "cacheHits": 13
+       "workerMs": 38.5,
+       "uploadMs": 2.5,
+       "cacheHits": 27
       },
       {
        "origin": "wembley-park",
-       "ms": 29.3,
+       "ms": 41,
        "failed": null,
-       "workerMs": 5.4,
-       "uploadMs": 1,
-       "cacheHits": 10
+       "workerMs": 28,
+       "uploadMs": 2.5,
+       "cacheHits": 28
       },
       {
        "origin": "canary-wharf",
-       "ms": 27.6,
+       "ms": 54.8,
        "failed": null,
-       "workerMs": 12.2,
-       "uploadMs": 0.1,
-       "cacheHits": 10
+       "workerMs": 39.8,
+       "uploadMs": 1.5,
+       "cacheHits": 34
       },
       {
        "origin": "heathrow",
-       "ms": 26.4,
+       "ms": 41.5,
        "failed": null,
-       "workerMs": 10.7,
+       "workerMs": 24.5,
        "uploadMs": 0.9,
-       "cacheHits": 0
+       "cacheHits": 20
       },
       {
        "origin": "croydon",
-       "ms": 13.2,
+       "ms": 43.4,
        "failed": null,
-       "workerMs": 6.1,
-       "uploadMs": 0.9,
-       "cacheHits": 9
+       "workerMs": 31.2,
+       "uploadMs": 1.5,
+       "cacheHits": 41
       }
      ],
      "motion": [
@@ -5854,29 +5795,29 @@
        "morphP95": 16.7,
        "panP50": 16.7,
        "panP95": 16.8,
-       "zoomP95": 16.8,
+       "zoomP95": 16.7,
        "p50": 16.7,
        "p95": 16.7,
-       "max": 16.8,
-       "frames": 833,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.8,
-       "gpuFrameMs": 3.2
+       "max": 50,
+       "frames": 831,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.5,
+       "gpuFrameMs": 4.8
       },
       {
        "origin": "wembley-park",
        "morphP50": 16.7,
-       "morphP95": 16.8,
+       "morphP95": 16.7,
        "panP50": 16.7,
-       "panP95": 16.8,
-       "zoomP95": 16.7,
+       "panP95": 16.7,
+       "zoomP95": 16.8,
        "p50": 16.7,
-       "p95": 16.8,
-       "max": 16.8,
+       "p95": 16.7,
+       "max": 33.4,
        "frames": 832,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.9,
-       "gpuFrameMs": 4.73
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.3,
+       "gpuFrameMs": 3.83
       },
       {
        "origin": "canary-wharf",
@@ -5884,29 +5825,29 @@
        "morphP95": 16.7,
        "panP50": 16.7,
        "panP95": 16.8,
-       "zoomP95": 16.8,
+       "zoomP95": 16.7,
        "p50": 16.7,
        "p95": 16.7,
        "max": 16.8,
-       "frames": 833,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.8,
-       "gpuFrameMs": 2.33
+       "frames": 832,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.3,
+       "gpuFrameMs": 2.89
       },
       {
        "origin": "heathrow",
        "morphP50": 16.7,
        "morphP95": 16.7,
        "panP50": 16.7,
-       "panP95": 16.8,
-       "zoomP95": 16.7,
+       "panP95": 16.7,
+       "zoomP95": 16.8,
        "p50": 16.7,
        "p95": 16.7,
        "max": 16.8,
-       "frames": 832,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.8,
-       "gpuFrameMs": 6.89
+       "frames": 833,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.5,
+       "gpuFrameMs": 3.45
       },
       {
        "origin": "croydon",
@@ -5914,115 +5855,115 @@
        "morphP95": 16.7,
        "panP50": 16.7,
        "panP95": 16.8,
-       "zoomP95": 16.8,
+       "zoomP95": 16.7,
        "p50": 16.7,
        "p95": 16.7,
-       "max": 16.8,
-       "frames": 832,
-       "drawP50Ms": 0.1,
-       "drawP95Ms": 0.7,
-       "gpuFrameMs": 1.38
+       "max": 33.4,
+       "frames": 831,
+       "drawP50Ms": 0,
+       "drawP95Ms": 0.5,
+       "gpuFrameMs": 5.53
       }
      ],
      "chord": [
       {
        "origin": "baker-street",
        "folds": {
-        "foldedShare": 0.19701052363574642,
-        "foldedSheets": 0.28065611136096136,
-        "medianStretch": 5.752070146585066
+        "foldedShare": 0.24826374154855865,
+        "foldedSheets": 0.367040954059592,
+        "medianStretch": 4.8653894454892574
        },
        "within1px": 1,
-       "p99Px": 0.048,
+       "p99Px": 0.137,
        "nearFold": {
-        "samples": 969,
-        "within1px": 0.9938,
-        "p99Px": 0.4
+        "samples": 851,
+        "within1px": 0.9929,
+        "p99Px": 0.526
        },
        "crossing": {
-        "primitives": 85,
-        "longestEdgeAtHalfPx": 12.9,
-        "p99EdgeAtHalfPx": 12.9
+        "primitives": 897,
+        "longestEdgeAtHalfPx": 13.7,
+        "p99EdgeAtHalfPx": 13.3
        }
       },
       {
        "origin": "wembley-park",
        "folds": {
-        "foldedShare": 0.08502362160174262,
-        "foldedSheets": 0.1270275841927563,
-        "medianStretch": 5.827037504895857
+        "foldedShare": 0.1921518289060511,
+        "foldedSheets": 0.3010435742071445,
+        "medianStretch": 3.151212005640365
        },
        "within1px": 1,
-       "p99Px": 0.046,
+       "p99Px": 0.154,
        "nearFold": {
-        "samples": 871,
-        "within1px": 0.9954,
-        "p99Px": 0.282
+        "samples": 858,
+        "within1px": 0.9918,
+        "p99Px": 0.7
        },
        "crossing": {
-        "primitives": 76,
-        "longestEdgeAtHalfPx": 14,
-        "p99EdgeAtHalfPx": 14
+        "primitives": 559,
+        "longestEdgeAtHalfPx": 17.8,
+        "p99EdgeAtHalfPx": 17.3
        }
       },
       {
        "origin": "canary-wharf",
        "folds": {
-        "foldedShare": 0.19187954397578433,
-        "foldedSheets": 0.2487725523341122,
-        "medianStretch": 5.552097489683034
+        "foldedShare": 0.25386856771054345,
+        "foldedSheets": 0.34917968259190835,
+        "medianStretch": 4.090828797612521
        },
        "within1px": 1,
-       "p99Px": 0.051,
+       "p99Px": 0.077,
        "nearFold": {
-        "samples": 900,
-        "within1px": 0.9744,
-        "p99Px": 4.812
+        "samples": 837,
+        "within1px": 0.9546,
+        "p99Px": 5.638
        },
        "crossing": {
-        "primitives": 89,
-        "longestEdgeAtHalfPx": 14.5,
-        "p99EdgeAtHalfPx": 14.5
+        "primitives": 409,
+        "longestEdgeAtHalfPx": 22.2,
+        "p99EdgeAtHalfPx": 16.2
        }
       },
       {
        "origin": "heathrow",
        "folds": {
-        "foldedShare": 0.12802695974426434,
-        "foldedSheets": 0.1752924406979488,
-        "medianStretch": 4.7804891926042785
+        "foldedShare": 0.24141772044470847,
+        "foldedSheets": 0.3543030770201418,
+        "medianStretch": 3.1436304028108046
        },
        "within1px": 1,
-       "p99Px": 0.022,
+       "p99Px": 0.065,
        "nearFold": {
-        "samples": 741,
-        "within1px": 0.9811,
-        "p99Px": 1.754
+        "samples": 537,
+        "within1px": 0.9814,
+        "p99Px": 1.449
        },
        "crossing": {
-        "primitives": 60,
-        "longestEdgeAtHalfPx": 11,
-        "p99EdgeAtHalfPx": 11
+        "primitives": 215,
+        "longestEdgeAtHalfPx": 11.1,
+        "p99EdgeAtHalfPx": 1.2
        }
       },
       {
        "origin": "croydon",
        "folds": {
-        "foldedShare": 0.09267235282469094,
-        "foldedSheets": 0.12674589431568573,
-        "medianStretch": 6.7403926563154
+        "foldedShare": 0.19381736399898158,
+        "foldedSheets": 0.2782124625900398,
+        "medianStretch": 3.5601090718537636
        },
        "within1px": 1,
-       "p99Px": 0.06,
+       "p99Px": 0.099,
        "nearFold": {
-        "samples": 889,
-        "within1px": 0.9325,
-        "p99Px": 11.324
+        "samples": 713,
+        "within1px": 0.9677,
+        "p99Px": 7.382
        },
        "crossing": {
-        "primitives": 87,
-        "longestEdgeAtHalfPx": 13.6,
-        "p99EdgeAtHalfPx": 13.6
+        "primitives": 758,
+        "longestEdgeAtHalfPx": 15.6,
+        "p99EdgeAtHalfPx": 11.3
        }
       }
      ]
@@ -6031,53 +5972,53 @@
    "spacingSweep": [
     {
      "spacingDiv": 256,
-     "shaded": 298824,
-     "fillVerts": 0,
-     "segments": 28119,
-     "bytes": 1265355,
-     "tessMs": 7.4,
+     "shaded": 728250,
+     "fillVerts": 125364,
+     "segments": 53673,
+     "bytes": 8016225,
+     "tessMs": 0,
      "chord": {
-      "samples": 2037,
+      "samples": 2457,
       "within1px": 1,
-      "p99Px": 0.081,
-      "maxPx": 0.523,
+      "p99Px": 0.088,
+      "maxPx": 0.364,
       "byZoom": {
        "10": {
-        "samples": 99,
+        "samples": 77,
         "within1px": 1,
-        "p99Px": 0.048
+        "p99Px": 0.037
        },
        "12": {
-        "samples": 1268,
+        "samples": 1094,
         "within1px": 1,
-        "p99Px": 0.083
+        "p99Px": 0.076
        },
        "13": {
-        "samples": 347,
+        "samples": 193,
         "within1px": 1,
-        "p99Px": 0.162
+        "p99Px": 0.093
        },
        "14": {
-        "samples": 323,
+        "samples": 1093,
         "within1px": 1,
-        "p99Px": 0.026
+        "p99Px": 0.1
        }
       },
       "nearFold": {
-       "samples": 1930,
-       "within1px": 0.9943,
-       "p99Px": 0.334
+       "samples": 1745,
+       "within1px": 0.9891,
+       "p99Px": 1.112
       },
       "nearNoData": {
-       "samples": 456,
-       "within1px": 0.7434,
-       "p99Px": 7.729
+       "samples": 649,
+       "within1px": 0.641,
+       "p99Px": 7.242
       },
-      "invisible": 1577,
+      "invisible": 1149,
       "crossingOuterMinute": {
-       "primitives": 85,
-       "longestEdgeAtHalfPx": 12.9,
-       "p99EdgeAtHalfPx": 12.9
+       "primitives": 897,
+       "longestEdgeAtHalfPx": 13.7,
+       "p99EdgeAtHalfPx": 13.3
       }
      }
     }
@@ -6090,29 +6031,29 @@
     "geom": "synthetic",
     "G6_frames": {
      "worstP50": 16.7,
-     "worstP95": 16.8,
-     "drawP95Ms": 0.9,
-     "gpuFrameMs": 6.89,
+     "worstP95": 16.7,
+     "drawP95Ms": 0.5,
+     "gpuFrameMs": 5.53,
      "note": "frame intervals are capped by vsync; the gate is judged on the phones"
     },
     "G7_originChange": {
-     "p50": 27.5,
-     "p95": 37.3,
+     "p50": 43.8,
+     "p95": 60.3,
      "pass": true
     },
     "G8_newOrigin": {
-     "p95NoNetwork": 39.9,
+     "p95NoNetwork": 95.8,
      "pass": null,
      "note": "not measured: synthetic geometry makes no request"
     },
     "G9_budget": {
-     "maxShaded": 298824,
+     "maxShaded": 728250,
      "maxTiles": 41,
      "overBudget": false
     },
     "failures": 0,
     "spacing": [
-     "spacing 256: 298824 shaded, 100.00% \u2264 1 px, p99 0.081 px"
+     "spacing 256: 728250 shaded, 100.00% \u2264 1 px, p99 0.088 px"
     ]
    }
   }
@@ -9553,6 +9494,52 @@
      "tessMs": 171
     }
    ]
+  },
+  "note": "Measured with the earlier 300k vertex budget and 600k worker cache; not rerun since the budget became 5M and the cache 8M. The drawing gates and the census do not depend on either."
+ },
+ "bentMapGpu": {
+  "about": "GPU time of one bent frame (u = 1), median of 12, real Streets v8 tiles at Canary Wharf, toy transit field, 3,687,950 vertices shaded, headless Chrome 157 on an Apple M2. Measured twice per setting; the spread between repeats is larger than any difference between settings.",
+  "ms": {
+   "B, exact bearings": {
+    "plain": [
+     20.5,
+     18.83
+    ],
+    "scaleAware": [
+     17.23,
+     23.76
+    ]
+   },
+   "B, half by reach": {
+    "plain": [
+     23.02,
+     14.95
+    ],
+    "scaleAware": [
+     23.13,
+     23.07
+    ]
+   },
+   "C, exact bearings": {
+    "plain": [
+     18.1,
+     16.78
+    ],
+    "scaleAware": [
+     15.54,
+     19.2
+    ]
+   },
+   "C, half by reach": {
+    "plain": [
+     19.85,
+     19.88
+    ],
+    "scaleAware": [
+     17.21,
+     18.65
+    ]
+   }
   }
  }
 }

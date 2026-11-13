@@ -10,10 +10,11 @@ Issue #5, part W-01 (Direction 5). Written 2026-11-13 against `master` at 002af6
 - **The deck.gl probe (A)** fails the line-width gate.
 - **Real tiles** (Mapbox Streets v8, [Results: real tiles](#results-real-tiles)):
   - the renderer passes all five drawing gates;
-  - but a transit scene needs 4–11× the 300k vertex budget at 48 m cells;
-  - a new origin takes up to 0.4 s with warm tiles.
-
-  Simplifying the geometry is the next piece of work.
+  - a transit scene is 1.1M–3.3M vertices shaded at 48 m cells in the census, and 3.7M for Canary
+    Wharf as the lab draws it: inside the 5M budget. A bent frame of that scene takes 15–24 ms of
+    GPU time on the M2.
+- **The bent map** gives each direction angle by how much the field reaches there, and lets the
+  base map step back as it bends ([On the bent map](#on-the-bent-map-directions-by-reach-the-style-the-network)).
 - **Not yet measured:** the two phones.
 
 B is the chosen renderer, with C as its fallback. It still has to be confirmed on the phones. The
@@ -98,6 +99,52 @@ and scene together, when the new scene arrives, and keeps the old view on screen
 - **"Tint folds"** (lab) draws a layer built from the field's own cells, only where it flips,
   under the lines. So every fold shows, not only folded parks and water.
 
+### On the bent map: directions by reach, the style, the network
+
+With exact bearings, a fast line's whole reach lands in a thin wedge. From Canary Wharf, central
+London fills about 30° to the west-north-west, its walking areas stacked on each other, every road
+drawn at full strength. Three things make the bent map readable.
+
+**Directions by reach** (`angularSpread` in `warp.js`; the lab's "Directions" menu, `?spread=`):
+
+- On each ring of minutes, every direction gets the share of the circle that it holds of the area
+  reachable within that time, mixed with an even share. The lab's default mixes half and half
+  (`spread` 0.5); 1 is the area share alone, 0 keeps every bearing.
+- Within a short walk the reach is a disc, so near the pin bearings stay as they are. Further out,
+  the directions a fast line reaches into open up and the rest close.
+- What stays exact: the order of directions (north-west stays between north and west), and the
+  radius, which is still minutes. On each ring the remap only stretches angles, so it adds no
+  folds; a unit test checks the fold sign.
+- What it costs: bearings are no longer true. At half by reach they move by up to 20° (Baker
+  Street) to 48° (Croydon) at the 45-minute ring, and the widest 10° sector opens 1.9–3.7×. By
+  reach alone: up to 38–96°.
+- The table is 36 bearings × 10 rings, interpolated bilinearly: a uniform array for B, used in the
+  worker for C. It takes about 1 ms per origin to build (node, M2).
+- It belongs to the view, not to the field. Whether the product uses it is W-02's call.
+
+**The bent-map style** (the lab's "Scale-aware style"; `?style=plain` turns it off). Everything in
+it is 1 at u = 0, so the ordinary map doesn't change.
+
+- **A line thins where the bent map squeezes it sideways:** its width × √(scale across the line),
+  between 0.35 and 1. It never gets wider: the bend magnifies most walking areas (about 4× outward
+  in the Canary Wharf wedge), and wider lines there only add weight.
+- **Each road and rail class recedes as the map bends,** to its own strength (`bent` in the
+  schema): motorway 0.8, trunk 0.7, primary 0.55, secondary 0.4, main rail and tunnels 0.45,
+  minor rail 0.35. On the bent map the base map is context; the stations and the network carry the
+  picture.
+- **Folds:** lines on a fold fade to 0.4, folded parks and water to 0.45.
+- **Station dots** shrink where the map is squeezed (never grow), and a labelled station's dot is a
+  little bigger. Rail is drawn above roads.
+- **Cost:** B computes the local scale in the vertex shader (four more field samples per segment);
+  C gets it from the worker as one more attribute (16 bytes per segment). Neither costs anything
+  measurable: a bent frame of the 3.7M-vertex Canary Wharf scene takes 14–16 ms of GPU time on the
+  M2 with the style on or off.
+
+**The network** (lab only; "Network", `?network=0` hides it): the toy lines drawn straight from
+stop to stop through the warp, in their own colours, fading in over the morph. On a time map the
+ride between two stations has no geography of its own, and the tiles' rail between them crosses
+the gaps between walking areas and smears. W-02 can draw #1's real network the same way.
+
 ### The contract for the London map (#6)
 
 ```js
@@ -136,7 +183,7 @@ const { x, y, alpha } = warp.toScreen(lon, lat, camera, u);   // CSS px
 | G6 frames | morph and pan, judged on the phones; desktop records draw() CPU time and GPU time beside the vsync-capped frame interval | phones: p50 ≤ 17 ms, p95 ≤ 33 ms |
 | G7 origin change | warm tiles, field ready, bent map → first frame of the new origin with the GPU finished (includes B's texture upload) | p95 ≤ 200 ms (slower phone) |
 | G8 new origin | cold tiles → first frame, real tiles only (`?geom=tiles`); a missing tile fails it | p95 ≤ 1.5 s |
-| G9 budget | vertices shaded (fill vertices + 6 per line segment per draw; roads draw twice, casing and fill) and tiles per origin | ≤ 300k and ≤ 48, or `overBudget` reported |
+| G9 budget | vertices shaded (fill vertices + 6 per line segment per draw; roads draw twice, casing and fill) and tiles per origin | ≤ 5M and ≤ 48, or `overBudget` reported |
 | G10 capabilities | each `?caps=` rung draws, no extension required | no console errors |
 
 The reference views for G1, G3 and G4 are 390×844 and 1440×900, with the 45-minute ring at
@@ -162,6 +209,7 @@ core WebGL2, so that need costs nothing on a conformant device.
   island, parks).
 - Cells: 48 m.
 - Origins: Baker Street, Wembley Park, Canary Wharf, Heathrow, Croydon (East Croydon).
+- The lab's defaults: half by reach, the bent-map style on, the 5M budget.
 
 **How to read the frame numbers.** Headless Chrome caps animation frames at 60 Hz, so the frame
 interval only shows that no frame was missed. The draw-call and GPU times are the useful desktop
@@ -169,17 +217,17 @@ numbers.
 
 | Gate | B (gpu) | C (cpu) | A (deck.gl) |
 |------|---------|---------|-------------|
-| G1 parity | **pass**: max 0.0006 px, 6,000 samples, alphas equal | **pass**: max 0.0001 px, 6,000 samples, alphas equal | not measurable (no evaluator) |
+| G1 parity | **pass**: max 0.0035 px, 6,000 samples, alphas equal | **pass**: max 0.0001 px, 6,000 samples, alphas equal | not measurable (no evaluator) |
 | G2 registration | **pass**: max 0 px | **pass**: max 0 px | **pass**: max 0 px |
-| G3 radius (drawn) | **pass**: radius max 0.058 px, ordinary max 0.061 px (300/300 dots) | **pass**: radius max 0.058 px, ordinary max 0.061 px (300/300 dots) | not measured (no pixel read-back) |
-| G4 chord, phone view | 99.91% within 1 px, p99 0.213 px | 99.91% within 1 px, p99 0.213 px | 99.65% within 1 px, p99 0.314 px |
-| G4 chord, desktop view | 99.57% within 1 px, p99 0.511 px | 99.57% within 1 px, p99 0.511 px | 99.07% within 1 px, p99 0.907 px |
-| G4, reported apart | near folds 98.9% (p99 1.264 px); crossing the outer minute: 257 primitives, longest edge at u = ½ 18 px | same mesh | same mesh |
-| G5 width (px) | **pass**: chain 1.635, kink 1.62, 12 angles 1.46–1.501 (nominal 1.5); stretched 1314:1 → 1.816 vs 1.815 | **pass**: chain 1.635, kink 1.62, 12 angles 1.46–1.501 (nominal 1.5); stretched 1314:1 → 1.816 vs 1.815 | **fail**: 26% of segments under 75% of their width, 7.8% under 25% (computed) |
-| G6 frames (5 origins) | frame p50/p95 16.7/16.8 ms; draw() p95 0.2 ms; GPU ≤ 5.24 ms a frame | frame p50/p95 16.7/16.8 ms; draw() p95 0.2 ms; GPU ≤ 4.53 ms a frame | frame p50/p95 16.7/16.7 ms; draw() p95 3.2 ms (it rebuilds its layers every frame); no GPU timer |
-| G7 origin change | **pass**: p50 11.2, p95 16.7 ms | **pass**: p50 11.5, p95 18.7 ms | **pass**: p50 12.7, p95 27.1 ms |
-| G8 new origin | not measured (no network); p95 38.6 ms without it | not measured (no network); p95 38.9 ms without it | not measured (no network); p95 42 ms without it |
-| G9 budget (transit) | **pass**: ≤ 298,848 shaded, ≤ 41 tiles | **pass**: ≤ 298,848 shaded, ≤ 41 tiles | **pass**: ≤ 298,848 shaded, ≤ 41 tiles |
+| G3 radius (drawn) | **pass**: radius max 0.06 px, ordinary max 0.061 px (300/300 dots) | **pass**: radius max 0.06 px, ordinary max 0.061 px (300/300 dots) | not measured (no pixel read-back) |
+| G4 chord, phone view | 100.00% within 1 px, p99 0.305 px | 100.00% within 1 px, p99 0.305 px | 99.83% within 1 px, p99 0.253 px |
+| G4 chord, desktop view | 99.40% within 1 px, p99 0.837 px | 99.40% within 1 px, p99 0.837 px | 99.78% within 1 px, p99 0.542 px |
+| G4, reported apart | near folds 97.3% (p99 3.525 px); crossing the outer minute: 522 primitives, longest edge at u = ½ 21.1 px | same mesh | same mesh |
+| G5 width (px) | **pass**: chain 1.635, kink 1.62, 12 angles 1.46–1.501 (nominal 1.5); stretched 723:1 → 1.814 vs 1.815 | **pass**: chain 1.635, kink 1.62, 12 angles 1.46–1.501 (nominal 1.5); stretched 723:1 → 1.814 vs 1.815 | **fail**: 32% of segments under 75% of their width, 6.1% under 25% (computed) |
+| G6 frames (5 origins) | frame p50/p95 16.7/16.7 ms; draw() p95 0.2 ms; GPU ≤ 12.1 ms a frame | frame p50/p95 16.7/16.8 ms; draw() p95 0.2 ms; GPU ≤ 4.96 ms a frame | frame p50/p95 16.7/16.8 ms; draw() p95 3.1 ms (it rebuilds its layers every frame); no GPU timer |
+| G7 origin change | **pass**: p50 11.1, p95 14.4 ms | **pass**: p50 12.1, p95 28.2 ms | **pass**: p50 12.8, p95 30.6 ms |
+| G8 new origin | not measured (no network); p95 31.1 ms without it | not measured (no network); p95 43.6 ms without it | not measured (no network); p95 58.3 ms without it |
+| G9 budget (transit) | **pass**: ≤ 346,195 shaded, ≤ 41 tiles | **pass**: ≤ 346,195 shaded, ≤ 41 tiles | **pass**: ≤ 346,195 shaded, ≤ 41 tiles |
 
 - **G10 rungs:**
   - `?caps=no-vtf` and `?caps=no-r32f` fall back to C.
@@ -187,21 +235,25 @@ numbers.
   - Losing and restoring the WebGL context shows the ordinary map, then the mesh again.
 - **Probe A's size:** deck.gl adds 577 kB gzipped (`dist.min.js` 9.4.1). Our renderer is 29 kB
   gzipped, plus 21 kB of vendored decoders.
+- **B's GPU time** (≤ 12.1 ms a frame, against C's 5.0) is the price of evaluating the warp in the
+  shader: each line vertex samples the field six times (both ends and the local scale), each with
+  the angle table's `atan`, `cos` and `sin`. On real tiles the two back-ends are level (see
+  [Results: real tiles](#results-real-tiles)).
 
 ### Stress run
 
-**Setup.** 24 m cells, which the budget holds to 300k shaded by shedding geometry. A 390×844 view
-at DPR 2, with the CPU throttled 4× by Chrome. The worker's own times don't change under that throttle, so it slows only
+**Setup.** 24 m cells, with nothing shed under the 5M budget. A 390×844 view at DPR 2, with the
+CPU throttled 4× by Chrome. The worker's own times don't change under that throttle, so it slows only
 the main thread. This run is indicative, not a phone.
 
 | | B (gpu) | C (cpu) |
 |---|---|---|
-| Shaded per origin | 296,082–298,824 | 296,082–298,824 |
-| Frames, worst p50 / p95 | 16.7 / 16.8 ms (worst frame 16.8 ms) | 16.7 / 16.8 ms (worst frame 16.8 ms) |
-| draw() CPU p95 | 0.8 ms | 0.9 ms |
-| GPU time a frame | 2.41–6.08 ms | 1.38–6.89 ms |
-| G7 origin change, p95 | 28.5 ms | 37.3 ms |
-| Worker pack at Baker Street | 14.2 ms | 11.7 ms |
+| Shaded per origin | 464,395–728,250 | 464,395–728,250 |
+| Frames, worst p50 / p95 | 16.7 / 16.8 ms (worst frame 250 ms) | 16.7 / 16.7 ms (worst frame 50 ms) |
+| draw() CPU p95 | 0.8 ms | 0.5 ms |
+| GPU time a frame | 6.2–7.89 ms | 2.89–5.53 ms |
+| G7 origin change, p95 | 43.6 ms | 60.3 ms |
+| Worker pack at Baker Street | 27.8 ms | 59.6 ms |
 
 ### Spacing sweep
 
@@ -209,12 +261,11 @@ Baker Street, transit field, phone view, G4's measure (sampled by size on screen
 
 | Cells | Shaded | Within 1 px | p99 | Near folds within 1 px |
 |---|---:|---:|---:|---:|
-| 95 m | 167,641 | 99.15% | 0.939 px | 96.3% |
-| 48 m | 296,838 | 99.70% | 0.268 px | 98.9% |
-| 24 m | 298,824 | 100.00% | 0.081 px | 99.4% |
+| 95 m | 167,641 | 99.05% | 0.916 px | 95.3% |
+| 48 m | 346,195 | 99.92% | 0.281 px | 98.3% |
+| 24 m | 728,250 | 100.00% | 0.088 px | 98.9% |
 
-95 m cells fail the size-weighted check, so the default is 48 m. At 48 m and 24 m Baker Street
-sheds geometry to stay inside 300k, so the bigger cell count buys less than it seems here.
+95 m cells pass only just (99.05%), and only 95% near folds, so the default is 48 m.
 
 ### Chord error per field and origin
 
@@ -222,9 +273,9 @@ G4's measure, phone view, away from folds.
 
 | Field | Baker Street | Wembley Park | Canary Wharf | Heathrow | Croydon |
 |---|---|---|---|---|---|
-| transit | 100.00%, p99 0.238 px | 100.00%, p99 0.227 px | 99.46%, p99 0.462 px | 100.00%, p99 0.074 px | 99.89%, p99 0.159 px |
-| walk | 100.00%, p99 0.081 px | 100.00%, p99 0.035 px | 100.00%, p99 0.063 px | 100.00%, p99 0.036 px | 100.00%, p99 0.036 px |
-| cliff | 99.91%, p99 0.097 px | 94.19% **fail**, p99 2.199 px | 99.85%, p99 0.059 px | 99.84%, p99 0.233 px | 100.00%, p99 0.049 px |
+| transit | 99.76%, p99 0.268 px | 100.00%, p99 0.179 px | 99.91%, p99 0.258 px | 100.00%, p99 0.133 px | 99.75%, p99 0.616 px |
+| walk | 100.00%, p99 0.095 px | 100.00%, p99 0.035 px | 100.00%, p99 0.073 px | 100.00%, p99 0.036 px | 100.00%, p99 0.034 px |
+| cliff | 99.96%, p99 0.135 px | 94.92% **fail**, p99 2.117 px | 99.85%, p99 0.091 px | 100.00%, p99 0.298 px | 100.00%, p99 0.071 px |
 
 The cliff field at Wembley Park fails. The river is a 9-minute jump within one field cell, so a
 fixed 48 m mesh can't follow it there. The plan named this risk. Its fallback is a mesh
@@ -243,18 +294,23 @@ These are renderer diagnostics, not Direction 4's verdict, because the fields ar
 
 | Field | Baker Street | Wembley Park | Canary Wharf | Heathrow | Croydon |
 |---|---|---|---|---|---|
-| transit | 19.7% (stacked 28.1%), 5.8:1 | 8.5% (stacked 12.7%), 5.8:1 | 19.2% (stacked 24.9%), 5.6:1 | 12.8% (stacked 17.5%), 4.8:1 | 9.3% (stacked 12.7%), 6.7:1 |
+| transit | 24.8% (stacked 36.7%), 4.9:1 | 19.2% (stacked 30.1%), 3.2:1 | 25.4% (stacked 34.9%), 4.1:1 | 24.1% (stacked 35.4%), 3.1:1 | 19.4% (stacked 27.8%), 3.6:1 |
 | walk | 0.0% (stacked 0.0%), 1.0:1 | 0.0% (stacked 0.0%), 1.0:1 | 0.0% (stacked 0.0%), 1.0:1 | 0.0% (stacked 0.0%), 1.0:1 | 0.0% (stacked 0.0%), 1.0:1 |
-| cliff | 0.0% (stacked 0.0%), 1.0:1 | 0.0% (stacked 0.0%), 1.0:1 | 0.0% (stacked 0.0%), 1.0:1 | 0.0% (stacked 0.0%), 1.0:1 | 0.0% (stacked 0.0%), 1.0:1 |
+| cliff | 0.0% (stacked 0.0%), 1.1:1 | 0.0% (stacked 0.0%), 1.1:1 | 0.0% (stacked 0.0%), 1.1:1 | 0.0% (stacked 0.0%), 1.1:1 | 0.0% (stacked 0.0%), 1.1:1 |
 
-Walk and cliff fields don't fold, and their stretch is 1.0:1. The toy network misses both
-proposed Direction 4 limits (10% folded, 3:1 stretch) at most origins. That is a warning, not a
+Walk and cliff fields don't fold, and their stretch is about 1:1. The toy network misses both
+proposed Direction 4 limits (10% folded, 3:1 stretch) at every origin. That is a warning, not a
 result: W-02 must run the same numbers on #1's real field.
+
+These are measured at half by reach. With exact bearings the same field folds 8.5–19.7% of the
+ring at 4.8–6.7:1. Directions by reach lowers the stretch, and raises the folded share: it makes no
+new folds, but the folds lie in the transit directions, which are the sectors it opens.
 
 ### Screenshots
 
-Back-end B, synthetic geometry, toy transit field, 1000×700 at DPR 1, taken with
-`scripts/lab_headless.mjs` (`--size 1000x700`). URL `/warp/lab/?backend=b&field=transit&origin=…&folds=…`.
+Back-end B, synthetic geometry, toy transit field, the lab's defaults (half by reach, the bent-map
+style, the network), 1000×700 at DPR 1, taken with `scripts/lab_headless.mjs` (`--size 1000x700`).
+URL `/warp/lab/?backend=b&field=transit&origin=…&folds=…`.
 
 | Baker Street, ordinary (u = 0, folds off) | Halfway (u = 0.5, fold layer on) |
 |---|---|
@@ -264,17 +320,16 @@ Back-end B, synthetic geometry, toy transit field, 1000×700 at DPR 1, taken wit
 
 **What the screenshots show:**
 
-- **Halfway:** places past 45 minutes move towards the outer ring and fade. The rings appear
-  only at the end of the morph.
+- **Halfway:** places past 45 minutes (Clapham Junction, Balham) move towards the outer ring and
+  fade. The network fades in; the rings appear only at the end of the morph.
 - **Bent:** nothing is drawn outside the 45-minute ring.
-- **Baker Street, bent:** Wembley Park's dot is at 20 minutes west-north-west. Its label loses a
-  collision with Finchley Road's (10 min); a tap lists it.
-- **Wembley Park, bent:** Baker Street sits at 20 minutes in the narrow, folded wedge that the
-  Metropolitan and Jubilee lines pull central London into.
+- **Baker Street, bent:** Wembley Park is at 20 minutes west-north-west, at the end of the
+  Metropolitan line, with the Elizabeth and Piccadilly lines running west and the DLR east.
+- **Wembley Park, bent:** the Metropolitan and Jubilee lines pull central London in. Baker Street
+  is at 20 minutes, and central London spreads over the south-east quarter rather than a narrow
+  wedge, still folded (the pink).
 - **Every station** has a dot, with its label beside it. Over synthetic geometry the corner says
   so instead of showing Mapbox's credit.
-- **Shedding is visible.** Baker Street's 48 m scene is at the 300k budget, so its secondary roads
-  and smallest parks (Regent's Park among them) are dropped.
 
 ## Results: real tiles
 
@@ -314,21 +369,29 @@ Mapbox Streets v8 through `/tiles`, the toy transit field, headless Chrome 157 o
 | G4 chord | phone view 99.92%, desktop 99.37% |
 | G5 width | chain 1.635, kink 1.62, angles 1.46–1.50 (nominal 1.5); at an 81:1 stretch 1.814 vs 1.815 |
 
-**The budget does not hold.**
+**Real scenes fit the 5M budget** whole, with water, parks and every road class: 1.1M–3.3M
+vertices shaded per transit origin at 48 m cells in the census above, and 3.7M for Canary Wharf as
+the lab draws it.
 
-- **Transit scenes are over 300k at every origin**, even after the worker sheds every park and
-  water body, 64 secondary roads and 2,163 primary road pieces (Baker Street).
-- **What is left is too much:** 0.49M–1.10M shaded of motorway, trunk and main rail, which the
-  shed order never drops.
-- **The map loses its water and parks.** Shedding removes them first, so the transit view has
-  none.
-- **Walking scenes fit** (264k–300k), with some parks shed.
+**GPU time per bent frame** of the largest, Canary Wharf's 3.7M (median of 12, measured twice per
+setting, `bentMapGpu` in the results file):
 
-This scene size has knock-on costs:
+| | Exact bearings | Half by reach |
+|---|---|---|
+| B, plain style | 18.8–20.5 ms | 15.0–23.0 ms |
+| B, bent-map style | 17.2–23.8 ms | 23.1 ms |
+| C, plain style | 16.8–18.1 ms | 19.9 ms |
+| C, bent-map style | 15.5–19.2 ms | 17.2–18.7 ms |
+
+Repeats differ more than settings do, so neither directions by reach nor the style costs anything
+measurable here, and B and C are level. At about 20 ms a frame the M2 holds 50–60 frames a
+second on this scene; a phone will be slower, which is what its G6 run has to show.
+
+**Origin changes** were measured with the earlier 300k budget and 600k worker cache, and not rerun
+since the budget became 5M and the cache 8M:
 
 | | B | C |
 |---|---|---|
-| GPU time per bent frame (transit) | 6.2–11.2 ms | 7.6–12.2 ms |
 | New origin, warm tiles (G7), p95 | 366 ms (**fail**) | 360 ms (**fail**) |
 | New origin, tiles from the browser's cache, p95 | 544 ms | 418 ms |
 | Worker tessellation per transit origin | 140–480 ms | 110–360 ms |
@@ -341,19 +404,13 @@ broadband, but each origin downloads 1.8–3.7 MB.
 - The benchmark's own cold rows were served from the browser's HTTP cache, which the census had
   filled. The DevTools cache switch doesn't reach the module worker.
 
-G7 fails because a real transit scene is bigger than the worker's 600k cache, so going back to an
-origin tessellates its tiles again.
+G7 failed because a real transit scene was bigger than the 600k cache, so going back to an origin
+tessellated its tiles again. The 8M cache holds two real scenes, which should remove that; the
+phone runs will show it.
 
-**What this needs, before phones are worth measuring:**
-
-- Simplify lines at the tile's own scale before cutting them (most road segments are far shorter
-  than a 48 m cell needs).
-- Draw trunk roads and slip roads only nearer the origin, and motorways and main rail beyond.
-- Keep parks and water above minor roads in the shed order.
-- Size the worker's cache to a real scene.
-- Draw the cell size from the census, not from synthetic geometry.
-
-That is new work for the renderer, not part of this spike's measurements.
+**If a phone can't carry a real scene**, the geometry can be simplified first: lines simplified at
+the tile's own scale before they are cut, trunk and slip roads only nearer the origin, and the
+shed order (which still applies above the budget) with parks and water ahead of minor roads.
 
 ## Decision
 
@@ -368,17 +425,18 @@ That is new work for the renderer, not part of this spike's measurements.
     departure time), where B uploads one texture;
   - a per-origin target pass in the worker (a median 5.8 ms for the 53k points of Baker Street's
     48 m scene, timed in node on the M2).
-- B is also faster on origin change: 16.7 against 18.7 ms (p95) on desktop, and 28.5 against 37.3
-  ms on the throttled stress run.
+- B is also faster on origin change: 14.4 against 28.2 ms (p95) on desktop, and 43.6 against 60.3
+  ms on the throttled stress run. C is cheaper on the GPU on synthetic scenes (5.0 against 12.1 ms
+  a frame); on real tiles the two are level.
 
-**Still to confirm:** the phones, for G6–G8, once real scenes fit the budget (see
+**Still to confirm:** the phones, for G6–G8, with real scenes of 1.1M–3.7M vertices (see
 [Results: real tiles](#results-real-tiles)).
 
 On desktop, B and C pass every gate the lab measures. The exception is G4 on the cliff field at
 Wembley Park, which is a question about the mesh and applies to both.
 
 A fails G5: its adapter only translates the corners that deck already extruded, so lines go thin
-where the bend turns them (26% of segments under 75% of their width). A hook
+where the bend turns them (32% of segments under 75% of their width). A hook
 that rebuilt the extrusion from extra attributes, or a `LineLayer` subclass with its own vertex
 shader, could keep the width. That was not built, because it means writing our line shader again
 inside deck, on top of 577 kB.
@@ -447,8 +505,9 @@ is on.
 - The server's 16-request tile limit is per process, shared by every visitor. The worker keeps 8
   in flight, so two cold loads at once fill it.
 
-**Vertex budget:** 300k vertices shaded per scene, 600k cached in the worker. The cache limit is
-enforced after every scene, including the current tiles once packed.
+**Vertex budget:** 5M vertices shaded per scene, 8M cached in the worker (the owner's call, after
+the census: real transit scenes are 1.1M–3.7M). The cache limit is enforced after every scene,
+including the current tiles once packed.
 
 - **Over budget, the worker drops**, farthest first within each class:
   1. secondary roads;
@@ -458,12 +517,8 @@ enforced after every scene, including the current tiles once packed.
   5. primary roads.
 - It never drops motorway, trunk or major rail, and reports `overBudget` instead.
 - Fully covered blocks share their grid nodes.
-- **Synthetic scenes:** 11k–299k shaded at 48 m. The toy transit field already reaches the
-  budget at two origins:
-  - Baker Street sheds 47 secondary roads, 20 small parks and 10 small water bodies;
-  - Canary Wharf sheds 18 parks and 9 water bodies.
-
-  Real tiles will be denser, so the census decides both the cell size and the budget.
+- **Synthetic scenes** are at most 346k shaded at 48 m, and real ones at most 3.7M, so nothing is
+  shed at the five origins today. Shedding is there for a denser city or a bigger reach.
 
 ## Changes from the plan
 
@@ -483,6 +538,7 @@ enforced after every scene, including the current tiles once packed.
   - Placement runs every frame, judged on the map as it is on screen now.
   - Station dots, the pin as an obstacle, and whole boxes inside the view.
 - **Budget (D19).**
+  - 5M vertices shaded and 8M cached, not 300k and 600k (the owner's call, after the census).
   - Counted in vertices shaded (six per line segment for each pass that draws it, so roads count
     twice), not "fill vertices plus segment instances".
   - The shed order adds secondary roads first.
@@ -496,28 +552,27 @@ enforced after every scene, including the current tiles once packed.
   Decision).
 - **Lab geometry.** Synthetic by default. `?geom=tiles` uses real tiles and is required for the
   census.
+- **Not in the plan:** directions by reach (half by reach is the lab's default, the owner's call),
+  the bent-map style, and the lab's schematic network. See
+  [On the bent map](#on-the-bent-map-directions-by-reach-the-style-the-network).
 
 ## What is left
 
-1. **Fit real tiles into the budget.** This is renderer work, and it comes before the phones are
-   worth measuring:
-   - simplify lines at tile scale;
-   - draw classes by distance;
-   - put parks and water ahead of roads in the shed order;
-   - size the worker's cache to a real scene.
-
-   Then rerun `/warp/lab/?geom=tiles&census=1` and the benchmark with `?geom=tiles` (see
-   [Results: real tiles](#results-real-tiles)).
-2. **Phones (owner).**
+1. **Phones (owner).**
    - On the iPhone (Safari) and the mid-range Android (Chrome), open `/warp/lab/?backend=b`,
-     then `?backend=c`.
+     then `?backend=c`, and the same with `&geom=tiles` for a real scene (it spends tile budget).
    - Each time press "Self-test", then "Run benchmark" (a few minutes; don't touch the screen),
      then "Copy results", and paste the JSON here.
    - Results accumulate in the page's storage until "Clear results". Record the exact models and
      browser versions.
-3. **W-02** takes over:
+   - If a phone misses G6 or G7 on real tiles, simplify the geometry first (see
+     [Results: real tiles](#results-real-tiles)).
+2. **W-02** takes over:
    - the real field (#1's composition and the walking near field), including where it jumps
-     (the cliff case above);
+     (the cliff case above). The lab's walk field is straight-line distance and ignores the
+     Thames; a real one crosses only at bridges and tunnels;
+   - whether the product bends directions by reach, and how much;
+   - drawing #1's network on the bent map, as the lab draws the toy lines;
    - the two views;
    - Direction 4's checks on real fields;
    - the overlap UI on top of the tap index;
@@ -554,7 +609,11 @@ enforced after every scene, including the current tiles once packed.
     slower.
   - Simplifying the geometry cuts this first. If a phone still misses G7 or G8 after that, add a
     small worker pool.
+- **Bearings are not true with directions by reach:** up to 20–48° off at the outer ring at half
+  by reach. Order and minutes are kept, and the rings stay exact.
 - **Desktop numbers say little about phones,** and headless Chrome caps frames at 60 Hz.
 - **Real tiles are heavy on a phone's network:** 1.8–3.7 MB per transit origin.
+- **Real scenes are heavy on a phone's GPU and memory:** up to 3.7M vertices a frame and 8M
+  cached. The owner expects modern phones to carry it; the phone runs decide.
 - **The lab spends tile budget only with `?geom=tiles`.** It is unlinked and `noindex`; the
   per-IP and monthly caps still apply.

@@ -8,7 +8,7 @@ from conftest import BODY_MARKER, ROUTING_TOKEN, TILES_TOKEN, assert_clean
 from server.warp.mapbox_client import MapboxClient
 
 ISO = ("post", "/api/isochrones", {"longitude": -0.12, "latitude": 51.5, "travel_times": [10]})
-WARP = ("post", "/api/warp-params", {"longitude": -0.12, "latitude": 51.5, "travel_times": [5, 10]})
+WARP = ("post", "/api/travel-time-field", {"longitude": -0.12, "latitude": 51.5, "mode": "walking"})
 SOLVE = ("post", "/api/meetup/solve", {
     "participants": [
         {"id": "a", "lon": -0.12, "lat": 51.5, "mode": "walking"},

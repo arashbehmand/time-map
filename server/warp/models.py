@@ -33,17 +33,6 @@ class IsochroneRequest(BaseModel):
     travel_times: TravelTimes = Field(default_factory=lambda: [5, 10, 15, 20])
 
 
-class WarpParamsRequest(BaseModel):
-    model_config = _STRICT
-    longitude: float = Field(ge=-180, le=180)
-    latitude: float = Field(ge=-WEB_MERCATOR_MAX_LAT, le=WEB_MERCATOR_MAX_LAT)
-    zoom: int = Field(default=14, ge=8, le=18)
-    width: int = Field(default=1280, ge=256, le=2048)
-    height: int = Field(default=720, ge=256, le=2048)
-    profile: Profile = "walking"
-    travel_times: TravelTimes = Field(default_factory=lambda: [5, 10, 15, 20])
-
-
 TravelMode = Literal["walking", "cycling", "driving", "transit"]
 TransitWindow = Literal["wd08", "wd13", "wd19", "sa13"]
 

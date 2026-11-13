@@ -661,7 +661,7 @@ async function boot() {
   if (typeof maplibregl === "undefined") { out("MapLibre didn't load."); return; }
   const [network, example] = await Promise.all([
     fetch("stations.json").then((r) => r.json()),
-    fetch("../example.json").then((r) => r.json()),
+    fetch("../example-field.json").then((r) => r.json()),
   ]);
   S.network = network; S.example = example;
   if (OPT.field === "real") await loadRealFields();

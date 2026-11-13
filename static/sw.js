@@ -22,8 +22,6 @@ const APP_SHELL = [
   "/warp/views.js",
   "/warp/words.js",
   "/warp/example-field.json",
-  "/warp/warpmath.js",
-  "/warp/example.json",
   // The mesh renderer the warp page bends the map with, its worker and their decoders.
   "/shared/mesh/caps.js",
   "/shared/mesh/contours.js",

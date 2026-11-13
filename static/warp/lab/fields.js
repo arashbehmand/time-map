@@ -5,13 +5,13 @@
 //   walk     minutes = distance × detour / walking speed
 //   transit  the toy network in stations.json: walk to a station, ride, walk on
 //   cliff    walking, with a river 1.5 km north that only one bridge crosses
-//   contours the saved King's Cross walking answer (static/warp/example.json), interpolated
+//   contours the warp page's saved King's Cross walking field (static/warp/example-field.json)
 //   identity, shear, pull   target-position grids, to show the London map (#6) can use the
 //            same renderer with a layout that is not travel time
 //   real     NOT synthetic: the field the warp page gets from POST /api/travel-time-field
 //            (?field=real&mode=transit|walking&window=wd08&smooth=1), fetched at boot for every
 //            test origin, so the self-test, the benchmark and directionChecks run on it
-import { fieldFromFunction, gridFromFunction, NO_DATA, sampleField } from "../../shared/mesh/field.js";
+import { decodeField, fieldFromFunction, gridFromFunction } from "../../shared/mesh/field.js";
 import { localFrame, metresPerUnit, WORLD_PX } from "../../shared/mesh/frame.js";
 
 export const FIELD_CELL = 100;          // metres (D7)
@@ -110,32 +110,9 @@ export function cliffField(origin, network) {
   });
 }
 
-// example.json: radii in px at ref_zoom per angle bin (y-down, bin i at θ = (i + ½)/N·2π − π),
-// one row per contour. Minutes are interpolated between contours; past the last, no data.
+// The warp page's saved field (static/warp/example-field.json, the server's wire format).
 export function contoursField(example) {
-  const origin = { lon: example.origin.lon, lat: example.origin.lat };
-  const mPerPx = metresPerUnit(origin.lat) / (WORLD_PX * Math.pow(2, example.ref_zoom));
-  const rows = example.source_radii.map((r) => r.map((v) => v * mPerPx));
-  const mins = example.contour_minutes.map(Number);
-  const n = rows[0].length;
-  const radiusAt = (row, theta) => {
-    const f = ((theta + Math.PI) / (2 * Math.PI)) * n - 0.5;
-    const i = Math.floor(f), a = f - i;
-    const i0 = ((i % n) + n) % n, i1 = (i0 + 1) % n;
-    return row[i0] * (1 - a) + row[i1] * a;
-  };
-  return polar(origin, (x, y) => {
-    const r = Math.hypot(x, y);
-    if (r === 0) return 0;
-    const th = Math.atan2(y, x);
-    let r0 = 0, m0 = 0;
-    for (let k = 0; k < rows.length; k++) {
-      const rk = radiusAt(rows[k], th);
-      if (r <= rk) return m0 + ((mins[k] - m0) * (r - r0)) / Math.max(rk - r0, 1e-6);
-      r0 = rk; m0 = mins[k];
-    }
-    return NO_DATA;
-  });
+  return decodeField(example);
 }
 
 // Target-position grids (layout units = local metres, so k = px per metre on screen).
@@ -164,7 +141,7 @@ export function makeWarpSpec(fieldName, origin, network, { example, maxMinutes =
   if (fieldName === "walk") field = walkField(origin, network);
   else if (fieldName === "transit") field = transitField(origin, network);
   else if (fieldName === "cliff") field = cliffField(origin, network);
-  else if (fieldName === "contours") { field = contoursField(example); maxMinutes = Math.min(maxMinutes, 20); }
+  else if (fieldName === "contours") { field = contoursField(example); maxMinutes = Math.min(maxMinutes, 25); }
   else if (fieldName === "real") {
     field = real && real.get(origin.id);
     if (!field) throw new Error(`no real field for ${origin.id}`);

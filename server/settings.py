@@ -56,7 +56,6 @@ DEFAULT_IN_FLIGHT = {"matrix": 3, "isochrone": 6, "tiles": 16, "glyphs": 8, "geo
 DEFAULT_PER_IP = {
     "solve": 6,
     "isochrones": 20,
-    "warp_params": 30,
     "travel_time_field": 20,
     "transit_status": 60,
     "geocode": 10,

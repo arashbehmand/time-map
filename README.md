@@ -90,7 +90,6 @@ server/                          # FastAPI backend
 │   ├── field.py                 # Contours → minutes on a grid, frames, the wire format
 │   ├── models.py                # Request models
 │   ├── mapbox_client.py         # Mapbox Isochrone fetching (minutes or metres), bounded cache
-│   └── (warp.py, pipeline.py, geometry.py: the radial lookup table, retired with W-02)
 ├── transit/                     # The London tables at runtime: validation, composition, coverage
 └── meetup/                      # Meetup optimizer module
     ├── routes.py                # POST /api/meetup/solve
@@ -273,7 +272,6 @@ finer resolution searched and `answer_resolution` the one the answer came from.
 |--------|------|-------------|
 | `POST` | `/api/travel-time-field` | A travel-time field for a pin, mode and (transit) timetable window |
 | `GET`  | `/api/transit/status` | Whether public transport times are available: windows, coverage, credits, validity |
-| `POST` | `/api/warp-params` | The old radial lookup table (retired at the end of W-02) |
 | `POST` | `/api/isochrones` | Raw isochrone polygons (via Mapbox Isochrone API; the meetup page uses it) |
 | `GET`  | `/tiles/{z}/{x}/{y}` | Mapbox vector tile proxy |
 | `GET`  | `/glyphs/{fontstack}/{range}` | Mapbox font glyph proxy |

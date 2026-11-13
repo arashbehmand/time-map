@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Request
 
 from server.guard.guard import per_ip
-from server.warp.models import IsochroneRequest, TravelFieldRequest, WarpParamsRequest
-from server.warp.pipeline import compute_warp_params
+from server.warp.models import IsochroneRequest, TravelFieldRequest
 
 router = APIRouter(tags=["warp"])
 
@@ -15,20 +14,6 @@ async def fetch_isochrones_endpoint(req: IsochroneRequest, request: Request):
         lat=req.latitude,
         profile=req.profile,
         minutes=req.travel_times,
-    )
-
-
-@router.post("/warp-params", dependencies=[per_ip("warp_params")])
-async def warp_params_endpoint(req: WarpParamsRequest, request: Request):
-    return await compute_warp_params(
-        request.app.state.isochrones,
-        longitude=req.longitude,
-        latitude=req.latitude,
-        zoom=req.zoom,
-        width=req.width,
-        height=req.height,
-        profile=req.profile,
-        travel_times=req.travel_times,
     )
 
 

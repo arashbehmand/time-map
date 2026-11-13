@@ -82,7 +82,10 @@ export const LINE_VERTS = 6;
 export const REFINE_SHARE = 0.1;
 const DRAWS = (buffer) => PASSES.filter((p) => (p.buffer || p.name) === buffer).length;
 
-export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null, refine = null } = {}) {
+// With `cut` ({x0, y0, cell, nx, ny, label}: a piece id per field node, −1 for none), keeps
+// only triangles and segments whose ends all fall on one piece (layouts.js islands): nothing
+// is stretched across a tear.
+export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null, refine = null, cut = null } = {}) {
   const t0 = now();
   const items = [];
   const bboxDist = (xs, ys) => Math.hypot((xs[0] + xs[1]) / 2, (ys[0] + ys[1]) / 2);
@@ -158,6 +161,7 @@ export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null,
       room -= r.added; refined += r.added; refineSkipped += r.skipped;
       passes[name] = { kind: "fill", pos: r.pos, style: r.style, index: r.index, zoom: r.zoom, count: r.index.length };
     }
+    if (cut) passes[name] = cutFills(passes[name], cut);
     if (warp) passes[name].targets = targetsFor(warp, passes[name].pos);
   }
   for (const [name, list] of Object.entries(linePasses)) {
@@ -183,6 +187,7 @@ export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null,
       room -= r.added * segCost; refined += r.added; refineSkipped += r.skipped;
       passes[name] = { kind: "line", seg: r.seg, style: r.style, zoom: r.zoom, count: r.count };
     }
+    if (cut) passes[name] = cutLines(passes[name], cut);
     const { seg: pseg, count: pns } = passes[name];
     if (warp) {
       // Two placements per segment, a then b, three floats each: the same layout as `seg`
@@ -259,4 +264,38 @@ export function censusTile(bytes, z) {
     }
   }
   return { bytes: bytes.byteLength, decodeMs, points, layers, roadClasses, stationKeys, stationModes, hasRoadLabel: "road_label" in vt.layers, z };
+}
+
+// The piece a point is drawn with: the warp reads all four corners of its cell (field.js
+// sampleGrid), so they must all be on one piece; −1 otherwise.
+function pieceOf(cut, x, y) {
+  const i = Math.floor((x - cut.x0) / cut.cell), j = Math.floor((y - cut.y0) / cut.cell);
+  if (i < 0 || j < 0 || i + 1 >= cut.nx || j + 1 >= cut.ny) return -1;
+  const k = j * cut.nx + i, L = cut.label, p = L[k];
+  return p >= 0 && L[k + 1] === p && L[k + cut.nx] === p && L[k + cut.nx + 1] === p ? p : -1;
+}
+
+function cutFills(pass, cut) {
+  const { pos, index } = pass;
+  const keep = [];
+  for (let t = 0; t < index.length; t += 3) {
+    const a = index[t], b = index[t + 1], c = index[t + 2];
+    const pa = pieceOf(cut, pos[2 * a], pos[2 * a + 1]);
+    if (pa < 0 || pieceOf(cut, pos[2 * b], pos[2 * b + 1]) !== pa || pieceOf(cut, pos[2 * c], pos[2 * c + 1]) !== pa) continue;
+    keep.push(a, b, c);
+  }
+  return { ...pass, index: Uint32Array.from(keep), count: keep.length };
+}
+
+function cutLines(pass, cut) {
+  const { seg, style, zoom, count } = pass;
+  const out = new Float32Array(seg.length), st = new Float32Array(count), zm = new Uint8Array(count);
+  let m = 0;
+  for (let s = 0; s < count; s++) {
+    const p = pieceOf(cut, seg[4 * s], seg[4 * s + 1]);
+    if (p < 0 || pieceOf(cut, seg[4 * s + 2], seg[4 * s + 3]) !== p) continue;
+    out.set(seg.subarray(4 * s, 4 * s + 4), 4 * m);
+    st[m] = style[s]; zm[m] = zoom[s]; m++;
+  }
+  return { ...pass, seg: out.slice(0, 4 * m), style: st.slice(0, m), zoom: zm.slice(0, m), count: m };
 }

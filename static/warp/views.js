@@ -21,6 +21,11 @@ export function bendOffered(mode, query = "") {
 export const DIRECTIONS = { reach: 0.5, compass: 0 };
 export const DEFAULT_DIRECTIONS = "reach";
 
+// How the bent map handles places that a fast line makes as quick as nearer ones (layouts.js).
+// A prototype: the choice shows with ?layouts=1 (or ?layout=…); the default stays "fold".
+export const LAYOUTS = ["fold", "squash", "islands"];
+export const DEFAULT_LAYOUT = "fold";
+
 export const WINDOWS = ["wd08", "wd13", "wd19", "sa13"];
 
 // The timetable window nearest the time in London now (the server's default too).

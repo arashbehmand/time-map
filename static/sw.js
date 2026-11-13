@@ -30,6 +30,7 @@ const APP_SHELL = [
   "/shared/mesh/fit.js",
   "/shared/mesh/frame.js",
   "/shared/mesh/hit.js",
+  "/shared/mesh/layouts.js",
   "/shared/mesh/labels.js",
   "/shared/mesh/pipeline.js",
   "/shared/mesh/refine.js",

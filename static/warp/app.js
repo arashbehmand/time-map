@@ -19,6 +19,7 @@ import { decodeField, knownMinutes, nodeAt } from "/shared/mesh/field.js";
 import { fitFor, reachBox } from "/shared/mesh/fit.js";
 import { cameraFromMap, localFrame } from "/shared/mesh/frame.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "/shared/mesh/labels.js";
+import { islandLayout, squashField } from "/shared/mesh/layouts.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "/shared/mesh/pipeline.js";
 import { createMeshRenderer } from "/shared/mesh/renderer.js";
 import { bandColor, bandRgb, ringPlan } from "/shared/mesh/rings.js";
@@ -39,6 +40,7 @@ const S = {
   window: V.defaultWindow(),
   outer: V.MODES.walking.defaultOuter,
   directions: V.DEFAULT_DIRECTIONS,
+  layout: V.DEFAULT_LAYOUT,      // fold | squash | islands (a trial: ?layouts=1)
   active: null,          // the field drawn now: {key, json, field, frame}
   bent: false,           // what the person asked for
   u: 0, fade: 0,         // morph (0 ordinary … 1 bent) and the mesh's opacity
@@ -234,11 +236,25 @@ function frameView() {
 // ── The bent view: the mesh ──────────────────────────────────────────
 const needsCpuTargets = () => !(S.renderer && S.renderer.mode === "gpu");
 
+// The bent view's warp for the chosen layout (layouts.js): `spec` for the page and the
+// renderer, `fit` (the plain fold) for framing and the tiles, `worker` for the worker when it
+// isn't the fold, whether the mesh is refined against it, and the islands' node mask.
 function meshSpec(entry) {
-  const spec = { kind: "polar", field: entry.field, maxMinutes: S.outer };
+  const fold = { kind: "polar", field: entry.field, maxMinutes: S.outer };
   const spread = V.DIRECTIONS[S.directions];
-  if (spread > 0) spec.angles = angularSpread(entry.field, S.outer, { spread });
-  return spec;
+  if (spread > 0 && S.layout !== "islands") fold.angles = angularSpread(entry.field, S.outer, { spread });
+  if (S.layout === "squash") {
+    const R = squashField(entry.field, Number(Q.get("squashslope")) > 0 ? { minSlope: Number(Q.get("squashslope")) / 1000 } : {});
+    const spec = { ...fold, field: R };
+    return { spec, fit: fold, refine: true, worker: { kind: "polar", field: plainField(R), maxMinutes: S.outer, angles: fold.angles || null } };
+  }
+  if (S.layout === "islands") {
+    const fill = Number(Q.get("islandfill"));
+    const L = islandLayout(entry.field, { maxMinutes: S.outer, ...(fill > 0 ? { fill } : {}) });
+    const spec = { kind: "grid", grid: L.grid, field: entry.field, maxMinutes: S.outer };
+    return { spec, fit: fold, refine: false, worker: { kind: "grid", grid: L.grid }, mask: L.mask, cut: L.cut, stats: L.stats };
+  }
+  return { spec: fold, fit: fold, refine: true, worker: null };
 }
 
 // What the worker needs (plain arrays; it rebuilds the field and the warp).
@@ -248,7 +264,7 @@ function plainField(f) {
 function workerField(f) { return { ...plainField(f), filled: f.filled }; }
 
 // The bent view wanted now: the active field, the outer ring, the directions setting.
-const desiredMeshKey = () => (S.active ? `${S.active.key}|${S.outer}|${S.directions}` : "");
+const desiredMeshKey = () => (S.active ? `${S.active.key}|${S.outer}|${S.directions}|${S.layout}` : "");
 
 // Ask the worker for the bent view of the active field: the map's scene, and the band layer
 // with its overlap index. It is swapped in when both have arrived, if still the one wanted.
@@ -258,10 +274,11 @@ function prepareMesh({ retry = false } = {}) {
   const key = desiredMeshKey();
   if (S.mesh && S.mesh.key === key && !retry) { S.pendingMesh = null; return; }
   if (S.pendingMesh && S.pendingMesh.key === key && !retry) return;
-  const spec = meshSpec(entry);
+  const L = meshSpec(entry);
+  const spec = L.spec;
   measureBox();
-  const fit = fitFor(spec, entry.frame, box.w, box.h, S.outer);
-  const reach = reachBox(spec, S.outer);
+  const fit = fitFor(L.fit, entry.frame, box.w, box.h, S.outer);
+  const reach = reachBox(L.fit, S.outer);
   const cover = tileCover(entry.frame, reach);
   const eps = V.refineEps(fit.k);
   const gen = ++S.gen;
@@ -272,12 +289,14 @@ function prepareMesh({ retry = false } = {}) {
   S.worker.postMessage({
     type: "scene", gen, origin: entry.frame.origin, tiles: cover.tiles,
     spacingDiv: DEFAULT_SPACING_DIV, budget: DEFAULT_BUDGET, source: "tiles",
-    warp: needsCpuTargets() ? { kind: "polar", field: plainField(entry.field), maxMinutes: S.outer, angles: spec.angles || null } : null,
-    refine: { field: plainField(entry.field), maxMinutes: S.outer, eps, angles: spec.angles || null },
+    warp: needsCpuTargets() ? (L.worker || { kind: "polar", field: plainField(entry.field), maxMinutes: S.outer, angles: spec.angles || null }) : null,
+    refine: L.refine ? { field: L.worker ? L.worker.field : plainField(entry.field), maxMinutes: S.outer, eps, angles: spec.angles || null } : null,
+    cut: L.cut || null,
   });
   if (!prev) {
     S.worker.postMessage({ type: "layers", key, gen, field: workerField(entry.field), maxMinutes: S.outer,
-                           angles: spec.angles || null, eps, box: reach, cpu: needsCpuTargets() });
+                           angles: spec.angles || null, eps: L.refine ? eps : null, box: reach, cpu: needsCpuTargets(),
+                           warp: L.worker, mask: L.mask || null });
   }
   if (S.bent && !S.mesh) setStatus(T.PREPARING, "busy");
 }
@@ -587,8 +606,12 @@ function updateLegend() {
   show(toggleBtn, offered);
   setText(toggleBtn, S.bent ? T.BEND_LABEL.on : T.BEND_LABEL.off);
   if (toggleBtn.getAttribute("aria-pressed") !== String(S.bent)) toggleBtn.setAttribute("aria-pressed", String(S.bent));
-  show($("direction-chips"), offered && S.bent);
-  show($("direction-note"), offered && S.bent);
+  show($("direction-chips"), offered && S.bent && S.layout !== "islands");
+  const layouts = Q.get("layouts") === "1" || V.LAYOUTS.includes(Q.get("layout"));
+  show($("layout-chips"), offered && S.bent && layouts);
+  show($("layout-note"), offered && S.bent && layouts);
+  setText($("layout-note"), T.LAYOUT_NOTES[S.layout]);
+  show($("direction-note"), offered && S.bent && S.layout !== "islands");
   setText($("direction-note"), T.DIRECTION_NOTES[S.directions]);
   show($("overlap-note"), S.bent && S.mode === "transit");
   setText($("overlap-note"), T.OVERLAP_NOTE);
@@ -858,6 +881,15 @@ function initControls() {
       requestField({ frame: true });
     });
   }
+  for (const radio of document.querySelectorAll('input[name="layout"]')) {
+    radio.addEventListener("change", () => {
+      if (!radio.checked) return;
+      S.layout = radio.value;
+      hideTapList();
+      updateLegend();
+      prepareMesh();
+    });
+  }
   for (const radio of document.querySelectorAll('input[name="directions"]')) {
     radio.addEventListener("change", () => {
       if (!radio.checked) return;
@@ -1024,6 +1056,7 @@ async function boot() {
     S.outer = V.MODES[ex.mode].defaultOuter;
   }
   checkRadio("mode", S.mode);
+  if (V.LAYOUTS.includes(Q.get("layout"))) { S.layout = Q.get("layout"); checkRadio("layout", S.layout); }
   pinEl.setAttribute("aria-label", `Starting point: ${S.origin.label}. Drag it, or use the arrow keys, to move it.`);
   await initMap([S.origin.lon, S.origin.lat], 14);
   if (ex) {

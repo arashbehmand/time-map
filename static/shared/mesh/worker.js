@@ -163,7 +163,7 @@ async function buildScene(msg) {
   const pack = (partial) => {
     const meshes = loaded.filter(Boolean);
     const missingTiles = tiles.filter((t, i) => settled[i] && !loaded[i]).map(tileId);
-    const scene = packScene(meshes, frame, { budget, warp, refine });
+    const scene = packScene(meshes, frame, { budget, warp, refine, cut: msg.cut || null });
     scene.stats = { ...scene.stats, ...counters, cover: tiles.length, loaded: meshes.length,
                     missing: missingTiles.length, missingTiles, partial, totalMs: now() - t0,
                     resident, peakResident, backend: warp ? "cpu" : "gpu" };
@@ -253,11 +253,17 @@ function fieldMessage(msg) {
       return;
     }
     const f = fieldOf(msg.field);
-    const warp = createWarp({ kind: "polar", field: f, maxMinutes: msg.maxMinutes, angles: msg.angles || null });
-    const m = bandMesh(f, msg.box);
+    // The layout's own warp when it isn't the plain fold (layouts.js): squash bends by another
+    // field, islands by a target grid. The band minutes are always the field's own.
+    const warp = msg.warp ? warpFrom(msg.warp)
+      : createWarp({ kind: "polar", field: f, maxMinutes: msg.maxMinutes, angles: msg.angles || null });
+    const m = bandMesh(f, msg.box, { mask: msg.mask || null });
     const n = m.pos.length / 2;
-    const r = refineFills({ pos: m.pos, index: m.index, style: new Float32Array(n), zoom: new Uint8Array(n) },
-      makeEdgeTest(f, msg.maxMinutes, msg.eps, msg.angles || null), { maxDepth: MAX_DEPTH });
+    const bendBy = msg.warp && msg.warp.kind === "polar" ? createField(msg.warp.field) : f;
+    const r = msg.eps
+      ? refineFills({ pos: m.pos, index: m.index, style: new Float32Array(n), zoom: new Uint8Array(n) },
+        makeEdgeTest(bendBy, msg.maxMinutes, msg.eps, msg.angles || null), { maxDepth: MAX_DEPTH })
+      : { pos: m.pos, index: m.index, added: 0, skipped: 0 };
     const minutes = new Float32Array(r.pos.length / 2);
     minutes.set(m.minutes);
     for (let v = n; v < minutes.length; v++) minutes[v] = sampleField(f, r.pos[2 * v], r.pos[2 * v + 1]);

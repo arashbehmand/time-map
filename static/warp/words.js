@@ -54,6 +54,12 @@ export const DIRECTION_NOTES = {
   compass: "True compass: every place keeps its direction from the pin. Fast lines squeeze into thin wedges.",
 };
 
+export const LAYOUT_NOTES = {
+  fold: "Fold: every place sits at its own minutes. Where a fast line makes far places as quick as nearer ones, the map overlaps itself.",
+  squash: "Squash: going outward, distance never shrinks, so nothing overlaps. Colour shows each place's own minutes, so quick spots near stations sit further out than their colour says.",
+  islands: "Islands: the ground around each station you reach by train or bus is cut out and drawn as a small map on the ring of its time. The gaps between islands are slow ground.",
+};
+
 export const OVERLAP_NOTE = "Where the map overlaps itself, different places are the same number of minutes away in the same direction.";
 
 export function minutesText(m) {

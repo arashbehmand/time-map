@@ -6116,5 +6116,3403 @@
     ]
    }
   }
+ },
+ "realTiles": {
+  "about": "Real Mapbox Streets v8 tiles through /tiles, toy transit field, headless Chrome 157 on an Apple M2, browser cache disabled for the benchmark. Counts only: no tile data is stored.",
+  "census": {
+   "summary": {
+    "uniqueTiles": 110,
+    "missing": 0,
+    "hasRoadLabel": false,
+    "perOrigin": [
+     {
+      "origin": "baker-street",
+      "tiles": 27,
+      "wanted": 27,
+      "coarsened": 0,
+      "kB": 3339,
+      "decodeMs": 83.6,
+      "shaded": {
+       "64": 1507582,
+       "128": 3337573,
+       "256": 8191236
+      }
+     },
+     {
+      "origin": "wembley-park",
+      "tiles": 28,
+      "wanted": 28,
+      "coarsened": 0,
+      "kB": 2251,
+      "decodeMs": 70.5,
+      "shaded": {
+       "64": 676705,
+       "128": 1352226,
+       "256": 3045314
+      }
+     },
+     {
+      "origin": "canary-wharf",
+      "tiles": 34,
+      "wanted": 34,
+      "coarsened": 0,
+      "kB": 3730,
+      "decodeMs": 101.7,
+      "shaded": {
+       "64": 1448294,
+       "128": 3176930,
+       "256": 7764684
+      }
+     },
+     {
+      "origin": "heathrow",
+      "tiles": 20,
+      "wanted": 20,
+      "coarsened": 0,
+      "kB": 1781,
+      "decodeMs": 51.6,
+      "shaded": {
+       "64": 562909,
+       "128": 1117792,
+       "256": 2535870
+      }
+     },
+     {
+      "origin": "croydon",
+      "tiles": 41,
+      "wanted": 41,
+      "coarsened": 0,
+      "kB": 2972,
+      "decodeMs": 83,
+      "shaded": {
+       "64": 799961,
+       "128": 1604106,
+       "256": 3650299
+      }
+     }
+    ],
+    "rail": {
+     "major_rail|none": 192,
+     "major_rail|tunnel": 147,
+     "major_rail|bridge": 52,
+     "service_rail|none": 44,
+     "service_rail|tunnel": 23,
+     "service_rail|bridge": 13,
+     "minor_rail|bridge": 19,
+     "minor_rail|none": 19,
+     "minor_rail|tunnel": 7
+    },
+    "stationModes": {
+     "rail|station": 1212,
+     "metro_rail|station": 188,
+     "bus|stop": 3025,
+     "bus|station": 10,
+     "ferry|station": 28,
+     "light_rail|station": 45,
+     "monorail|station": 6,
+     "tram|stop": 86
+    }
+   },
+   "layers": {
+    "building": 497,
+    "landuse": 8383,
+    "landuse_overlay": 1013,
+    "natural_label": 541,
+    "place_label": 6658,
+    "poi_label": 5969,
+    "road": 61508,
+    "structure": 14506,
+    "transit_stop_label": 4600,
+    "water": 96,
+    "waterway": 191,
+    "aeroway": 1445,
+    "motorway_junction": 548,
+    "admin": 27,
+    "airport_label": 21
+   },
+   "roadClasses": {
+    "traffic_signals|none": 10641,
+    "yield_sign|none": 10863,
+    "stop_sign|none": 273,
+    "mini_roundabout|none": 629,
+    "path|tunnel": 254,
+    "path|none": 2219,
+    "path|bridge": 263,
+    "track|none": 148,
+    "service|none": 2922,
+    "service|tunnel": 408,
+    "pedestrian|none": 1126,
+    "pedestrian|tunnel": 96,
+    "street_limited|tunnel": 52,
+    "street_limited|none": 825,
+    "street|tunnel": 126,
+    "street|bridge": 117,
+    "street|none": 11752,
+    "trunk_link|none": 810,
+    "tertiary|none": 2651,
+    "tertiary|bridge": 66,
+    "secondary|none": 3040,
+    "primary|none": 6052,
+    "trunk|none": 2553,
+    "trunk|bridge": 55,
+    "major_rail|none": 192,
+    "major_rail|tunnel": 147,
+    "major_rail|bridge": 52,
+    "service_rail|none": 44,
+    "service_rail|tunnel": 23,
+    "service_rail|bridge": 13,
+    "turning_loop|none": 30,
+    "service|bridge": 90,
+    "pedestrian|bridge": 31,
+    "primary_link|none": 451,
+    "turning_circle|none": 1284,
+    "junction|none": 25,
+    "construction|none": 72,
+    "construction|bridge": 1,
+    "tertiary_link|none": 116,
+    "primary|bridge": 129,
+    "trunk|tunnel": 17,
+    "secondary_link|none": 133,
+    "secondary|bridge": 54,
+    "ferry|none": 191,
+    "track|tunnel": 3,
+    "street_limited|bridge": 5,
+    "primary_link|bridge": 6,
+    "tertiary|tunnel": 12,
+    "secondary|tunnel": 4,
+    "primary|tunnel": 26,
+    "track|bridge": 7,
+    "aerialway|none": 6,
+    "motorway_link|none": 43,
+    "motorway|none": 101,
+    "level_crossing|none": 70,
+    "golf|none": 109,
+    "turning_circle|tunnel": 6,
+    "minor_rail|bridge": 19,
+    "minor_rail|none": 19,
+    "path|ford": 2,
+    "trunk_link|tunnel": 4,
+    "minor_rail|tunnel": 7,
+    "trunk_link|bridge": 4,
+    "construction|tunnel": 2,
+    "tertiary_link|bridge": 6,
+    "motorway_link|bridge": 7,
+    "motorway|bridge": 4
+   },
+   "stationKeys": {
+    "stop_type": 4600,
+    "filterrank": 4600,
+    "iso_3166_1": 4600,
+    "iso_3166_2": 4600,
+    "network": 4600,
+    "maki": 4600,
+    "mode": 4600,
+    "name_script": 4565,
+    "name": 4576,
+    "name_ru": 261,
+    "name_en": 33,
+    "name_ar": 55,
+    "name_zh-Hant": 47,
+    "name_fr": 25,
+    "name_zh-Hans": 47,
+    "name_ja": 16,
+    "name_ko": 20,
+    "name_de": 2,
+    "name_it": 1
+   }
+  },
+  "selftest_b": {
+   "kind": "selftest",
+   "at": "2026-11-13T13:16:42.191Z",
+   "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+   "backend": "b",
+   "mode": "gpu",
+   "fellBack": false,
+   "programsError": null,
+   "field": "transit",
+   "origin": "baker-street",
+   "geom": "tiles",
+   "spacing": 128,
+   "renderer": "WebKit WebGL",
+   "caps": {
+    "gpu": true,
+    "floatLinear": true,
+    "colorBufferFloat": true,
+    "maxVertexTextureUnits": 16
+   },
+   "gates": {
+    "G1_parity": {
+     "maxPx": 0.0005,
+     "alphaMismatch": 0,
+     "samples": 6000,
+     "source": "field texture",
+     "pass": true
+    },
+    "G2_registration": {
+     "maxPx": 0,
+     "samples": 1002,
+     "pass": true
+    },
+    "G3_radius": {
+     "method": "dots drawn through the line program, centres read back from pixels (phone view)",
+     "samples": 300,
+     "drawn": 300,
+     "radiusMaxPx": 0.058,
+     "radiusP99Px": 0.054,
+     "ordinaryMaxPx": 0.061,
+     "pass": true
+    },
+    "G4_chord": {
+     "phone": {
+      "samples": 1315,
+      "within1px": 0.9992,
+      "p99Px": 0.158,
+      "maxPx": 1.03,
+      "byZoom": {
+       "10": {
+        "samples": 54,
+        "within1px": 1,
+        "p99Px": 0.038
+       },
+       "12": {
+        "samples": 878,
+        "within1px": 1,
+        "p99Px": 0.149
+       },
+       "13": {
+        "samples": 209,
+        "within1px": 0.9952,
+        "p99Px": 0.251
+       },
+       "14": {
+        "samples": 174,
+        "within1px": 1,
+        "p99Px": 0.235
+       }
+      },
+      "nearFold": {
+       "samples": 958,
+       "within1px": 0.9969,
+       "p99Px": 0.506
+      },
+      "nearNoData": {
+       "samples": 250,
+       "within1px": 0.604,
+       "p99Px": 12.967
+      },
+      "invisible": 1477,
+      "crossingOuterMinute": {
+       "primitives": 426,
+       "longestEdgeAtHalfPx": 23,
+       "p99EdgeAtHalfPx": 19.4
+      }
+     },
+     "desktop": {
+      "samples": 1265,
+      "within1px": 0.9937,
+      "p99Px": 0.557,
+      "maxPx": 2.386,
+      "byZoom": {
+       "10": {
+        "samples": 70,
+        "within1px": 1,
+        "p99Px": 0.148
+       },
+       "12": {
+        "samples": 810,
+        "within1px": 0.9938,
+        "p99Px": 0.424
+       },
+       "13": {
+        "samples": 208,
+        "within1px": 0.9856,
+        "p99Px": 1.079
+       },
+       "14": {
+        "samples": 177,
+        "within1px": 1,
+        "p99Px": 0.451
+       }
+      },
+      "nearFold": {
+       "samples": 927,
+       "within1px": 0.9871,
+       "p99Px": 1.11
+      },
+      "nearNoData": {
+       "samples": 261,
+       "within1px": 0.4636,
+       "p99Px": 32.518
+      },
+      "invisible": 1547,
+      "crossingOuterMinute": {
+       "primitives": 426,
+       "longestEdgeAtHalfPx": 53.2,
+       "p99EdgeAtHalfPx": 44.8
+      }
+     },
+     "pass": true
+    },
+    "G5_width": {
+     "chainStraightPx": 1.635,
+     "chainKinkPx": 1.62,
+     "anglesMinPx": 1.46,
+     "anglesMaxPx": 1.501,
+     "stretched": {
+      "stretch": 81,
+      "widthPx": 1.814,
+      "nominalPx": 1.815
+     },
+     "nominalPx": 1.5,
+     "dpr": 1,
+     "failed": [],
+     "pass": true
+    }
+   }
+  },
+  "bench": {
+   "b": {
+    "kind": "bench",
+    "at": "2026-11-13T13:16:43.573Z",
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "backend": "b",
+    "geom": "tiles",
+    "spacing": 128,
+    "screen": {
+     "w": 1440,
+     "h": 900,
+     "dpr": 1
+    },
+    "gpu": {
+     "mode": "gpu",
+     "fellBack": false,
+     "renderer": "WebKit WebGL",
+     "unmasked": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+     "caps": {
+      "webgl2": true,
+      "maxTextureSize": 16384,
+      "maxVertexTextureUnits": 16,
+      "maxVertexAttribs": 16,
+      "maxVertexUniformVectors": 1024,
+      "floatLinear": true,
+      "colorBufferFloat": true,
+      "renderer": "WebKit WebGL",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "forced": null,
+      "r32f": {
+       "ok": true
+      },
+      "rg32f": {
+       "ok": true
+      },
+      "vtf": true,
+      "gpu": true,
+      "cpu": true
+     }
+    },
+    "runs": [
+     {
+      "field": "transit",
+      "cold": [
+       {
+        "origin": "baker-street",
+        "ms": 454.9,
+        "failed": null,
+        "fieldMs": 8.7,
+        "tiles": 27,
+        "fetched": 27,
+        "missing": 0,
+        "shaded": 1096926,
+        "bytes": 2824878,
+        "overBudget": true,
+        "dropped": {
+         "secondary": 64,
+         "park": 5881,
+         "water": 952,
+         "primary": 2163
+        },
+        "workerMs": 442.2,
+        "tessMs": 391.3,
+        "packMs": 35.6,
+        "uploadMs": 0.8,
+        "peakResident": 3337573,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 241.7,
+        "failed": null,
+        "fieldMs": 13.2,
+        "tiles": 28,
+        "fetched": 28,
+        "missing": 0,
+        "shaded": 616884,
+        "bytes": 1658475,
+        "overBudget": true,
+        "dropped": {
+         "secondary": 20,
+         "park": 3009,
+         "water": 489,
+         "primary": 1899
+        },
+        "workerMs": 224.5,
+        "tessMs": 141.4,
+        "packMs": 71.1,
+        "uploadMs": 0.3,
+        "peakResident": 1352226,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 544.3,
+        "failed": null,
+        "fieldMs": 5.9,
+        "tiles": 34,
+        "fetched": 34,
+        "missing": 0,
+        "shaded": 1025352,
+        "bytes": 2664123,
+        "overBudget": true,
+        "dropped": {
+         "secondary": 41,
+         "park": 6623,
+         "water": 993,
+         "minor_rail": 22,
+         "primary": 2349
+        },
+        "workerMs": 532.7,
+        "tessMs": 477.7,
+        "packMs": 39.6,
+        "uploadMs": 0.8,
+        "peakResident": 3176930,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 180.9,
+        "failed": null,
+        "fieldMs": 7.6,
+        "tiles": 20,
+        "fetched": 20,
+        "missing": 0,
+        "shaded": 493278,
+        "bytes": 1348620,
+        "overBudget": true,
+        "dropped": {
+         "park": 3063,
+         "water": 641,
+         "minor_rail": 1,
+         "primary": 1629
+        },
+        "workerMs": 168,
+        "tessMs": 139.6,
+        "packMs": 15.7,
+        "uploadMs": 0.5,
+        "peakResident": 1117792,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 321.8,
+        "failed": null,
+        "fieldMs": 9.7,
+        "tiles": 41,
+        "fetched": 41,
+        "missing": 0,
+        "shaded": 637494,
+        "bytes": 1748670,
+        "overBudget": true,
+        "dropped": {
+         "secondary": 32,
+         "park": 4826,
+         "water": 592,
+         "minor_rail": 18,
+         "primary": 2219
+        },
+        "workerMs": 317.6,
+        "tessMs": 226,
+        "packMs": 66.2,
+        "uploadMs": 0.5,
+        "peakResident": 1604106,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       }
+      ],
+      "warm": [
+       {
+        "origin": "baker-street",
+        "ms": 363.6,
+        "failed": null,
+        "workerMs": 350.8,
+        "uploadMs": 0.4,
+        "cacheHits": 1
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 177.4,
+        "failed": null,
+        "workerMs": 168.2,
+        "uploadMs": 0.4,
+        "cacheHits": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 378.6,
+        "failed": null,
+        "workerMs": 361.8,
+        "uploadMs": 0.7,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 127.6,
+        "failed": null,
+        "workerMs": 123.9,
+        "uploadMs": 0.4,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 177.1,
+        "failed": null,
+        "workerMs": 164.3,
+        "uploadMs": 0.3,
+        "cacheHits": 3
+       },
+       {
+        "origin": "baker-street",
+        "ms": 362.1,
+        "failed": null,
+        "workerMs": 342.3,
+        "uploadMs": 1,
+        "cacheHits": 2
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 236.7,
+        "failed": null,
+        "workerMs": 218.6,
+        "uploadMs": 0.5,
+        "cacheHits": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 343.1,
+        "failed": null,
+        "workerMs": 339,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 127.3,
+        "failed": null,
+        "workerMs": 121.8,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 195.8,
+        "failed": null,
+        "workerMs": 187.7,
+        "uploadMs": 0.4,
+        "cacheHits": 3
+       },
+       {
+        "origin": "baker-street",
+        "ms": 402.1,
+        "failed": null,
+        "workerMs": 393.5,
+        "uploadMs": 0.3,
+        "cacheHits": 2
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 158.3,
+        "failed": null,
+        "workerMs": 147.3,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 348.4,
+        "failed": null,
+        "workerMs": 338,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 142.3,
+        "failed": null,
+        "workerMs": 130.1,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 173.2,
+        "failed": null,
+        "workerMs": 159.8,
+        "uploadMs": 0.6,
+        "cacheHits": 3
+       },
+       {
+        "origin": "baker-street",
+        "ms": 366.2,
+        "failed": null,
+        "workerMs": 361.8,
+        "uploadMs": 0.5,
+        "cacheHits": 2
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 136,
+        "failed": null,
+        "workerMs": 131.3,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 344.2,
+        "failed": null,
+        "workerMs": 333.1,
+        "uploadMs": 0.4,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 124.7,
+        "failed": null,
+        "workerMs": 117.4,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 214.4,
+        "failed": null,
+        "workerMs": 198.6,
+        "uploadMs": 0.2,
+        "cacheHits": 3
+       }
+      ],
+      "motion": [
+       {
+        "origin": "baker-street",
+        "morphP50": 16.7,
+        "morphP95": 16.8,
+        "panP50": 16.7,
+        "panP95": 16.8,
+        "zoomP95": 16.8,
+        "p50": 16.7,
+        "p95": 16.8,
+        "max": 16.8,
+        "frames": 833,
+        "drawP50Ms": 0,
+        "drawP95Ms": 0.2,
+        "gpuFrameMs": 6.85
+       },
+       {
+        "origin": "wembley-park",
+        "morphP50": 16.7,
+        "morphP95": 16.7,
+        "panP50": 16.7,
+        "panP95": 16.7,
+        "zoomP95": 16.7,
+        "p50": 16.7,
+        "p95": 16.7,
+        "max": 16.8,
+        "frames": 833,
+        "drawP50Ms": 0.1,
+        "drawP95Ms": 0.2,
+        "gpuFrameMs": 7.25
+       },
+       {
+        "origin": "canary-wharf",
+        "morphP50": 16.7,
+        "morphP95": 16.8,
+        "panP50": 16.7,
+        "panP95": 16.8,
+        "zoomP95": 16.8,
+        "p50": 16.7,
+        "p95": 16.8,
+        "max": 16.8,
+        "frames": 832,
+        "drawP50Ms": 0.1,
+        "drawP95Ms": 0.1,
+        "gpuFrameMs": 6.23
+       },
+       {
+        "origin": "heathrow",
+        "morphP50": 16.7,
+        "morphP95": 16.8,
+        "panP50": 16.7,
+        "panP95": 16.7,
+        "zoomP95": 16.8,
+        "p50": 16.7,
+        "p95": 16.8,
+        "max": 16.8,
+        "frames": 832,
+        "drawP50Ms": 0,
+        "drawP95Ms": 0.1,
+        "gpuFrameMs": 11.24
+       },
+       {
+        "origin": "croydon",
+        "morphP50": 16.7,
+        "morphP95": 16.8,
+        "panP50": 16.7,
+        "panP95": 16.8,
+        "zoomP95": 16.8,
+        "p50": 16.7,
+        "p95": 16.8,
+        "max": 16.8,
+        "frames": 832,
+        "drawP50Ms": 0,
+        "drawP95Ms": 0.1,
+        "gpuFrameMs": 9.9
+       }
+      ],
+      "chord": [
+       {
+        "origin": "baker-street",
+        "folds": {
+         "foldedShare": 0.19701052363574642,
+         "foldedSheets": 0.28065611136096136,
+         "medianStretch": 5.752070146585066
+        },
+        "within1px": 0.9959,
+        "p99Px": 0.249,
+        "nearFold": {
+         "samples": 741,
+         "within1px": 0.9933,
+         "p99Px": 0.642
+        },
+        "crossing": {
+         "primitives": 426,
+         "longestEdgeAtHalfPx": 23,
+         "p99EdgeAtHalfPx": 19.4
+        }
+       },
+       {
+        "origin": "wembley-park",
+        "folds": {
+         "foldedShare": 0.08502362160174262,
+         "foldedSheets": 0.1270275841927563,
+         "medianStretch": 5.827037504895857
+        },
+        "within1px": 1,
+        "p99Px": 0.169,
+        "nearFold": {
+         "samples": 904,
+         "within1px": 0.9878,
+         "p99Px": 2.546
+        },
+        "crossing": {
+         "primitives": 352,
+         "longestEdgeAtHalfPx": 19.3,
+         "p99EdgeAtHalfPx": 18.5
+        }
+       },
+       {
+        "origin": "canary-wharf",
+        "folds": {
+         "foldedShare": 0.19187954397578433,
+         "foldedSheets": 0.2487725523341122,
+         "medianStretch": 5.552097489683034
+        },
+        "within1px": 1,
+        "p99Px": 0.234,
+        "nearFold": {
+         "samples": 886,
+         "within1px": 0.9661,
+         "p99Px": 4.515
+        },
+        "crossing": {
+         "primitives": 505,
+         "longestEdgeAtHalfPx": 23.8,
+         "p99EdgeAtHalfPx": 16.9
+        }
+       },
+       {
+        "origin": "heathrow",
+        "folds": {
+         "foldedShare": 0.12802695974426434,
+         "foldedSheets": 0.1752924406979488,
+         "medianStretch": 4.7804891926042785
+        },
+        "within1px": 1,
+        "p99Px": 0.077,
+        "nearFold": {
+         "samples": 635,
+         "within1px": 0.9276,
+         "p99Px": 8.132
+        },
+        "crossing": {
+         "primitives": 229,
+         "longestEdgeAtHalfPx": 21.9,
+         "p99EdgeAtHalfPx": 20.8
+        }
+       },
+       {
+        "origin": "croydon",
+        "folds": {
+         "foldedShare": 0.09267235282469094,
+         "foldedSheets": 0.12674589431568573,
+         "medianStretch": 6.7403926563154
+        },
+        "within1px": 0.9973,
+        "p99Px": 0.148,
+        "nearFold": {
+         "samples": 866,
+         "within1px": 0.9688,
+         "p99Px": 4.172
+        },
+        "crossing": {
+         "primitives": 429,
+         "longestEdgeAtHalfPx": 19.1,
+         "p99EdgeAtHalfPx": 15.3
+        }
+       }
+      ]
+     },
+     {
+      "field": "walk",
+      "cold": [
+       {
+        "origin": "baker-street",
+        "ms": 84.2,
+        "failed": null,
+        "fieldMs": 15.2,
+        "tiles": 10,
+        "fetched": 10,
+        "missing": 0,
+        "shaded": 299667,
+        "bytes": 1232496,
+        "overBudget": false,
+        "dropped": {
+         "secondary": 64,
+         "park": 1100
+        },
+        "workerMs": 74.8,
+        "tessMs": 49.2,
+        "packMs": 9.3,
+        "uploadMs": 0.4,
+        "peakResident": 314415,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 49.6,
+        "failed": null,
+        "fieldMs": 5.1,
+        "tiles": 16,
+        "fetched": 16,
+        "missing": 0,
+        "shaded": 264344,
+        "bytes": 2349668,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 35.3,
+        "tessMs": 26.7,
+        "packMs": 2.4,
+        "uploadMs": 1.1,
+        "peakResident": 226490,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 67.7,
+        "failed": null,
+        "fieldMs": 6.1,
+        "tiles": 14,
+        "fetched": 14,
+        "missing": 0,
+        "shaded": 293660,
+        "bytes": 2740616,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 54.5,
+        "tessMs": 33.7,
+        "packMs": 16.4,
+        "uploadMs": 0.8,
+        "peakResident": 248096,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 56.1,
+        "failed": null,
+        "fieldMs": 4.6,
+        "tiles": 10,
+        "fetched": 10,
+        "missing": 0,
+        "shaded": 285031,
+        "bytes": 3810532,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 50.4,
+        "tessMs": 36.1,
+        "packMs": 9.9,
+        "uploadMs": 0.3,
+        "peakResident": 251839,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 72.4,
+        "failed": null,
+        "fieldMs": 5.6,
+        "tiles": 24,
+        "fetched": 24,
+        "missing": 0,
+        "shaded": 299996,
+        "bytes": 3802751,
+        "overBudget": false,
+        "dropped": {
+         "secondary": 32,
+         "park": 796
+        },
+        "workerMs": 61.7,
+        "tessMs": 48.7,
+        "packMs": 4.5,
+        "uploadMs": 0.8,
+        "peakResident": 307801,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       }
+      ],
+      "warm": [
+       {
+        "origin": "baker-street",
+        "ms": 50.5,
+        "failed": null,
+        "workerMs": 42.5,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 29.8,
+        "failed": null,
+        "workerMs": 28,
+        "uploadMs": 0.4,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 45.8,
+        "failed": null,
+        "workerMs": 41.4,
+        "uploadMs": 0.4,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 44.8,
+        "failed": null,
+        "workerMs": 38.1,
+        "uploadMs": 0.4,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 62.1,
+        "failed": null,
+        "workerMs": 50.1,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 45.7,
+        "failed": null,
+        "workerMs": 36.8,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 27.8,
+        "failed": null,
+        "workerMs": 24.6,
+        "uploadMs": 0.3,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 44.7,
+        "failed": null,
+        "workerMs": 37.9,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 45,
+        "failed": null,
+        "workerMs": 37.1,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 62.2,
+        "failed": null,
+        "workerMs": 48.4,
+        "uploadMs": 0.6,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 46.5,
+        "failed": null,
+        "workerMs": 34.8,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 29.1,
+        "failed": null,
+        "workerMs": 28.1,
+        "uploadMs": 0.3,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 45.5,
+        "failed": null,
+        "workerMs": 43.9,
+        "uploadMs": 0.4,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 43.7,
+        "failed": null,
+        "workerMs": 39.7,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 61.8,
+        "failed": null,
+        "workerMs": 48.4,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 46.2,
+        "failed": null,
+        "workerMs": 36.5,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 30.2,
+        "failed": null,
+        "workerMs": 22.7,
+        "uploadMs": 0.1,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 44,
+        "failed": null,
+        "workerMs": 37.4,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 45.5,
+        "failed": null,
+        "workerMs": 36.5,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 61.7,
+        "failed": null,
+        "workerMs": 49.4,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       }
+      ],
+      "motion": [],
+      "chord": [
+       {
+        "origin": "baker-street",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003402659459
+        },
+        "within1px": 1,
+        "p99Px": 0.04,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 183,
+         "longestEdgeAtHalfPx": 4.3,
+         "p99EdgeAtHalfPx": 4.3
+        }
+       },
+       {
+        "origin": "wembley-park",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003402659459
+        },
+        "within1px": 1,
+        "p99Px": 0.03,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 311,
+         "longestEdgeAtHalfPx": 4.2,
+         "p99EdgeAtHalfPx": 4.2
+        }
+       },
+       {
+        "origin": "canary-wharf",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003402659459
+        },
+        "within1px": 1,
+        "p99Px": 0.038,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 360,
+         "longestEdgeAtHalfPx": 4.3,
+         "p99EdgeAtHalfPx": 4.3
+        }
+       },
+       {
+        "origin": "heathrow",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003402659459
+        },
+        "within1px": 1,
+        "p99Px": 0.034,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 514,
+         "longestEdgeAtHalfPx": 4.3,
+         "p99EdgeAtHalfPx": 4.3
+        }
+       },
+       {
+        "origin": "croydon",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003402659459
+        },
+        "within1px": 1,
+        "p99Px": 0.029,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 383,
+         "longestEdgeAtHalfPx": 4.3,
+         "p99EdgeAtHalfPx": 4.3
+        }
+       }
+      ]
+     },
+     {
+      "field": "cliff",
+      "cold": [
+       {
+        "origin": "baker-street",
+        "ms": 41.8,
+        "failed": null,
+        "fieldMs": 5.4,
+        "tiles": 10,
+        "fetched": 10,
+        "missing": 0,
+        "shaded": 299667,
+        "bytes": 1232496,
+        "overBudget": false,
+        "dropped": {
+         "secondary": 64,
+         "park": 1100
+        },
+        "workerMs": 36.7,
+        "tessMs": 31.8,
+        "packMs": 1.5,
+        "uploadMs": 0.3,
+        "peakResident": 314415,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 49.7,
+        "failed": null,
+        "fieldMs": 6.8,
+        "tiles": 16,
+        "fetched": 16,
+        "missing": 0,
+        "shaded": 264344,
+        "bytes": 2349668,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 43.8,
+        "tessMs": 32.1,
+        "packMs": 1.4,
+        "uploadMs": 0.2,
+        "peakResident": 226490,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 43,
+        "failed": null,
+        "fieldMs": 5.1,
+        "tiles": 14,
+        "fetched": 14,
+        "missing": 0,
+        "shaded": 293660,
+        "bytes": 2740616,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 38.8,
+        "tessMs": 32.7,
+        "packMs": 1.6,
+        "uploadMs": 0.2,
+        "peakResident": 248096,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 47.1,
+        "failed": null,
+        "fieldMs": 5.4,
+        "tiles": 10,
+        "fetched": 10,
+        "missing": 0,
+        "shaded": 285031,
+        "bytes": 3810532,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 38.3,
+        "tessMs": 33.1,
+        "packMs": 1.8,
+        "uploadMs": 0.3,
+        "peakResident": 251839,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 54.2,
+        "failed": null,
+        "fieldMs": 5.4,
+        "tiles": 24,
+        "fetched": 24,
+        "missing": 0,
+        "shaded": 299996,
+        "bytes": 3802751,
+        "overBudget": false,
+        "dropped": {
+         "secondary": 32,
+         "park": 796
+        },
+        "workerMs": 51.7,
+        "tessMs": 41.6,
+        "packMs": 2.5,
+        "uploadMs": 0.4,
+        "peakResident": 307801,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       }
+      ],
+      "warm": [
+       {
+        "origin": "baker-street",
+        "ms": 40,
+        "failed": null,
+        "workerMs": 38.1,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 26.9,
+        "failed": null,
+        "workerMs": 24.6,
+        "uploadMs": 0.3,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 43.7,
+        "failed": null,
+        "workerMs": 36.9,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 45.7,
+        "failed": null,
+        "workerMs": 39,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 60.7,
+        "failed": null,
+        "workerMs": 49.5,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 45,
+        "failed": null,
+        "workerMs": 36.4,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 28.6,
+        "failed": null,
+        "workerMs": 26.1,
+        "uploadMs": 0.4,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 45.3,
+        "failed": null,
+        "workerMs": 38.4,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 45.3,
+        "failed": null,
+        "workerMs": 37.4,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 60.9,
+        "failed": null,
+        "workerMs": 50.9,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 44,
+        "failed": null,
+        "workerMs": 36.2,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 27.5,
+        "failed": null,
+        "workerMs": 26,
+        "uploadMs": 0.2,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 64.2,
+        "failed": null,
+        "workerMs": 48.3,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 45,
+        "failed": null,
+        "workerMs": 36.4,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 58.7,
+        "failed": null,
+        "workerMs": 47.7,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 46.4,
+        "failed": null,
+        "workerMs": 37.4,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 27.5,
+        "failed": null,
+        "workerMs": 26,
+        "uploadMs": 0.1,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 43.5,
+        "failed": null,
+        "workerMs": 37.2,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 46.1,
+        "failed": null,
+        "workerMs": 38.5,
+        "uploadMs": 0.4,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 60.3,
+        "failed": null,
+        "workerMs": 50.1,
+        "uploadMs": 0.4,
+        "cacheHits": 0
+       }
+      ],
+      "motion": [],
+      "chord": [
+       {
+        "origin": "baker-street",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003603142378
+        },
+        "within1px": 1,
+        "p99Px": 0.074,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 196,
+         "longestEdgeAtHalfPx": 13.6,
+         "p99EdgeAtHalfPx": 10.9
+        }
+       },
+       {
+        "origin": "wembley-park",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003603142378
+        },
+        "within1px": 0.97,
+        "p99Px": 1.858,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 336,
+         "longestEdgeAtHalfPx": 8.6,
+         "p99EdgeAtHalfPx": 7.5
+        }
+       },
+       {
+        "origin": "canary-wharf",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003603142378
+        },
+        "within1px": 0.9979,
+        "p99Px": 0.126,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 414,
+         "longestEdgeAtHalfPx": 18.9,
+         "p99EdgeAtHalfPx": 16.4
+        }
+       },
+       {
+        "origin": "heathrow",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003603142378
+        },
+        "within1px": 0.9979,
+        "p99Px": 0.074,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 455,
+         "longestEdgeAtHalfPx": 17.4,
+         "p99EdgeAtHalfPx": 4.6
+        }
+       },
+       {
+        "origin": "croydon",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003603142378
+        },
+        "within1px": 0.978,
+        "p99Px": 2.015,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 361,
+         "longestEdgeAtHalfPx": 6.3,
+         "p99EdgeAtHalfPx": 4.3
+        }
+       }
+      ]
+     }
+    ],
+    "spacingSweep": [
+     {
+      "spacingDiv": 64,
+      "shaded": 604236,
+      "fillVerts": 0,
+      "segments": 73383,
+      "bytes": 1541043,
+      "tessMs": 184.9,
+      "chord": {
+       "samples": 2039,
+       "within1px": 0.9931,
+       "p99Px": 0.757,
+       "maxPx": 2.644,
+       "byZoom": {
+        "10": {
+         "samples": 94,
+         "within1px": 1,
+         "p99Px": 0.384
+        },
+        "12": {
+         "samples": 1351,
+         "within1px": 0.9919,
+         "p99Px": 0.853
+        },
+        "13": {
+         "samples": 332,
+         "within1px": 0.991,
+         "p99Px": 0.795
+        },
+        "14": {
+         "samples": 262,
+         "within1px": 1,
+         "p99Px": 0.298
+        }
+       },
+       "nearFold": {
+        "samples": 1471,
+        "within1px": 0.9789,
+        "p99Px": 1.357
+       },
+       "nearNoData": {
+        "samples": 386,
+        "within1px": 0.4275,
+        "p99Px": 16.269
+       },
+       "invisible": 2104,
+       "crossingOuterMinute": {
+        "primitives": 424,
+        "longestEdgeAtHalfPx": 24.7,
+        "p99EdgeAtHalfPx": 24
+       }
+      }
+     },
+     {
+      "spacingDiv": 128,
+      "shaded": 1096926,
+      "fillVerts": 0,
+      "segments": 134518,
+      "bytes": 2824878,
+      "tessMs": 305.8,
+      "chord": {
+       "samples": 1999,
+       "within1px": 0.999,
+       "p99Px": 0.206,
+       "maxPx": 1.031,
+       "byZoom": {
+        "10": {
+         "samples": 79,
+         "within1px": 1,
+         "p99Px": 0.081
+        },
+        "12": {
+         "samples": 1320,
+         "within1px": 0.9992,
+         "p99Px": 0.206
+        },
+        "13": {
+         "samples": 336,
+         "within1px": 0.997,
+         "p99Px": 0.201
+        },
+        "14": {
+         "samples": 264,
+         "within1px": 1,
+         "p99Px": 0.209
+        }
+       },
+       "nearFold": {
+        "samples": 1469,
+        "within1px": 0.9946,
+        "p99Px": 0.685
+       },
+       "nearNoData": {
+        "samples": 411,
+        "within1px": 0.5426,
+        "p99Px": 9.98
+       },
+       "invisible": 2121,
+       "crossingOuterMinute": {
+        "primitives": 426,
+        "longestEdgeAtHalfPx": 23,
+        "p99EdgeAtHalfPx": 19.4
+       }
+      }
+     },
+     {
+      "spacingDiv": 256,
+      "shaded": 2090904,
+      "fillVerts": 0,
+      "segments": 257466,
+      "bytes": 5406786,
+      "tessMs": 621.6,
+      "chord": {
+       "samples": 2040,
+       "within1px": 1,
+       "p99Px": 0.107,
+       "maxPx": 0.625,
+       "byZoom": {
+        "10": {
+         "samples": 85,
+         "within1px": 1,
+         "p99Px": 0.07
+        },
+        "12": {
+         "samples": 1347,
+         "within1px": 1,
+         "p99Px": 0.086
+        },
+        "13": {
+         "samples": 347,
+         "within1px": 1,
+         "p99Px": 0.147
+        },
+        "14": {
+         "samples": 261,
+         "within1px": 1,
+         "p99Px": 0.116
+        }
+       },
+       "nearFold": {
+        "samples": 1469,
+        "within1px": 0.9939,
+        "p99Px": 0.743
+       },
+       "nearNoData": {
+        "samples": 376,
+        "within1px": 0.8165,
+        "p99Px": 7.074
+       },
+       "invisible": 2115,
+       "crossingOuterMinute": {
+        "primitives": 426,
+        "longestEdgeAtHalfPx": 14,
+        "p99EdgeAtHalfPx": 11.6
+       }
+      }
+     }
+    ],
+    "summary": {
+     "backend": "b",
+     "mode": "gpu",
+     "fellBack": false,
+     "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+     "geom": "tiles",
+     "G6_frames": {
+      "worstP50": 16.7,
+      "worstP95": 16.8,
+      "drawP95Ms": 0.2,
+      "gpuFrameMs": 11.24,
+      "note": "frame intervals are capped by vsync; the gate is judged on the phones"
+     },
+     "G7_originChange": {
+      "p50": 50.5,
+      "p95": 366.2,
+      "pass": false
+     },
+     "G8_newOrigin": {
+      "p50": 67.7,
+      "p95": 544.3,
+      "missingTiles": 0,
+      "pass": true
+     },
+     "G9_budget": {
+      "maxShaded": 1096926,
+      "maxTiles": 41,
+      "overBudget": true
+     },
+     "failures": 0,
+     "spacing": [
+      "spacing 64: 604236 shaded, 99.31% \u2264 1 px, p99 0.757 px",
+      "spacing 128: 1096926 shaded, 99.90% \u2264 1 px, p99 0.206 px",
+      "spacing 256: 2090904 shaded, 100.00% \u2264 1 px, p99 0.107 px"
+     ]
+    }
+   },
+   "c": {
+    "kind": "bench",
+    "at": "2026-11-13T13:18:15.314Z",
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "backend": "c",
+    "geom": "tiles",
+    "spacing": 128,
+    "screen": {
+     "w": 1440,
+     "h": 900,
+     "dpr": 1
+    },
+    "gpu": {
+     "mode": "cpu",
+     "fellBack": false,
+     "renderer": "WebKit WebGL",
+     "unmasked": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+     "caps": {
+      "webgl2": true,
+      "maxTextureSize": 16384,
+      "maxVertexTextureUnits": 16,
+      "maxVertexAttribs": 16,
+      "maxVertexUniformVectors": 1024,
+      "floatLinear": true,
+      "colorBufferFloat": true,
+      "renderer": "WebKit WebGL",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "forced": null,
+      "r32f": {
+       "ok": true
+      },
+      "rg32f": {
+       "ok": true
+      },
+      "vtf": true,
+      "gpu": true,
+      "cpu": true
+     }
+    },
+    "runs": [
+     {
+      "field": "transit",
+      "cold": [
+       {
+        "origin": "baker-street",
+        "ms": 418.4,
+        "failed": null,
+        "fieldMs": 7.8,
+        "tiles": 27,
+        "fetched": 27,
+        "missing": 0,
+        "shaded": 1096926,
+        "bytes": 6053310,
+        "overBudget": true,
+        "dropped": {
+         "secondary": 64,
+         "park": 5881,
+         "water": 952,
+         "primary": 2163
+        },
+        "workerMs": 412.7,
+        "tessMs": 359.7,
+        "packMs": 39.4,
+        "uploadMs": 1.1,
+        "peakResident": 3337573,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 247.1,
+        "failed": null,
+        "fieldMs": 13.1,
+        "tiles": 28,
+        "fetched": 28,
+        "missing": 0,
+        "shaded": 616884,
+        "bytes": 3553875,
+        "overBudget": true,
+        "dropped": {
+         "secondary": 20,
+         "park": 3009,
+         "water": 489,
+         "primary": 1899
+        },
+        "workerMs": 244.1,
+        "tessMs": 153.1,
+        "packMs": 82,
+        "uploadMs": 0.4,
+        "peakResident": 1352226,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 378.7,
+        "failed": null,
+        "fieldMs": 5.5,
+        "tiles": 34,
+        "fetched": 34,
+        "missing": 0,
+        "shaded": 1025352,
+        "bytes": 5708835,
+        "overBudget": true,
+        "dropped": {
+         "secondary": 41,
+         "park": 6623,
+         "water": 993,
+         "minor_rail": 22,
+         "primary": 2349
+        },
+        "workerMs": 362.1,
+        "tessMs": 310.1,
+        "packMs": 42.5,
+        "uploadMs": 0.6,
+        "peakResident": 3176930,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 150.4,
+        "failed": null,
+        "fieldMs": 6,
+        "tiles": 20,
+        "fetched": 20,
+        "missing": 0,
+        "shaded": 493278,
+        "bytes": 2889900,
+        "overBudget": true,
+        "dropped": {
+         "park": 3063,
+         "water": 641,
+         "minor_rail": 1,
+         "primary": 1629
+        },
+        "workerMs": 132.2,
+        "tessMs": 108.5,
+        "packMs": 16.5,
+        "uploadMs": 0.2,
+        "peakResident": 1117792,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 203.9,
+        "failed": null,
+        "fieldMs": 5.7,
+        "tiles": 41,
+        "fetched": 41,
+        "missing": 0,
+        "shaded": 637494,
+        "bytes": 3747150,
+        "overBudget": true,
+        "dropped": {
+         "secondary": 32,
+         "park": 4826,
+         "water": 592,
+         "minor_rail": 18,
+         "primary": 2219
+        },
+        "workerMs": 198.4,
+        "tessMs": 166.7,
+        "packMs": 17.9,
+        "uploadMs": 0.1,
+        "peakResident": 1604106,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       }
+      ],
+      "warm": [
+       {
+        "origin": "baker-street",
+        "ms": 349,
+        "failed": null,
+        "workerMs": 343.9,
+        "uploadMs": 0.3,
+        "cacheHits": 1
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 144.2,
+        "failed": null,
+        "workerMs": 136,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 361.8,
+        "failed": null,
+        "workerMs": 354.3,
+        "uploadMs": 0.5,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 161,
+        "failed": null,
+        "workerMs": 152.8,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 227.1,
+        "failed": null,
+        "workerMs": 212.8,
+        "uploadMs": 0.3,
+        "cacheHits": 3
+       },
+       {
+        "origin": "baker-street",
+        "ms": 345.6,
+        "failed": null,
+        "workerMs": 342.4,
+        "uploadMs": 0.5,
+        "cacheHits": 2
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 143.6,
+        "failed": null,
+        "workerMs": 129.6,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 380.5,
+        "failed": null,
+        "workerMs": 365.1,
+        "uploadMs": 0.6,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 127.4,
+        "failed": null,
+        "workerMs": 125.4,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 163.4,
+        "failed": null,
+        "workerMs": 157.9,
+        "uploadMs": 0.4,
+        "cacheHits": 3
+       },
+       {
+        "origin": "baker-street",
+        "ms": 344.5,
+        "failed": null,
+        "workerMs": 325.1,
+        "uploadMs": 0.3,
+        "cacheHits": 2
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 143.6,
+        "failed": null,
+        "workerMs": 131.5,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 345.8,
+        "failed": null,
+        "workerMs": 331.8,
+        "uploadMs": 0.4,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 127,
+        "failed": null,
+        "workerMs": 119.8,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 163.7,
+        "failed": null,
+        "workerMs": 156.3,
+        "uploadMs": 0.4,
+        "cacheHits": 3
+       },
+       {
+        "origin": "baker-street",
+        "ms": 326.3,
+        "failed": null,
+        "workerMs": 321.4,
+        "uploadMs": 0.2,
+        "cacheHits": 2
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 178,
+        "failed": null,
+        "workerMs": 171.8,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 359.9,
+        "failed": null,
+        "workerMs": 348.9,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 132.2,
+        "failed": null,
+        "workerMs": 117.9,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 160.6,
+        "failed": null,
+        "workerMs": 152.7,
+        "uploadMs": 0.2,
+        "cacheHits": 3
+       }
+      ],
+      "motion": [
+       {
+        "origin": "baker-street",
+        "morphP50": 16.7,
+        "morphP95": 16.7,
+        "panP50": 16.7,
+        "panP95": 16.7,
+        "zoomP95": 16.8,
+        "p50": 16.7,
+        "p95": 16.7,
+        "max": 16.8,
+        "frames": 832,
+        "drawP50Ms": 0,
+        "drawP95Ms": 0.1,
+        "gpuFrameMs": 12.24
+       },
+       {
+        "origin": "wembley-park",
+        "morphP50": 16.7,
+        "morphP95": 16.7,
+        "panP50": 16.7,
+        "panP95": 16.7,
+        "zoomP95": 16.7,
+        "p50": 16.7,
+        "p95": 16.7,
+        "max": 16.8,
+        "frames": 832,
+        "drawP50Ms": 0.1,
+        "drawP95Ms": 0.1,
+        "gpuFrameMs": 8.85
+       },
+       {
+        "origin": "canary-wharf",
+        "morphP50": 16.7,
+        "morphP95": 16.7,
+        "panP50": 16.7,
+        "panP95": 16.7,
+        "zoomP95": 16.8,
+        "p50": 16.7,
+        "p95": 16.7,
+        "max": 16.8,
+        "frames": 832,
+        "drawP50Ms": 0,
+        "drawP95Ms": 0.1,
+        "gpuFrameMs": 10.31
+       },
+       {
+        "origin": "heathrow",
+        "morphP50": 16.7,
+        "morphP95": 16.8,
+        "panP50": 16.7,
+        "panP95": 16.8,
+        "zoomP95": 16.7,
+        "p50": 16.7,
+        "p95": 16.8,
+        "max": 33.3,
+        "frames": 832,
+        "drawP50Ms": 0,
+        "drawP95Ms": 0.1,
+        "gpuFrameMs": 7.64
+       },
+       {
+        "origin": "croydon",
+        "morphP50": 16.7,
+        "morphP95": 16.7,
+        "panP50": 16.7,
+        "panP95": 16.7,
+        "zoomP95": 16.8,
+        "p50": 16.7,
+        "p95": 16.7,
+        "max": 16.8,
+        "frames": 832,
+        "drawP50Ms": 0,
+        "drawP95Ms": 0.2,
+        "gpuFrameMs": 7.87
+       }
+      ],
+      "chord": [
+       {
+        "origin": "baker-street",
+        "folds": {
+         "foldedShare": 0.19701052363574642,
+         "foldedSheets": 0.28065611136096136,
+         "medianStretch": 5.752070146585066
+        },
+        "within1px": 0.9959,
+        "p99Px": 0.249,
+        "nearFold": {
+         "samples": 741,
+         "within1px": 0.9933,
+         "p99Px": 0.642
+        },
+        "crossing": {
+         "primitives": 426,
+         "longestEdgeAtHalfPx": 23,
+         "p99EdgeAtHalfPx": 19.4
+        }
+       },
+       {
+        "origin": "wembley-park",
+        "folds": {
+         "foldedShare": 0.08502362160174262,
+         "foldedSheets": 0.1270275841927563,
+         "medianStretch": 5.827037504895857
+        },
+        "within1px": 1,
+        "p99Px": 0.169,
+        "nearFold": {
+         "samples": 904,
+         "within1px": 0.9878,
+         "p99Px": 2.546
+        },
+        "crossing": {
+         "primitives": 352,
+         "longestEdgeAtHalfPx": 19.3,
+         "p99EdgeAtHalfPx": 18.5
+        }
+       },
+       {
+        "origin": "canary-wharf",
+        "folds": {
+         "foldedShare": 0.19187954397578433,
+         "foldedSheets": 0.2487725523341122,
+         "medianStretch": 5.552097489683034
+        },
+        "within1px": 1,
+        "p99Px": 0.234,
+        "nearFold": {
+         "samples": 886,
+         "within1px": 0.9661,
+         "p99Px": 4.515
+        },
+        "crossing": {
+         "primitives": 505,
+         "longestEdgeAtHalfPx": 23.8,
+         "p99EdgeAtHalfPx": 16.9
+        }
+       },
+       {
+        "origin": "heathrow",
+        "folds": {
+         "foldedShare": 0.12802695974426434,
+         "foldedSheets": 0.1752924406979488,
+         "medianStretch": 4.7804891926042785
+        },
+        "within1px": 1,
+        "p99Px": 0.077,
+        "nearFold": {
+         "samples": 635,
+         "within1px": 0.9276,
+         "p99Px": 8.132
+        },
+        "crossing": {
+         "primitives": 229,
+         "longestEdgeAtHalfPx": 21.9,
+         "p99EdgeAtHalfPx": 20.8
+        }
+       },
+       {
+        "origin": "croydon",
+        "folds": {
+         "foldedShare": 0.09267235282469094,
+         "foldedSheets": 0.12674589431568573,
+         "medianStretch": 6.7403926563154
+        },
+        "within1px": 0.9973,
+        "p99Px": 0.148,
+        "nearFold": {
+         "samples": 866,
+         "within1px": 0.9688,
+         "p99Px": 4.172
+        },
+        "crossing": {
+         "primitives": 429,
+         "longestEdgeAtHalfPx": 19.1,
+         "p99EdgeAtHalfPx": 15.3
+        }
+       }
+      ]
+     },
+     {
+      "field": "walk",
+      "cold": [
+       {
+        "origin": "baker-street",
+        "ms": 69.7,
+        "failed": null,
+        "fieldMs": 12.9,
+        "tiles": 10,
+        "fetched": 10,
+        "missing": 0,
+        "shaded": 299667,
+        "bytes": 2337444,
+        "overBudget": false,
+        "dropped": {
+         "secondary": 64,
+         "park": 1100
+        },
+        "workerMs": 64.1,
+        "tessMs": 47,
+        "packMs": 10.2,
+        "uploadMs": 0.3,
+        "peakResident": 314415,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 46.7,
+        "failed": null,
+        "fieldMs": 6,
+        "tiles": 16,
+        "fetched": 16,
+        "missing": 0,
+        "shaded": 264344,
+        "bytes": 4002956,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 45.5,
+        "tessMs": 27.7,
+        "packMs": 10.3,
+        "uploadMs": 0.4,
+        "peakResident": 226490,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 64.5,
+        "failed": null,
+        "fieldMs": 5.3,
+        "tiles": 14,
+        "fetched": 14,
+        "missing": 0,
+        "shaded": 293660,
+        "bytes": 4615280,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 55.6,
+        "tessMs": 33.8,
+        "packMs": 17.6,
+        "uploadMs": 0.4,
+        "peakResident": 248096,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 55.8,
+        "failed": null,
+        "fieldMs": 4.5,
+        "tiles": 10,
+        "fetched": 10,
+        "missing": 0,
+        "shaded": 285031,
+        "bytes": 6290848,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 51.2,
+        "tessMs": 35.1,
+        "packMs": 13.5,
+        "uploadMs": 0.5,
+        "peakResident": 251839,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 67.1,
+        "failed": null,
+        "fieldMs": 4.7,
+        "tiles": 24,
+        "fetched": 24,
+        "missing": 0,
+        "shaded": 299996,
+        "bytes": 6266735,
+        "overBudget": false,
+        "dropped": {
+         "secondary": 32,
+         "park": 796
+        },
+        "workerMs": 56,
+        "tessMs": 42.3,
+        "packMs": 9,
+        "uploadMs": 0.5,
+        "peakResident": 307801,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       }
+      ],
+      "warm": [
+       {
+        "origin": "baker-street",
+        "ms": 44.3,
+        "failed": null,
+        "workerMs": 41.1,
+        "uploadMs": 0.1,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 43.2,
+        "failed": null,
+        "workerMs": 31.9,
+        "uploadMs": 0.1,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 47.6,
+        "failed": null,
+        "workerMs": 42.6,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 45.1,
+        "failed": null,
+        "workerMs": 43.7,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 60.7,
+        "failed": null,
+        "workerMs": 52.6,
+        "uploadMs": 0.5,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 64.4,
+        "failed": null,
+        "workerMs": 62.8,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 45.6,
+        "failed": null,
+        "workerMs": 29,
+        "uploadMs": 0.1,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 46.5,
+        "failed": null,
+        "workerMs": 41.1,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 45.2,
+        "failed": null,
+        "workerMs": 43.2,
+        "uploadMs": 0.4,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 61.6,
+        "failed": null,
+        "workerMs": 55.4,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 47.3,
+        "failed": null,
+        "workerMs": 37.8,
+        "uploadMs": 0,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 45.8,
+        "failed": null,
+        "workerMs": 26.7,
+        "uploadMs": 0.1,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 42.9,
+        "failed": null,
+        "workerMs": 40.9,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 47.6,
+        "failed": null,
+        "workerMs": 41.3,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 61.6,
+        "failed": null,
+        "workerMs": 54.4,
+        "uploadMs": 0.5,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 46.7,
+        "failed": null,
+        "workerMs": 37.5,
+        "uploadMs": 0,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 29.9,
+        "failed": null,
+        "workerMs": 27,
+        "uploadMs": 0.1,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 44.6,
+        "failed": null,
+        "workerMs": 41.2,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 45.1,
+        "failed": null,
+        "workerMs": 40.5,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 60.4,
+        "failed": null,
+        "workerMs": 52.6,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       }
+      ],
+      "motion": [],
+      "chord": [
+       {
+        "origin": "baker-street",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003402659459
+        },
+        "within1px": 1,
+        "p99Px": 0.04,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 183,
+         "longestEdgeAtHalfPx": 4.3,
+         "p99EdgeAtHalfPx": 4.3
+        }
+       },
+       {
+        "origin": "wembley-park",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003402659459
+        },
+        "within1px": 1,
+        "p99Px": 0.03,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 311,
+         "longestEdgeAtHalfPx": 4.2,
+         "p99EdgeAtHalfPx": 4.2
+        }
+       },
+       {
+        "origin": "canary-wharf",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003402659459
+        },
+        "within1px": 1,
+        "p99Px": 0.038,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 360,
+         "longestEdgeAtHalfPx": 4.3,
+         "p99EdgeAtHalfPx": 4.3
+        }
+       },
+       {
+        "origin": "heathrow",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003402659459
+        },
+        "within1px": 1,
+        "p99Px": 0.034,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 514,
+         "longestEdgeAtHalfPx": 4.3,
+         "p99EdgeAtHalfPx": 4.3
+        }
+       },
+       {
+        "origin": "croydon",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003402659459
+        },
+        "within1px": 1,
+        "p99Px": 0.029,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 383,
+         "longestEdgeAtHalfPx": 4.3,
+         "p99EdgeAtHalfPx": 4.3
+        }
+       }
+      ]
+     },
+     {
+      "field": "cliff",
+      "cold": [
+       {
+        "origin": "baker-street",
+        "ms": 44.9,
+        "failed": null,
+        "fieldMs": 5.1,
+        "tiles": 10,
+        "fetched": 10,
+        "missing": 0,
+        "shaded": 299667,
+        "bytes": 2337444,
+        "overBudget": false,
+        "dropped": {
+         "secondary": 64,
+         "park": 1100
+        },
+        "workerMs": 36.5,
+        "tessMs": 29.6,
+        "packMs": 3.6,
+        "uploadMs": 0.2,
+        "peakResident": 314415,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 40.3,
+        "failed": null,
+        "fieldMs": 5.3,
+        "tiles": 16,
+        "fetched": 16,
+        "missing": 0,
+        "shaded": 264344,
+        "bytes": 4002956,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 31.1,
+        "tessMs": 22,
+        "packMs": 5.1,
+        "uploadMs": 0.2,
+        "peakResident": 226490,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 62.3,
+        "failed": null,
+        "fieldMs": 5.3,
+        "tiles": 14,
+        "fetched": 14,
+        "missing": 0,
+        "shaded": 293660,
+        "bytes": 4615280,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 57.5,
+        "tessMs": 40.5,
+        "packMs": 6.3,
+        "uploadMs": 0.3,
+        "peakResident": 248096,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 47.2,
+        "failed": null,
+        "fieldMs": 5.1,
+        "tiles": 10,
+        "fetched": 10,
+        "missing": 0,
+        "shaded": 285031,
+        "bytes": 6290848,
+        "overBudget": false,
+        "dropped": {},
+        "workerMs": 41.9,
+        "tessMs": 31.9,
+        "packMs": 7.6,
+        "uploadMs": 0.2,
+        "peakResident": 251839,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 63.9,
+        "failed": null,
+        "fieldMs": 5.2,
+        "tiles": 24,
+        "fetched": 24,
+        "missing": 0,
+        "shaded": 299996,
+        "bytes": 6266735,
+        "overBudget": false,
+        "dropped": {
+         "secondary": 32,
+         "park": 796
+        },
+        "workerMs": 52.8,
+        "tessMs": 40.2,
+        "packMs": 8.4,
+        "uploadMs": 0.2,
+        "peakResident": 307801,
+        "rings": [
+         1000,
+         10000,
+         null
+        ],
+        "coarsened": 0
+       }
+      ],
+      "warm": [
+       {
+        "origin": "baker-street",
+        "ms": 51.4,
+        "failed": null,
+        "workerMs": 38.3,
+        "uploadMs": 0,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 27.8,
+        "failed": null,
+        "workerMs": 26.8,
+        "uploadMs": 0.2,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 45.2,
+        "failed": null,
+        "workerMs": 39.6,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 44.9,
+        "failed": null,
+        "workerMs": 40.6,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 61.6,
+        "failed": null,
+        "workerMs": 52.8,
+        "uploadMs": 0.5,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 48.3,
+        "failed": null,
+        "workerMs": 44.7,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 40.1,
+        "failed": null,
+        "workerMs": 32.4,
+        "uploadMs": 0.2,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 60.7,
+        "failed": null,
+        "workerMs": 54.7,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 45.1,
+        "failed": null,
+        "workerMs": 41.2,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 61.6,
+        "failed": null,
+        "workerMs": 53.3,
+        "uploadMs": 0.4,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 45.4,
+        "failed": null,
+        "workerMs": 37.6,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 28.6,
+        "failed": null,
+        "workerMs": 27.4,
+        "uploadMs": 0.2,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 44.7,
+        "failed": null,
+        "workerMs": 41.9,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 47.7,
+        "failed": null,
+        "workerMs": 40.5,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 75.1,
+        "failed": null,
+        "workerMs": 58.5,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "baker-street",
+        "ms": 62.4,
+        "failed": null,
+        "workerMs": 50.6,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "wembley-park",
+        "ms": 27.8,
+        "failed": null,
+        "workerMs": 26.8,
+        "uploadMs": 0.2,
+        "cacheHits": 1
+       },
+       {
+        "origin": "canary-wharf",
+        "ms": 46.7,
+        "failed": null,
+        "workerMs": 43.3,
+        "uploadMs": 0.3,
+        "cacheHits": 0
+       },
+       {
+        "origin": "heathrow",
+        "ms": 43,
+        "failed": null,
+        "workerMs": 40.6,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       },
+       {
+        "origin": "croydon",
+        "ms": 64,
+        "failed": null,
+        "workerMs": 51.8,
+        "uploadMs": 0.2,
+        "cacheHits": 0
+       }
+      ],
+      "motion": [],
+      "chord": [
+       {
+        "origin": "baker-street",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003603142378
+        },
+        "within1px": 1,
+        "p99Px": 0.074,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 196,
+         "longestEdgeAtHalfPx": 13.6,
+         "p99EdgeAtHalfPx": 10.9
+        }
+       },
+       {
+        "origin": "wembley-park",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003603142378
+        },
+        "within1px": 0.97,
+        "p99Px": 1.858,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 336,
+         "longestEdgeAtHalfPx": 8.6,
+         "p99EdgeAtHalfPx": 7.5
+        }
+       },
+       {
+        "origin": "canary-wharf",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003603142378
+        },
+        "within1px": 0.9979,
+        "p99Px": 0.126,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 414,
+         "longestEdgeAtHalfPx": 18.9,
+         "p99EdgeAtHalfPx": 16.4
+        }
+       },
+       {
+        "origin": "heathrow",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003603142378
+        },
+        "within1px": 0.9979,
+        "p99Px": 0.074,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 455,
+         "longestEdgeAtHalfPx": 17.4,
+         "p99EdgeAtHalfPx": 4.6
+        }
+       },
+       {
+        "origin": "croydon",
+        "folds": {
+         "foldedShare": 0,
+         "foldedSheets": 0,
+         "medianStretch": 1.0000003603142378
+        },
+        "within1px": 0.978,
+        "p99Px": 2.015,
+        "nearFold": {
+         "samples": 0,
+         "within1px": 1,
+         "p99Px": 0
+        },
+        "crossing": {
+         "primitives": 361,
+         "longestEdgeAtHalfPx": 6.3,
+         "p99EdgeAtHalfPx": 4.3
+        }
+       }
+      ]
+     }
+    ],
+    "spacingSweep": [
+     {
+      "spacingDiv": 64,
+      "shaded": 604236,
+      "fillVerts": 0,
+      "segments": 73383,
+      "bytes": 3302235,
+      "tessMs": 168,
+      "chord": {
+       "samples": 2039,
+       "within1px": 0.9931,
+       "p99Px": 0.757,
+       "maxPx": 2.644,
+       "byZoom": {
+        "10": {
+         "samples": 94,
+         "within1px": 1,
+         "p99Px": 0.384
+        },
+        "12": {
+         "samples": 1351,
+         "within1px": 0.9919,
+         "p99Px": 0.853
+        },
+        "13": {
+         "samples": 332,
+         "within1px": 0.991,
+         "p99Px": 0.795
+        },
+        "14": {
+         "samples": 262,
+         "within1px": 1,
+         "p99Px": 0.298
+        }
+       },
+       "nearFold": {
+        "samples": 1471,
+        "within1px": 0.9789,
+        "p99Px": 1.357
+       },
+       "nearNoData": {
+        "samples": 386,
+        "within1px": 0.4275,
+        "p99Px": 16.269
+       },
+       "invisible": 2104,
+       "crossingOuterMinute": {
+        "primitives": 424,
+        "longestEdgeAtHalfPx": 24.7,
+        "p99EdgeAtHalfPx": 24
+       }
+      }
+     },
+     {
+      "spacingDiv": 128,
+      "shaded": 1096926,
+      "fillVerts": 0,
+      "segments": 134518,
+      "bytes": 6053310,
+      "tessMs": 322.3,
+      "chord": {
+       "samples": 1999,
+       "within1px": 0.999,
+       "p99Px": 0.206,
+       "maxPx": 1.031,
+       "byZoom": {
+        "10": {
+         "samples": 79,
+         "within1px": 1,
+         "p99Px": 0.081
+        },
+        "12": {
+         "samples": 1320,
+         "within1px": 0.9992,
+         "p99Px": 0.206
+        },
+        "13": {
+         "samples": 336,
+         "within1px": 0.997,
+         "p99Px": 0.201
+        },
+        "14": {
+         "samples": 264,
+         "within1px": 1,
+         "p99Px": 0.209
+        }
+       },
+       "nearFold": {
+        "samples": 1469,
+        "within1px": 0.9946,
+        "p99Px": 0.685
+       },
+       "nearNoData": {
+        "samples": 411,
+        "within1px": 0.5426,
+        "p99Px": 9.98
+       },
+       "invisible": 2121,
+       "crossingOuterMinute": {
+        "primitives": 426,
+        "longestEdgeAtHalfPx": 23,
+        "p99EdgeAtHalfPx": 19.4
+       }
+      }
+     },
+     {
+      "spacingDiv": 256,
+      "shaded": 2090904,
+      "fillVerts": 0,
+      "segments": 257466,
+      "bytes": 11585970,
+      "tessMs": 592.7,
+      "chord": {
+       "samples": 2040,
+       "within1px": 1,
+       "p99Px": 0.107,
+       "maxPx": 0.625,
+       "byZoom": {
+        "10": {
+         "samples": 85,
+         "within1px": 1,
+         "p99Px": 0.07
+        },
+        "12": {
+         "samples": 1347,
+         "within1px": 1,
+         "p99Px": 0.086
+        },
+        "13": {
+         "samples": 347,
+         "within1px": 1,
+         "p99Px": 0.147
+        },
+        "14": {
+         "samples": 261,
+         "within1px": 1,
+         "p99Px": 0.116
+        }
+       },
+       "nearFold": {
+        "samples": 1469,
+        "within1px": 0.9939,
+        "p99Px": 0.743
+       },
+       "nearNoData": {
+        "samples": 376,
+        "within1px": 0.8165,
+        "p99Px": 7.074
+       },
+       "invisible": 2115,
+       "crossingOuterMinute": {
+        "primitives": 426,
+        "longestEdgeAtHalfPx": 14,
+        "p99EdgeAtHalfPx": 11.6
+       }
+      }
+     }
+    ],
+    "summary": {
+     "backend": "c",
+     "mode": "cpu",
+     "fellBack": false,
+     "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+     "geom": "tiles",
+     "G6_frames": {
+      "worstP50": 16.7,
+      "worstP95": 16.8,
+      "drawP95Ms": 0.2,
+      "gpuFrameMs": 12.24,
+      "note": "frame intervals are capped by vsync; the gate is judged on the phones"
+     },
+     "G7_originChange": {
+      "p50": 60.7,
+      "p95": 359.9,
+      "pass": false
+     },
+     "G8_newOrigin": {
+      "p50": 64.5,
+      "p95": 418.4,
+      "missingTiles": 0,
+      "pass": true
+     },
+     "G9_budget": {
+      "maxShaded": 1096926,
+      "maxTiles": 41,
+      "overBudget": true
+     },
+     "failures": 0,
+     "spacing": [
+      "spacing 64: 604236 shaded, 99.31% \u2264 1 px, p99 0.757 px",
+      "spacing 128: 1096926 shaded, 99.90% \u2264 1 px, p99 0.206 px",
+      "spacing 256: 2090904 shaded, 100.00% \u2264 1 px, p99 0.107 px"
+     ]
+    }
+   }
+  }
  }
 }

@@ -9,6 +9,7 @@
 //        --remote-debugging-port=9333 --user-data-dir=/tmp/lab-chrome --enable-gpu --use-angle=metal
 //   3. node scripts/lab_headless.mjs --url "http://127.0.0.1:8765/warp/lab/?backend=b" \
 //        --eval "__lab.runSelfTest()" [--shot out.png] [--size 1440x900] [--dpr 1] [--throttle 4]
+//        [--no-cache]   (bypass the browser's HTTP cache, so cold loads really fetch every tile)
 //
 // --eval is any expression; it is awaited after the lab is ready. Useful ones:
 //   __lab.runSelfTest()                         gates G1–G5
@@ -46,6 +47,7 @@ await send("Runtime.enable");
 await send("Page.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: dpr, mobile: false });
 if (args.throttle) await send("Emulation.setCPUThrottlingRate", { rate: Number(args.throttle) });
+if (args["no-cache"]) { await send("Network.enable"); await send("Network.setCacheDisabled", { cacheDisabled: true }); }
 await send("Page.navigate", { url: args.url });
 for (let i = 0; i < 200 && (await evaluate("!!(window.__lab && window.__lab.ready)")) !== true; i++) await new Promise((r) => setTimeout(r, 100));
 const ready = await evaluate("Promise.race([__lab.ready.then(() => 'ready', (e) => 'boot failed: ' + e.message), new Promise((r) => setTimeout(() => r('not ready after 40 s'), 40000))])");

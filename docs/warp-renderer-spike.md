@@ -8,12 +8,16 @@ Issue #5, part W-01 (Direction 5). Written 2026-11-13 against `master` at 002af6
   can measure, except G4 on one field at one origin (the cliff field at Wembley Park, see
   [Chord error per field](#chord-error-per-field-and-origin)).
 - **The deck.gl probe (A)** fails the line-width gate.
-- **Not yet measured:**
-  - the two phones;
-  - real map tiles (the census needs a tiles token, which this worktree didn't have).
+- **Real tiles** (Mapbox Streets v8, [Results: real tiles](#results-real-tiles)):
+  - the renderer passes all five drawing gates;
+  - but a transit scene needs 4–11× the 300k vertex budget at 48 m cells;
+  - a new origin takes up to 0.4 s with warm tiles.
 
-  B is the chosen renderer, with C as its fallback, but it still has to be confirmed on the phones
-  and on real tiles. The steps for each are in [What is left](#what-is-left).
+  Simplifying the geometry is the next piece of work.
+- **Not yet measured:** the two phones.
+
+B is the chosen renderer, with C as its fallback. It still has to be confirmed on the phones. The
+steps are in [What is left](#what-is-left).
 
 All travel times here are **synthetic** (`static/warp/lab/stations.json`, made-up speeds over
 hand-typed station positions). So is the lab's default geometry. They test the renderer; they
@@ -272,6 +276,78 @@ Back-end B, synthetic geometry, toy transit field, 1000×700 at DPR 1, taken wit
 - **Shedding is visible.** Baker Street's 48 m scene is at the 300k budget, so its secondary roads
   and smallest parks (Regent's Park among them) are dropped.
 
+## Results: real tiles
+
+Mapbox Streets v8 through `/tiles`, the toy transit field, headless Chrome 157 on the M2, with the
+browser cache off for the benchmark. Counts only are kept (`docs/warp-renderer-spike-results.json`,
+`realTiles`); no tile data or screenshot of it is stored.
+
+**The census:** 110 tiles, none missing.
+
+| Origin | Tiles | Data | Decode (all tiles) | Shaded at 95 m | at 48 m | at 24 m |
+|---|---:|---:|---:|---:|---:|---:|
+| Baker Street | 27 | 3.3 MB | 84 ms | 1.51M | 3.34M | 8.19M |
+| Wembley Park | 28 | 2.3 MB | 71 ms | 0.68M | 1.35M | 3.05M |
+| Canary Wharf | 34 | 3.7 MB | 102 ms | 1.45M | 3.18M | 7.76M |
+| Heathrow | 20 | 1.8 MB | 52 ms | 0.56M | 1.12M | 2.54M |
+| Croydon | 41 | 3.0 MB | 83 ms | 0.80M | 1.60M | 3.65M |
+
+**What the tiles hold:**
+
+- **No `road_label` layer.** Road names are on `road`, so the `/warp/` page's road-label layer draws
+  nothing today.
+- **Slip roads are common:** 810 `trunk_link`, 451 `primary_link`, 43 `motorway_link`.
+- **The Underground is partly there:**
+  - 147 `major_rail` features in tunnels (and 52 on bridges), which the mesh draws in the tunnel
+    colour;
+  - 188 `metro_rail` stations, and 45 `light_rail`;
+  - `minor_rail` is rare (45).
+
+  So the deep lines can be drawn from the tiles where they appear, but not reliably everywhere. #1's
+  GTFS shapes are the complete source.
+
+**The drawing gates hold on real tiles** (back-end B, Baker Street):
+
+| Gate | Result |
+|---|---|
+| G1 parity | max 0.0005 px |
+| G3 radius | max 0.058 px |
+| G4 chord | phone view 99.92%, desktop 99.37% |
+| G5 width | chain 1.635, kink 1.62, angles 1.46–1.50 (nominal 1.5); at an 81:1 stretch 1.814 vs 1.815 |
+
+**The budget does not hold.**
+
+- **Transit scenes are over 300k at every origin**, even after the worker sheds every park and
+  water body, 64 secondary roads and 2,163 primary road pieces (Baker Street).
+- **What is left is too much:** 0.49M–1.10M shaded of motorway, trunk and main rail, which the
+  shed order never drops.
+- **The map loses its water and parks.** Shedding removes them first, so the transit view has
+  none.
+- **Walking scenes fit** (264k–300k), with some parks shed.
+
+This scene size has knock-on costs:
+
+| | B | C |
+|---|---|---|
+| GPU time per bent frame (transit) | 6.2–11.2 ms | 7.6–12.2 ms |
+| New origin, cold tiles (G8), p95 | 544 ms (pass) | 418 ms (pass) |
+| New origin, warm tiles (G7), p95 | 366 ms (**fail**) | 360 ms (**fail**) |
+| Worker tessellation per transit origin | 140–480 ms | 110–360 ms |
+
+G7 fails because a real transit scene is bigger than the worker's 600k cache, so going back to an
+origin tessellates its tiles again.
+
+**What this needs, before phones are worth measuring:**
+
+- Simplify lines at the tile's own scale before cutting them (most road segments are far shorter
+  than a 48 m cell needs).
+- Draw trunk roads and slip roads only nearer the origin, and motorways and main rail beyond.
+- Keep parks and water above minor roads in the shed order.
+- Size the worker's cache to a real scene.
+- Draw the cell size from the census, not from synthetic geometry.
+
+That is new work for the renderer, not part of this spike's measurements.
+
 ## Decision
 
 **B, with C as its fallback** (the owner's call, 2026-11-13).
@@ -288,10 +364,8 @@ Back-end B, synthetic geometry, toy transit field, 1000×700 at DPR 1, taken wit
 - B is also faster on origin change: 16.7 against 18.7 ms (p95) on desktop, and 28.5 against 37.3
   ms on the throttled stress run.
 
-**Still to confirm:**
-
-- the phones, for G6–G8;
-- the census, because real tiles may hold far more vertices than the synthetic scenes.
+**Still to confirm:** the phones, for G6–G8, once real scenes fit the budget (see
+[Results: real tiles](#results-real-tiles)).
 
 On desktop, B and C pass every gate the lab measures. The exception is G4 on the cliff field at
 Wembley Park, which is a question about the mesh and applies to both.
@@ -418,17 +492,15 @@ enforced after every scene, including the current tiles once packed.
 
 ## What is left
 
-1. **Tile census (owner, needs a tiles token).**
-   - Run `uvicorn server.app:app`, open `/warp/lab/?geom=tiles&census=1`, then press "Copy
-     results".
-   - It records:
-     - per-layer counts;
-     - the `road.class × structure` histogram (are the Underground's tunnels in Streets v8? are
-       the `*_link` classes there?);
-     - the `transit_stop_label` keys, and whether `road_label` exists;
-     - per origin: bytes, decode time, and vertices shaded at 95, 48 and 24 m cells.
-   - Then fix the rings, the cell size and the class filters here. Run the benchmark again with
-     `?geom=tiles`: that is the only run that measures G8.
+1. **Fit real tiles into the budget.** This is renderer work, and it comes before the phones are
+   worth measuring:
+   - simplify lines at tile scale;
+   - draw classes by distance;
+   - put parks and water ahead of roads in the shed order;
+   - size the worker's cache to a real scene.
+
+   Then rerun `/warp/lab/?geom=tiles&census=1` and the benchmark with `?geom=tiles` (see
+   [Results: real tiles](#results-real-tiles)).
 2. **Phones (owner).**
    - On the iPhone (Safari) and the mid-range Android (Chrome), open `/warp/lab/?backend=b`,
      then `?backend=c`.
@@ -453,12 +525,10 @@ enforced after every scene, including the current tiles once packed.
 - **Mapbox terms.** Mapbox's terms for drawing Streets tiles with our own renderer weren't read
   (see `docs/provider-terms.md`). The spike stores no Mapbox tiles: the test tile is encoded by
   hand, and the lab's default geometry is made up. Confirm the terms before shipping.
-- **Rail in Streets v8 is unverified:**
-  - `major_rail` and `minor_rail` on `road`, with `structure=tunnel`;
-  - whether rail survives at z10;
-  - whether the Underground is present at all.
-
-  If it isn't there, rail geometry has to come from #1's GTFS shapes through the same adapter.
+- **Rail in Streets v8 is only partly there.**
+  - The census found 147 tunnelled `major_rail` features and 188 `metro_rail` stations across the
+    five covers, but not every line.
+  - The complete rail geometry is #1's GTFS shapes, through the same adapter.
 - **Real tiles may still join badly where zooms meet,** because they are generalised
   differently. The mesh can't crack there any more, but the geometry itself may not match. The
   synthetic geometry is the same at every zoom, so it can't show this.
@@ -472,8 +542,12 @@ enforced after every scene, including the current tiles once packed.
 - **Holes inside the reachable area** (#1's unreachable cells, if they come as "no data") would
   move onto the outer ring while fading, and make faint radial slivers mid-morph. W-02 should
   give unreachable places a time past the outer minute, or decide how holes look.
-- **One worker** decodes and tessellates every tile. Synthetic scenes take 1–30 ms in the worker;
-  real tiles are unmeasured. If the census shows a phone missing G8, add a small worker pool.
+- **One worker** decodes and tessellates every tile.
+  - Real transit scenes take 110–480 ms of tessellation on the M2. A phone will be several times
+    slower.
+  - Simplifying the geometry cuts this first. If a phone still misses G7 or G8 after that, add a
+    small worker pool.
 - **Desktop numbers say little about phones,** and headless Chrome caps frames at 60 Hz.
+- **Real tiles are heavy on a phone's network:** 1.8–3.7 MB per transit origin.
 - **The lab spends tile budget only with `?geom=tiles`.** It is unlinked and `noindex`; the
   per-IP and monthly caps still apply.

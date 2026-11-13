@@ -471,7 +471,17 @@ function initControls() {
   S.map.on("move", () => { S.dirty = true; });
 }
 
+// The checks need the mesh: without it (no WebGL2, or a lost context) they say so and stop.
+function meshMissing(kind) {
+  if (S.renderer && S.renderer.supported && !S.lostContext && S.frame) return null;
+  const r = { kind, skipped: "no mesh here (no WebGL2, or the context is lost): showing the ordinary map" };
+  out(r.skipped);
+  return r;
+}
+
 async function runSelfTestNow() {
+  const missing = meshMissing("selftest");
+  if (missing) return missing;
   out("Running the self-test…");
   const { runSelfTest } = await import("./selftest.js");
   const r = await runSelfTest(labApi);
@@ -480,6 +490,8 @@ async function runSelfTestNow() {
   return r;
 }
 async function runBenchNow(opts) {
+  const missing = meshMissing("bench");
+  if (missing) return missing;
   out("Running the benchmark… (don't touch the map)");
   const { runBench } = await import("./bench.js");
   const r = await runBench(labApi, opts);
@@ -556,6 +568,7 @@ async function boot() {
   updateCredits();
   await loaded;
   if (!meshOk) {
+    for (const id of ["selftest", "bench", "morph", "u", "folds"]) $(id).disabled = true;
     S.origin = first;
     S.map.jumpTo({ center: [first.lon, first.lat], zoom: 12 });
     labApi.readyAt = performance.now();

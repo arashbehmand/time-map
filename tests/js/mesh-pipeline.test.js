@@ -68,7 +68,7 @@ test("packing puts each tile in local metres and fills the CPU targets", () => {
   // The secondary road is in the tile's corner, more than 2 km from Baker Street: dropped.
   const secondary = mesh.lines.find((l) => l.cat === "secondary").segs.length / 4;
   assert.equal(scene.passes.rail.count + scene.passes.road.count, mesh.stats.segments - secondary);
-  assert.equal(scene.stats.shaded, scene.stats.fillVerts + 6 * scene.stats.segments);
+  assert.equal(scene.stats.shaded, scene.stats.fillVerts + 6 * scene.passes.rail.count + 12 * scene.passes.road.count);
   assert.deepEqual(scene.origin, origin);
   assert.equal(scene.labels[0].text, "Baker Street");
   assert.ok(scene.stats.bytes > 0);

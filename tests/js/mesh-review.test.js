@@ -129,3 +129,28 @@ test("tiles of different zooms put the same vertices on their shared edge", asyn
   const fine = new Set([...fineA, ...fineB]);
   assert.deepEqual([...coarse].sort(), [...fine].sort());
 });
+
+test("roads count twice in the budget: casing and fill are two draws", async () => {
+  const { packScene: pack } = await import("../../static/shared/mesh/pipeline.js");
+  const mesh = {
+    z: 12, x: 2046, y: 1361, extent: 4096, fills: [], labels: [],
+    lines: [
+      { style: 5, cat: "motorway", pass: "road", segs: new Float32Array([0, 0, 10, 0, 10, 0, 20, 0]) },
+      { style: 2, cat: "major_rail", pass: "rail", segs: new Float32Array([0, 5, 10, 5]) },
+    ],
+    stats: { fillVerts: 0, segments: 3 },
+  };
+  const s = pack([mesh], frame);
+  assert.equal(s.stats.shaded, 2 * 6 * 2 + 1 * 6);
+  assert.equal(pack([mesh], frame, { budget: 20 }).stats.overBudget, true);
+});
+
+test("the census times decoding the whole tile, geometry included", async () => {
+  const { censusTile } = await import("../../static/shared/mesh/pipeline.js");
+  const { encodeTile } = await import("./mvt-fixture.js");
+  const bytes = encodeTile({ road: [{ type: 2, props: { class: "major_rail" }, geometry: [[[0, 0], [100, 0], [200, 50]]] }],
+    water: [{ type: 3, props: {}, geometry: [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]] }] });
+  const c = censusTile(bytes, 12);
+  assert.equal(c.points, 3 + 5);
+  assert.ok(c.decodeMs >= 0);
+});

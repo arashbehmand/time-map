@@ -131,7 +131,7 @@ const { x, y, alpha } = warp.toScreen(lon, lat, camera, u);   // CSS px
 | G6 frames | morph and pan, judged on the phones; desktop records draw() CPU time and GPU time beside the vsync-capped frame interval | phones: p50 ≤ 17 ms, p95 ≤ 33 ms |
 | G7 origin change | warm tiles, field ready, bent map → first frame of the new origin with the GPU finished (includes B's texture upload) | p95 ≤ 200 ms (slower phone) |
 | G8 new origin | cold tiles → first frame, real tiles only (`?geom=tiles`); a missing tile fails it | p95 ≤ 1.5 s |
-| G9 budget | vertices shaded (fill vertices + 6 per line segment) and tiles per origin | ≤ 300k and ≤ 48, or `overBudget` reported |
+| G9 budget | vertices shaded (fill vertices + 6 per line segment per draw; roads draw twice, casing and fill) and tiles per origin | ≤ 300k and ≤ 48, or `overBudget` reported |
 | G10 capabilities | each `?caps=` rung draws, no extension required | no console errors |
 
 The reference views for G1, G3 and G4 are 390×844 and 1440×900, with the 45-minute ring at
@@ -160,17 +160,17 @@ numbers.
 
 | Gate | B (gpu) | C (cpu) | A (deck.gl) |
 |------|---------|---------|-------------|
-| G1 parity | **pass**: max 0.0033 px, 6,000 samples, alphas equal | **pass**: max 0.0001 px, 6,000 samples, alphas equal | not measurable (no evaluator) |
+| G1 parity | **pass**: max 0.0006 px, 6,000 samples, alphas equal | **pass**: max 0.0001 px, 6,000 samples, alphas equal | not measurable (no evaluator) |
 | G2 registration | **pass**: max 0 px | **pass**: max 0 px | **pass**: max 0 px |
 | G3 radius (drawn) | **pass**: radius max 0.058 px, ordinary max 0.061 px (300/300 dots) | **pass**: radius max 0.058 px, ordinary max 0.061 px (300/300 dots) | not measured (no pixel read-back) |
-| G4 chord, phone view | 99.94% within 1 px, p99 0.192 px | 99.94% within 1 px, p99 0.192 px | 100.00% within 1 px, p99 0.258 px |
-| G4 chord, desktop view | 99.84% within 1 px, p99 0.379 px | 99.84% within 1 px, p99 0.379 px | 99.53% within 1 px, p99 0.555 px |
-| G4, reported apart | near folds 98.5% (p99 1.908 px); crossing the outer minute: 522 primitives, longest edge at u = ½ 20.1 px | same mesh | same mesh |
-| G5 width (px) | **pass**: chain 1.635, kink 1.62, 12 angles 1.46–1.501 (nominal 1.5); stretched 2670:1 → 1.818 vs 1.815 | **pass**: chain 1.635, kink 1.62, 12 angles 1.46–1.501 (nominal 1.5); stretched 2670:1 → 1.818 vs 1.815 | **fail**: 25% of segments under 75% of their width, 6.9% under 25% (computed) |
-| G6 frames (5 origins) | frame p50/p95 16.7/16.8 ms; draw() p95 0.2 ms; GPU ≤ 5.84 ms a frame | frame p50/p95 16.7/16.8 ms; draw() p95 0.2 ms; GPU ≤ 4.99 ms a frame | frame p50/p95 16.7/16.8 ms; draw() p95 4.2 ms (it rebuilds its layers every frame); no GPU timer |
-| G7 origin change | **pass**: p50 11.5, p95 16.6 ms | **pass**: p50 11.2, p95 19.9 ms | **pass**: p50 15.9, p95 26.8 ms |
-| G8 new origin | not measured (no network); p95 38 ms without it | not measured (no network); p95 39.8 ms without it | not measured (no network); p95 49.5 ms without it |
-| G9 budget (transit) | **pass**: ≤ 204,859 shaded, ≤ 41 tiles | **pass**: ≤ 204,859 shaded, ≤ 41 tiles | **pass**: ≤ 204,859 shaded, ≤ 41 tiles |
+| G4 chord, phone view | 99.91% within 1 px, p99 0.213 px | 99.91% within 1 px, p99 0.213 px | 99.65% within 1 px, p99 0.314 px |
+| G4 chord, desktop view | 99.57% within 1 px, p99 0.511 px | 99.57% within 1 px, p99 0.511 px | 99.07% within 1 px, p99 0.907 px |
+| G4, reported apart | near folds 98.9% (p99 1.264 px); crossing the outer minute: 257 primitives, longest edge at u = ½ 18 px | same mesh | same mesh |
+| G5 width (px) | **pass**: chain 1.635, kink 1.62, 12 angles 1.46–1.501 (nominal 1.5); stretched 1314:1 → 1.816 vs 1.815 | **pass**: chain 1.635, kink 1.62, 12 angles 1.46–1.501 (nominal 1.5); stretched 1314:1 → 1.816 vs 1.815 | **fail**: 26% of segments under 75% of their width, 7.8% under 25% (computed) |
+| G6 frames (5 origins) | frame p50/p95 16.7/16.8 ms; draw() p95 0.2 ms; GPU ≤ 5.24 ms a frame | frame p50/p95 16.7/16.8 ms; draw() p95 0.2 ms; GPU ≤ 4.53 ms a frame | frame p50/p95 16.7/16.7 ms; draw() p95 3.2 ms (it rebuilds its layers every frame); no GPU timer |
+| G7 origin change | **pass**: p50 11.2, p95 16.7 ms | **pass**: p50 11.5, p95 18.7 ms | **pass**: p50 12.7, p95 27.1 ms |
+| G8 new origin | not measured (no network); p95 38.6 ms without it | not measured (no network); p95 38.9 ms without it | not measured (no network); p95 42 ms without it |
+| G9 budget (transit) | **pass**: ≤ 298,848 shaded, ≤ 41 tiles | **pass**: ≤ 298,848 shaded, ≤ 41 tiles | **pass**: ≤ 298,848 shaded, ≤ 41 tiles |
 
 - **G10 rungs:**
   - `?caps=no-vtf` and `?caps=no-r32f` fall back to C.
@@ -181,18 +181,18 @@ numbers.
 
 ### Stress run
 
-**Setup.** 24 m cells, about 300k shaded at Baker Street. A 390×844 view at DPR 2, with the CPU
-throttled 4× by Chrome. The worker's own times don't change under that throttle, so it slows only
+**Setup.** 24 m cells, which the budget holds to 300k shaded by shedding geometry. A 390×844 view
+at DPR 2, with the CPU throttled 4× by Chrome. The worker's own times don't change under that throttle, so it slows only
 the main thread. This run is indicative, not a phone.
 
 | | B (gpu) | C (cpu) |
 |---|---|---|
-| Shaded per origin | 294,562–299,652 | 294,562–299,652 |
-| Frames, worst p50 / p95 | 16.7 / 16.8 ms (worst frame 33.3 ms) | 16.7 / 16.8 ms (worst frame 33.3 ms) |
-| draw() CPU p95 | 0.7 ms | 0.4 ms |
-| GPU time a frame | 3.85–6.57 ms | 2.86–5.42 ms |
-| G7 origin change, p95 | 15.7 ms | 32 ms |
-| Worker pack at Baker Street | 12 ms | 16.9 ms |
+| Shaded per origin | 296,082–298,824 | 296,082–298,824 |
+| Frames, worst p50 / p95 | 16.7 / 16.8 ms (worst frame 16.8 ms) | 16.7 / 16.8 ms (worst frame 16.8 ms) |
+| draw() CPU p95 | 0.8 ms | 0.9 ms |
+| GPU time a frame | 2.41–6.08 ms | 1.38–6.89 ms |
+| G7 origin change, p95 | 28.5 ms | 37.3 ms |
+| Worker pack at Baker Street | 14.2 ms | 11.7 ms |
 
 ### Spacing sweep
 
@@ -200,11 +200,12 @@ Baker Street, transit field, phone view, G4's measure (sampled by size on screen
 
 | Cells | Shaded | Within 1 px | p99 | Near folds within 1 px |
 |---|---:|---:|---:|---:|
-| 95 m | 96,763 | 99.15% | 0.939 px | 96.3% |
-| 48 m | 204,859 | 99.85% | 0.252 px | 98.0% |
-| 24 m | 297,438 | 100.00% | 0.093 px | 99.4% |
+| 95 m | 167,641 | 99.15% | 0.939 px | 96.3% |
+| 48 m | 296,838 | 99.70% | 0.268 px | 98.9% |
+| 24 m | 298,824 | 100.00% | 0.081 px | 99.4% |
 
-95 m cells fail the size-weighted check, so the default is 48 m.
+95 m cells fail the size-weighted check, so the default is 48 m. At 48 m and 24 m Baker Street
+sheds geometry to stay inside 300k, so the bigger cell count buys less than it seems here.
 
 ### Chord error per field and origin
 
@@ -212,7 +213,7 @@ G4's measure, phone view, away from folds.
 
 | Field | Baker Street | Wembley Park | Canary Wharf | Heathrow | Croydon |
 |---|---|---|---|---|---|
-| transit | 99.84%, p99 0.333 px | 100.00%, p99 0.227 px | 99.82%, p99 0.304 px | 100.00%, p99 0.074 px | 99.89%, p99 0.159 px |
+| transit | 100.00%, p99 0.238 px | 100.00%, p99 0.227 px | 99.46%, p99 0.462 px | 100.00%, p99 0.074 px | 99.89%, p99 0.159 px |
 | walk | 100.00%, p99 0.081 px | 100.00%, p99 0.035 px | 100.00%, p99 0.063 px | 100.00%, p99 0.036 px | 100.00%, p99 0.036 px |
 | cliff | 99.91%, p99 0.097 px | 94.19% **fail**, p99 2.199 px | 99.85%, p99 0.059 px | 99.84%, p99 0.233 px | 100.00%, p99 0.049 px |
 
@@ -263,6 +264,8 @@ Back-end B, synthetic geometry, toy transit field, 1000×700 at DPR 1, taken wit
   Metropolitan and Jubilee lines pull central London into.
 - **Every station** has a dot, with its label beside it. Over synthetic geometry the corner says
   so instead of showing Mapbox's credit.
+- **Shedding is visible.** Baker Street's 48 m scene is at the 300k budget, so its secondary roads
+  and smallest parks (Regent's Park among them) are dropped.
 
 ## Decision (provisional)
 
@@ -270,16 +273,17 @@ On desktop, B and C pass every gate the lab measures. The exception is G4 on the
 Wembley Park, which is a question about the mesh and applies to both.
 
 A fails G5: its adapter only translates the corners that deck already extruded, so lines go thin
-where the bend turns them (25% of segments under 75% of their width). A hook
+where the bend turns them (26% of segments under 75% of their width). A hook
 that rebuilt the extrusion from extra attributes, or a `LineLayer` subclass with its own vertex
 shader, could keep the width. That was not built, because it means writing our line shader again
 inside deck, on top of 577 kB.
 
 **Under D22 as written, C is preferred on the desktop numbers.** B is not 2× faster on origin
-change (G7 p95: B 16.6 ms, C 19.9 ms). B stays in the code as a `#define`.
+change (G7 p95: B 16.7 ms, C 18.7 ms). B stays in the code as a `#define`.
 
-On the throttled stress run (24 m cells, about 300k shaded), B is 2.0× faster: 15.7 ms against 32
-ms. That sits exactly at D22's threshold, so the phone runs decide.
+On the throttled stress run (24 m cells, held to 300k shaded by the budget), B is 1.3× faster:
+28.5 ms against 37.3 ms. That is short of D22's threshold, so on present numbers the rule keeps C;
+the phone runs decide.
 
 **One decision for the owner.** D22 ranks C first for needing "no vertex float textures". Those
 are core WebGL2: every conformant device has them, and the probe confirms it at start-up. C's own
@@ -288,7 +292,8 @@ costs:
 - 24 bytes more per fill vertex and per segment;
 - a full repack and re-upload of the scene whenever the field changes (another mode or
   departure time), where B uploads one texture;
-- a per-origin target pass in the worker (about 5 ms for 297,438 shaded vertices on the M2).
+- a per-origin target pass in the worker (a median 5.8 ms for the 53k points of Baker Street's
+  48 m scene, timed in node on the M2).
 
 My recommendation is to rank B first, with C as its fallback. The rule was approved as written,
 so this is the owner's call.
@@ -373,7 +378,12 @@ enforced after every scene, including the current tiles once packed.
   5. primary roads.
 - It never drops motorway, trunk or major rail, and reports `overBudget` instead.
 - Fully covered blocks share their grid nodes.
-- **Synthetic scenes:** 8k–205k shaded at 48 m. Whether real tiles fit is the census's question.
+- **Synthetic scenes:** 11k–299k shaded at 48 m. The toy transit field already reaches the
+  budget at two origins:
+  - Baker Street sheds 47 secondary roads, 20 small parks and 10 small water bodies;
+  - Canary Wharf sheds 18 parks and 9 water bodies.
+
+  Real tiles will be denser, so the census decides both the cell size and the budget.
 
 ## Changes from the plan
 
@@ -393,7 +403,8 @@ enforced after every scene, including the current tiles once packed.
   - Placement runs every frame, judged on the map as it is on screen now.
   - Station dots, the pin as an obstacle, and whole boxes inside the view.
 - **Budget (D19).**
-  - Counted in vertices shaded, not "fill vertices plus segment instances".
+  - Counted in vertices shaded (six per line segment for each pass that draws it, so roads count
+    twice), not "fill vertices plus segment instances".
   - The shed order adds secondary roads first.
   - Water is dropped smallest first rather than simplified.
   - Farthest first within a class.

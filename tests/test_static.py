@@ -226,3 +226,12 @@ def test_lab_driver_is_in_the_repo():
     driver = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "lab_headless.mjs"
     text = driver.read_text()
     assert "__lab.runSelfTest()" in text and "Runtime.evaluate" in text
+
+
+def test_lab_fallback_hides_the_overlay_and_skips_checks():
+    css = (ROOT / "warp/lab/lab.css").read_text()
+    assert re.search(r"body\.no-mesh #mesh, body\.no-mesh #overlay \{ display: none; \}", css)
+    js = (ROOT / "warp/lab/lab.js").read_text()
+    for runner in ("async function runSelfTestNow", "async function runBenchNow"):
+        body = js.split(runner)[1].split("\n}\n")[0]
+        assert "meshMissing(" in body, runner

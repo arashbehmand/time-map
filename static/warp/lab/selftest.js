@@ -376,20 +376,23 @@ function g5Width(lab, rand) {
   results.anglesMinPx = round(Math.min(...angles));
   results.anglesMaxPx = round(Math.max(...angles));
 
-  // 3. One segment where the bent map stretches most (≥ 4:1), at u = 1 on the live view.
+  // 3. A segment where the bent map stretches at least 4:1, at u = 1 on the live view: the
+  //    most stretched candidates in turn, until one is long enough on screen to measure.
   const live = lab.camera();
   const lines = Object.values(S.scene.passes).filter((p) => p.kind === "line" && p.count);
-  let best = null;
+  const cands = [];
   for (let s = 0; s < 4000 && lines.length; s++) {
     const p = lines[Math.floor(rand() * lines.length)], k = Math.floor(rand() * p.count), g = p.seg;
     const mx = (g[4 * k] + g[4 * k + 2]) / 2, my = (g[4 * k + 1] + g[4 * k + 3]) / 2;
     const j = warp.jacobian(mx, my);
-    if (!j || j.det <= 0 || !Number.isFinite(j.stretch)) continue;
+    if (!j || j.det <= 0 || !Number.isFinite(j.stretch) || j.stretch < 4) continue;
     const m = warp.screenOfLocal(mx, my, live, 1);
     if (m.alpha < 1 || m.x < 60 || m.y < 60 || m.x > live.width - 60 || m.y > live.height - 60) continue;
-    if (!best || j.stretch > best.stretch) best = { stretch: j.stretch, g, k, mx, my };
+    cands.push({ stretch: j.stretch, g, k, mx, my });
   }
-  if (best && best.stretch >= 4) {
+  cands.sort((a, b) => b.stretch - a.stretch);
+  results.stretched = { skipped: cands.length ? "no stretched segment long enough on screen" : "no on-screen segment stretched 4:1" };
+  for (const best of cands.slice(0, 30)) {
     const { g, k } = best;
     const dx = g[4 * k + 2] - g[4 * k], dy = g[4 * k + 3] - g[4 * k + 1];
     let s = 0.5;
@@ -401,17 +404,15 @@ function g5Width(lab, rand) {
     }
     const local = [[best.mx - dx * s, best.my - dy * s], [best.mx + dx * s, best.my + dy * s]];
     const scr = local.map(([x, y]) => warp.screenOfLocal(x, y, live, 1));
-    if (Math.hypot(scr[1].x - scr[0].x, scr[1].y - scr[0].y) >= 60) {
-      const one = drawPath(r, warp, live, 1, local, style);
-      const p0 = r.renderLines(live, 1, one, [0, 0, 1, 1]);
-      const mid = [(scr[0].x + scr[1].x) / 2, (scr[0].y + scr[1].y) / 2];
-      const rect = [Math.round((mid[0] - 20) * p0.dpr), Math.round((mid[1] - 20) * p0.dpr), Math.round(40 * p0.dpr), Math.round(40 * p0.dpr)];
-      const got = r.renderLines(live, 1, one, rect);
-      results.stretched = { stretch: round(best.stretch, 1), widthPx: round(widthIn(got.cov, rect, scr.map((q) => [q.x * p0.dpr, q.y * p0.dpr]), p0.dpr)), nominalPx: round(p0.widths[style]) };
-      if (Math.abs(results.stretched.widthPx - results.stretched.nominalPx) > 0.25) fails.push("stretched");
-    }
-  } else {
-    results.stretched = { skipped: `no on-screen segment stretched 4:1 (best ${best ? round(best.stretch, 1) : "none"})` };
+    if (Math.hypot(scr[1].x - scr[0].x, scr[1].y - scr[0].y) < 60) continue;
+    const one = drawPath(r, warp, live, 1, local, style);
+    const p0 = r.renderLines(live, 1, one, [0, 0, 1, 1]);
+    const mid = [(scr[0].x + scr[1].x) / 2, (scr[0].y + scr[1].y) / 2];
+    const rect = [Math.round((mid[0] - 20) * p0.dpr), Math.round((mid[1] - 20) * p0.dpr), Math.round(40 * p0.dpr), Math.round(40 * p0.dpr)];
+    const got = r.renderLines(live, 1, one, rect);
+    results.stretched = { stretch: round(best.stretch, 1), widthPx: round(widthIn(got.cov, rect, scr.map((q) => [q.x * p0.dpr, q.y * p0.dpr]), p0.dpr)), nominalPx: round(p0.widths[style]) };
+    if (Math.abs(results.stretched.widthPx - results.stretched.nominalPx) > 0.25) fails.push("stretched");
+    break;
   }
   results.nominalPx = round(nominal);
   if (Math.abs(results.chainStraightPx - nominal) > 0.25) fails.push("chain");

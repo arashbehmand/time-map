@@ -6,7 +6,7 @@ body { background: #f0ede9; }
 body.basemap #map { opacity: 1; }
 body.basemap #mesh, body.basemap #deck-canvas { opacity: 0.55; }
 body.no-mesh #map { opacity: 1; }
-body.no-mesh #mesh { display: none; }
+body.no-mesh #mesh, body.no-mesh #overlay { display: none; }   /* no stale bent labels over the ordinary map */
 
 #mesh, #deck-canvas, #overlay {
   position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none;

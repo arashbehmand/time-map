@@ -220,11 +220,19 @@ export function createMeshRenderer(canvas, opts = {}) {
   }
 
   function freePasses() {
-    for (const p of [...Object.values(passes), ...(fold ? [fold] : [])]) {
+    for (const p of Object.values(passes)) {
       gl.deleteVertexArray(p.vao);
       for (const b of p.buffers) gl.deleteBuffer(b);
     }
     passes = {};
+  }
+
+  // The fold layer belongs to the warp, not to a scene: it survives scene uploads (partial
+  // scenes, retries) and goes when the warp changes.
+  function freeFold() {
+    if (!fold) return;
+    gl.deleteVertexArray(fold.vao);
+    for (const b of fold.buffers) gl.deleteBuffer(b);
     fold = null;
   }
 
@@ -279,7 +287,7 @@ export function createMeshRenderer(canvas, opts = {}) {
   // fold shows, not only folded parks and water. {pos, index, targets?} like a fill pass.
   function setFoldMesh(mesh) {
     if (lost) return;
-    if (fold) { gl.deleteVertexArray(fold.vao); for (const b of fold.buffers) gl.deleteBuffer(b); fold = null; }
+    freeFold();
     if (mesh && mesh.index.length) fold = fillVao(mesh);
   }
 
@@ -289,6 +297,7 @@ export function createMeshRenderer(canvas, opts = {}) {
     if (lost) return 0;
     const t0 = performance.now();
     if (warpTex) { gl.deleteTexture(warpTex.texture); warpTex = null; }
+    freeFold();
     warpKind = warp ? warp.kind : "none";
     const src = warp ? (warp.kind === "polar" ? warp.field : warp.grid) : null;
     warpOrigin = src ? src.origin : null;
@@ -478,6 +487,7 @@ export function createMeshRenderer(canvas, opts = {}) {
     canvas.removeEventListener("webglcontextrestored", onRestored);
     if (lost) return;
     freePasses();
+    freeFold();
     for (const p of programs.values()) gl.deleteProgram(p.p);
     for (const e of evaluators.values()) e.dispose();
     if (warpTex) gl.deleteTexture(warpTex.texture);
@@ -490,5 +500,6 @@ export function createMeshRenderer(canvas, opts = {}) {
     setScene, setWarp, setFoldMesh, draw, evaluate, renderLines, stats, destroy,
     get lost() { return lost; },
     get origins() { return { scene: sceneOrigin, warp: warpOrigin }; },
+    get hasFoldLayer() { return !!fold; },
   };
 }

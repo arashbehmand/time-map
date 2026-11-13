@@ -70,8 +70,10 @@ export function tessellateTile(features, { z, x, y, spacingDiv = DEFAULT_SPACING
 // Pack tile meshes into one buffer per pass, in local metres around `frame`'s origin; the
 // scene says which origin that is, so it can never be drawn with another origin's warp.
 // With `warp` (back-end C), also writes per-vertex placements. Applies the budget, counted in
-// vertices shaded: one per fill vertex, six per line segment (one instanced quad).
+// vertices shaded: one per fill vertex, six per line segment (one instanced quad) for every pass
+// that draws it (roads twice: casing, then fill).
 export const LINE_VERTS = 6;
+const DRAWS = (buffer) => PASSES.filter((p) => (p.buffer || p.name) === buffer).length;
 
 export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null } = {}) {
   const t0 = now();
@@ -107,7 +109,7 @@ export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null 
         y0 = Math.min(y0, segs[j + 1]); y1 = Math.max(y1, segs[j + 1]);
       }
       const dist = bboxDist([p.ox + x0 * p.scale, p.ox + x1 * p.scale], [p.oy + y0 * p.scale, p.oy + y1 * p.scale]);
-      items.push({ m, p, f, segs, kind: "line", cat: f.cat, count: LINE_VERTS * (segs.length / 4), area: 0, dist });
+      items.push({ m, p, f, segs, kind: "line", cat: f.cat, count: LINE_VERTS * DRAWS(f.pass) * (segs.length / 4), area: 0, dist });
     }
   }
   const b = enforceBudget(items, budget);
@@ -176,17 +178,17 @@ export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null 
     }
   }
 
-  let fillVerts = 0, segments = 0, bytes = 0;
-  for (const p of Object.values(passes)) {
+  let fillVerts = 0, segments = 0, lineShaded = 0, bytes = 0;
+  for (const [name, p] of Object.entries(passes)) {
     if (p.kind === "fill") fillVerts += p.pos.length / 2;
-    else segments += p.count;
+    else { segments += p.count; lineShaded += LINE_VERTS * DRAWS(name) * p.count; }
     for (const a of [p.pos, p.style, p.index, p.seg, p.targets, p.zoom]) if (a) bytes += a.byteLength;
   }
   return {
     origin: { lon: frame.origin.lon, lat: frame.origin.lat },
     passes, labels,
     stats: {
-      tiles: meshes.length, fillVerts, segments, shaded: fillVerts + LINE_VERTS * segments, bytes,
+      tiles: meshes.length, fillVerts, segments, shaded: fillVerts + lineShaded, bytes,
       dropped: b.dropped, overBudget: b.overBudget, packMs: now() - t0,
     },
   };
@@ -202,10 +204,16 @@ export function spacingForZoom(z, base = DEFAULT_SPACING_DIV) {
 // The pass list the renderer draws, with buffers named.
 export const DRAW_ORDER = PASSES;
 
-// What one real tile holds, for the census (lab ?census=1).
+// What one real tile holds, for the census (lab ?geom=tiles&census=1). decodeMs covers the
+// whole decode: every feature's properties and geometry, not just the layer headers.
 export function censusTile(bytes, z) {
   const t0 = now();
   const vt = new VectorTile(new PbfReader(bytes));
+  let points = 0;
+  for (const name of Object.keys(vt.layers)) {
+    const layer = vt.layers[name];
+    for (let i = 0; i < layer.length; i++) for (const part of layer.feature(i).loadGeometry()) points += part.length;
+  }
   const decodeMs = now() - t0;
   const layers = {}, roadClasses = {}, stationKeys = {}, stationModes = {};
   for (const name of Object.keys(vt.layers)) {
@@ -224,5 +232,5 @@ export function censusTile(bytes, z) {
       }
     }
   }
-  return { bytes: bytes.byteLength, decodeMs, layers, roadClasses, stationKeys, stationModes, hasRoadLabel: "road_label" in vt.layers, z };
+  return { bytes: bytes.byteLength, decodeMs, points, layers, roadClasses, stationKeys, stationModes, hasRoadLabel: "road_label" in vt.layers, z };
 }

@@ -1,5 +1,6 @@
 // SYNTHETIC travel-time fields and layouts for the renderer lab. Pure (the network comes in
-// as data), so the node tests build the same fields. None of these are real travel times.
+// as data), so the node tests build the same fields. None of these are real travel times,
+// except `real`, which comes from the server.
 //
 //   walk     minutes = distance × detour / walking speed
 //   transit  the toy network in stations.json: walk to a station, ride, walk on
@@ -7,13 +8,16 @@
 //   contours the saved King's Cross walking answer (static/warp/example.json), interpolated
 //   identity, shear, pull   target-position grids, to show the London map (#6) can use the
 //            same renderer with a layout that is not travel time
+//   real     NOT synthetic: the field the warp page gets from POST /api/travel-time-field
+//            (?field=real&mode=transit|walking&window=wd08&smooth=1), fetched at boot for every
+//            test origin, so the self-test, the benchmark and directionChecks run on it
 import { fieldFromFunction, gridFromFunction, NO_DATA, sampleField } from "../../shared/mesh/field.js";
 import { localFrame, metresPerUnit, WORLD_PX } from "../../shared/mesh/frame.js";
 
 export const FIELD_CELL = 100;          // metres (D7)
 export const FIELD_HALF = 25_000;       // ±25 km
 export const GRID_CELL = 500;
-export const POLAR_FIELDS = ["walk", "transit", "cliff", "contours"];
+export const POLAR_FIELDS = ["walk", "transit", "cliff", "contours", "real"];
 export const GRID_FIELDS = ["identity", "shear", "pull"];
 
 const DEFAULT_PARAMS = { walkMetresPerMinute: 80, detour: 1.3, waitMinutes: 4, dwellMinutes: 0.5,
@@ -154,13 +158,17 @@ export function gridField(name, origin, network) {
 }
 
 // The lab's one entry point: a warp spec for createWarp() / the renderer / the worker.
-export function makeWarpSpec(fieldName, origin, network, { example, maxMinutes = 45 } = {}) {
+export function makeWarpSpec(fieldName, origin, network, { example, maxMinutes = 45, real = null } = {}) {
   if (GRID_FIELDS.includes(fieldName)) return { kind: "grid", grid: gridField(fieldName, origin, network) };
   let field;
   if (fieldName === "walk") field = walkField(origin, network);
   else if (fieldName === "transit") field = transitField(origin, network);
   else if (fieldName === "cliff") field = cliffField(origin, network);
   else if (fieldName === "contours") { field = contoursField(example); maxMinutes = Math.min(maxMinutes, 20); }
+  else if (fieldName === "real") {
+    field = real && real.get(origin.id);
+    if (!field) throw new Error(`no real field for ${origin.id}`);
+  }
   else throw new Error(`unknown field ${fieldName}`);
   return { kind: "polar", field, maxMinutes };
 }

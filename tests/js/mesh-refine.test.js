@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { bandMesh } from "../../static/shared/mesh/contours.js";
 import { makeEdgeTest, refineFills, refineLines } from "../../static/shared/mesh/refine.js";
-import { cliffField, RIVER_Y } from "../../static/warp/lab/fields.js";
+import { angularSpread } from "../../static/shared/mesh/warp.js";
+import { cliffField, RIVER_Y, transitField } from "../../static/warp/lab/fields.js";
 
 const network = JSON.parse(readFileSync(new URL("../../static/warp/lab/stations.json", import.meta.url)));
 const origin = network.origins.find((o) => o.id === "canary-wharf");
@@ -114,4 +115,14 @@ test("the band mesh takes only cells whose corners the warp can place", () => {
   holed.minutes[k] = -1;
   const h = bandMesh(holed, [-500, -500, 500, 500]);
   assert.equal(h.index.length / 6, 10 * 10 - 9);
+});
+
+test("with directions by reach, the test reads the bent position, not minutes alone", () => {
+  const o = network.origins.find((p) => p.id === "canary-wharf");
+  const f = transitField(o, network);
+  const angles = angularSpread(f, 45, { spread: 0.5 });
+  const mesh = gridMesh(-3000, -3000, 125);
+  const plain = refineFills(mesh, makeEdgeTest(f, 45, EPS));
+  const bent = refineFills(mesh, makeEdgeTest(f, 45, EPS, angles));
+  assert.ok(bent.added > plain.added, `${bent.added} vs ${plain.added}`);
 });

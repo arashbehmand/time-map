@@ -121,7 +121,7 @@ export function packScene(meshes, frame, { budget = DEFAULT_BUDGET, warp = null,
   let room = budget;
   for (let i = 0; i < items.length; i++) if (b.keep[i]) room -= items[i].count;
   room = Math.max(0, room);
-  const edgeTest = refine ? makeEdgeTest(refine.field, refine.maxMinutes ?? Infinity, refine.eps) : null;
+  const edgeTest = refine ? makeEdgeTest(refine.field, refine.maxMinutes ?? Infinity, refine.eps, refine.angles || null) : null;
   let refined = 0, refineSkipped = 0;
 
   const fillPasses = { water: [], park: [] };

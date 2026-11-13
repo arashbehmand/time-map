@@ -56,3 +56,5 @@ class TravelFieldRequest(BaseModel):
     latitude: float = Field(ge=-WEB_MERCATOR_MAX_LAT, le=WEB_MERCATOR_MAX_LAT)
     mode: TravelMode = "walking"
     window: TransitWindow | None = None
+    # Transit only: false keeps the tables' whole minutes (Direction 4 is reported both ways).
+    smooth: bool = True

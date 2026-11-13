@@ -35,7 +35,8 @@ async def warp_params_endpoint(req: WarpParamsRequest, request: Request):
 @router.post("/travel-time-field", dependencies=[per_ip("travel_time_field")])
 async def travel_time_field_endpoint(req: TravelFieldRequest, request: Request):
     """One travel-time field for a pin and a way of travelling (server/warp/travel_field.py)."""
-    return await request.app.state.fields.get(req.longitude, req.latitude, req.mode, req.window)
+    return await request.app.state.fields.get(req.longitude, req.latitude, req.mode, req.window,
+                                              smooth=req.smooth)
 
 
 @router.get("/transit/status", dependencies=[per_ip("transit_status")])

@@ -233,7 +233,7 @@ function prepareMesh() {
     type: "scene", gen, origin: entry.frame.origin, tiles: cover.tiles,
     spacingDiv: DEFAULT_SPACING_DIV, budget: DEFAULT_BUDGET, source: "tiles",
     warp: needsCpuTargets() ? { kind: "polar", field: plainField(entry.field), maxMinutes: S.outer, angles: spec.angles || null } : null,
-    refine: { field: plainField(entry.field), maxMinutes: S.outer, eps: V.refineEps(S.outer) },
+    refine: { field: plainField(entry.field), maxMinutes: S.outer, eps: V.refineEps(S.outer), angles: spec.angles || null },
   });
   if (S.bent && !S.mesh) setStatus(T.PREPARING, "busy");
 }

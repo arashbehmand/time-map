@@ -147,17 +147,22 @@ function drawnCentres(r, warp, cam, u, pts, want, style) {
   return out;
 }
 
-function g3Radius(lab, rand) {
+// The issue's "1,000 random cells": points that hold a time within the ring (folds and
+// stations included; no data, beyond and filled-in water left out).
+export const G3_SAMPLES = 1000;
+
+function g3Radius(lab, rand, samples = G3_SAMPLES) {
   const { S } = lab, r = S.renderer;
   if (S.spec.kind !== "polar") return { skipped: "grid layouts have no travel time" };
   if (!r.renderLines) return { skipped: "no pixel read-back for this back-end" };
   const f = S.spec.field, maxMin = S.spec.maxMinutes ?? lab.OPT.max;
   const cam = referenceCamera(lab, REFERENCE_VIEWS[0]);
   const pts = [];
-  for (let tries = 0; pts.length < 2 * 300 && tries < 100000; tries++) {
+  for (let tries = 0; pts.length < 2 * samples && tries < 400000; tries++) {
     const x = f.x0 + rand() * (f.nx - 1) * f.cell, y = f.y0 + rand() * (f.ny - 1) * f.cell;
     const t = sampleField(f, x, y);
     if (t === NO_DATA || t > maxMin || Math.hypot(x, y) < 50) continue;
+    if (f.filled && f.filled[Math.round((y - f.y0) / f.cell) * f.nx + Math.round((x - f.x0) / f.cell)]) continue;
     const s = S.warp.screenOfLocal(x, y, cam, 1), g = S.warp.screenOfLocal(x, y, cam, 0);
     const inView = (p) => p.x > 12 && p.y > 12 && p.x < cam.width - 12 && p.y < cam.height - 12;
     if (!inView(s) || !inView(g)) continue;
@@ -439,7 +444,7 @@ function g5Width(lab, rand) {
   return { ...results, dpr, failed: fails, pass: fails.length === 0 };
 }
 
-export async function runSelfTest(lab) {
+export async function runSelfTest(lab, { g3n = G3_SAMPLES } = {}) {
   const { S, OPT } = lab;
   const rand = rng(20261113);
   const result = {
@@ -457,7 +462,7 @@ export async function runSelfTest(lab) {
   };
   run("G1_parity", () => g1Parity(lab, rand));
   run("G2_registration", () => g2Registration(lab, rand));
-  run("G3_radius", () => g3Radius(lab, rand));
+  run("G3_radius", () => g3Radius(lab, rand, g3n));
   run("G4_chord", () => g4Chord(lab, rand));
   run("G5_width", () => g5Width(lab, rand));
   S.dirty = true;

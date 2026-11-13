@@ -126,7 +126,8 @@ function warpFrom(spec) {
 // The field the mesh is refined against (refine.js): sent with every scene, back-end B too.
 function refineFrom(spec) {
   if (!spec) return null;
-  return { field: createField(spec.field), maxMinutes: spec.maxMinutes, eps: spec.eps, maxDepth: spec.maxDepth };
+  return { field: createField(spec.field), maxMinutes: spec.maxMinutes, eps: spec.eps, maxDepth: spec.maxDepth,
+           angles: spec.angles || null };
 }
 
 function post(gen, scene, extra) {

@@ -3,10 +3,14 @@
 // Query switches: origin, field, backend=b|c|a, geom=synthetic|tiles (tiles spends the tile
 // budget), spacing, max, caps=no-vtf|no-r32f|no-webgl2, folds=1, census=1, selftest=1, bench=1,
 // spread=0..1 (directions by reach, default 0.5), style=plain, network=0, budget.
+// field=real takes the warp page's own field from the server (mode=transit|walking|cycling|
+// driving, window=wd08|wd13|wd19|sa13, smooth=0|1), for every test origin; with it,
+// __lab.directionChecks() reports Direction 4 of #5 (W-02) on real fields.
 import { tileCover } from "../../shared/mesh/cover.js";
 import { fitFor, reachBox } from "../../shared/mesh/fit.js";
-import { cameraFromMap, WORLD_PX } from "../../shared/mesh/frame.js";
-import { sampleField } from "../../shared/mesh/field.js";
+import { cameraFromMap, localFrame, WORLD_PX } from "../../shared/mesh/frame.js";
+import { decodeField, sampleField } from "../../shared/mesh/field.js";
+import { directionFour, ringRadius } from "../../shared/mesh/diagnostics.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "../../shared/mesh/labels.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "../../shared/mesh/pipeline.js";
 import { createMeshRenderer } from "../../shared/mesh/renderer.js";
@@ -35,6 +39,12 @@ const OPT = {
   // default, 0.5, goes halfway.
   spread: Q.has("spread") ? Math.min(1, Math.max(0, Number(Q.get("spread")) || 0)) : 0.5,
   budget: Number(Q.get("budget")) || DEFAULT_BUDGET,
+  mode: Q.get("mode") || "transit",
+  window: Q.get("window") || "wd08",
+  smooth: Q.get("smooth") !== "0",
+  // Refine the mesh where the field bends it (refine.js), as the warp page does; ?refine=0 off.
+  refine: Q.get("refine") !== "0",
+  refineDepth: Number(Q.get("refineDepth")) || 3,
 };
 const MORPH_MS = 1800;
 const RING_FROM_U = 0.9;          // the time rings fade in over the last tenth of the morph
@@ -91,6 +101,15 @@ function needsCpuTargets() {
   return !(OPT.backend === "b" && S.renderer && S.renderer.mode === "gpu");
 }
 
+// Half a pixel at the largest px per minute the self-test draws (the desktop reference view,
+// outer ring at 0.42 of its 900 px short side), as the warp page's views.refineEps.
+function refineFor(spec) {
+  if (spec.kind !== "polar") return null;
+  const max = spec.maxMinutes ?? OPT.max, f = spec.field;
+  return { field: { origin: f.origin, cell: f.cell, nx: f.nx, ny: f.ny, x0: f.x0, y0: f.y0, minutes: f.minutes },
+           maxMinutes: max, eps: 0.5 / ((0.42 * 900) / max), maxDepth: OPT.refineDepth, angles: spec.angles || null };
+}
+
 function requestScene(view = S.pending || S, { clear = false } = {}) {
   S.gen++;
   view.gen = S.gen;
@@ -101,6 +120,7 @@ function requestScene(view = S.pending || S, { clear = false } = {}) {
     spacingDiv: OPT.spacing, budget: OPT.budget, source: OPT.geom,
     syntheticUrl: new URL("./synthetic-tiles.js", import.meta.url).href, network: S.network,
     warp: needsCpuTargets() ? view.spec : null,
+    refine: OPT.refine ? refineFor(view.spec) : null,
   });
   return S.gen;
 }
@@ -167,7 +187,7 @@ function originById(id) {
 // switches when that scene arrives (activate), so nothing is drawn with mismatched origins.
 function setOrigin(id, { frame: reframe = true, clear = false } = {}) {
   const origin = originById(id);
-  const spec = makeWarpSpec(OPT.field, origin, S.network, { example: S.example, maxMinutes: OPT.max });
+  const spec = makeWarpSpec(OPT.field, origin, S.network, { example: S.example, maxMinutes: OPT.max, real: S.real });
   if (spec.kind === "polar" && OPT.spread > 0) spec.angles = angularSpread(spec.field, spec.maxMinutes ?? OPT.max, { spread: OPT.spread });
   const warp = createWarp(spec);
   const el = S.map.getContainer();
@@ -511,12 +531,12 @@ function meshMissing(kind) {
   return r;
 }
 
-async function runSelfTestNow() {
+async function runSelfTestNow(opts) {
   const missing = meshMissing("selftest");
   if (missing) return missing;
   out("Running the self-test…");
   const { runSelfTest } = await import("./selftest.js");
-  const r = await runSelfTest(labApi);
+  const r = await runSelfTest(labApi, opts);
   storeResult("selftest", r);
   out(JSON.stringify(r, null, 1));
   return r;
@@ -541,11 +561,96 @@ async function runCensusNow() {
   return r;
 }
 
+// ── Real fields (?field=real) and Direction 4 ────────────────────────
+async function fetchField(o, { mode = OPT.mode, window = OPT.window, smooth = OPT.smooth } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    const resp = await fetch("/api/travel-time-field", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ longitude: o.lon, latitude: o.lat, mode, ...(mode === "transit" ? { window, smooth } : {}) }),
+    });
+    if (resp.ok) return resp.json();
+    // The per-IP limit (20 a minute by default): wait as asked, a few times.
+    const after = Number(resp.headers.get("Retry-After"));
+    if (resp.status !== 429 || attempt >= 5 || !(after >= 0)) throw new Error(`field for ${o.id}: HTTP ${resp.status}`);
+    await new Promise((r) => setTimeout(r, (after + 1) * 1000));
+  }
+}
+
+async function loadRealFields() {
+  S.real = new Map();
+  S.realJson = new Map();
+  for (const o of S.network.origins) {
+    const json = await fetchField(o);
+    S.realJson.set(o.id, json);
+    S.real.set(o.id, decodeField(json));
+  }
+}
+
+const quantile = (a, q) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor(q * s.length))] : null; };
+
+// The jump where the 2 km walking near field meets the tables: |t(2.05 km) − t(1.95 km)|
+// along 360 bearings, where both hold a time.
+function nearFieldSeam(field) {
+  const jumps = [];
+  for (let k = 0; k < 360; k++) {
+    const a = (k * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+    const t0 = sampleField(field, 1950 * c, 1950 * s), t1 = sampleField(field, 2050 * c, 2050 * s);
+    if (t0 >= 0 && t1 >= 0 && t0 < 1e3 && t1 < 1e3) jumps.push(Math.abs(t1 - t0));
+  }
+  return { bearings: jumps.length, median: quantile(jumps, 0.5), p90: quantile(jumps, 0.9) };
+}
+
+// Direction 4's two numeric checks (folded share of the 45-minute ring ≤ 10%, median local
+// stretch ≤ 3:1) for every test origin, window, directions setting and smoothing, plus the
+// radius check, the seam, and Wembley Park from Baker Street. Numbers only.
+async function directionChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spreads = [0.5, 0], smooths = [true, false], ring = 45, mode = OPT.mode } = {}) {
+  const t0 = performance.now();
+  const results = [], seams = [], wembley = [];
+  const wp = S.network.origins.find((o) => o.id === "wembley-park");
+  for (const o of S.network.origins) {
+    for (const w of mode === "transit" ? windows : [null]) {
+      for (const sm of mode === "transit" ? smooths : [true]) {
+        const json = await fetchField(o, { mode, window: w, smooth: sm });
+        const field = decodeField(json);
+        const frame = localFrame(o);
+        if (sm) seams.push({ origin: o.id, window: w, sources: json.sources, ...nearFieldSeam(field) });
+        if (o.id === "baker-street" && sm) {
+          const [x, y] = frame.toLocal(wp.lon, wp.lat);
+          const st = (json.stations || []).find((s) => s.name === "Wembley Park");
+          wembley.push({ window: w, fieldMinutes: Math.round(sampleField(field, x, y) * 10) / 10, stationRowMinutes: st ? st.minutes : null, sources: json.sources });
+        }
+        for (const sp of spreads) {
+          const spec = { kind: "polar", field, maxMinutes: ring };
+          if (sp > 0) spec.angles = angularSpread(field, ring, { spread: sp });
+          const d = directionFour(spec);
+          const rr = ringRadius(spec, { n: 1000 });
+          const r3 = (v) => (v === null ? null : Math.round(v * 1000) / 1000);
+          results.push({
+            origin: o.id, window: w, smooth: sm, spread: sp, sources: json.sources, notes: json.notes,
+            foldedShare: r3(d.at200.foldedShare), stackedShare: r3(d.at200.foldedSheets), medianStretch: r3(d.at200.medianStretch),
+            foldedShare800: r3(d.at800.foldedShare), medianStretch800: r3(d.at800.medianStretch),
+            cellsSkipped: d.at200.skipped, cells: d.at200.cells,
+            passFolded: d.passFolded, passStretch: d.passStretch, radiusMaxErrMinutes: rr.maxError, radiusSamples: rr.n,
+          });
+        }
+      }
+    }
+  }
+  const smoothDefault = results.filter((r) => r.smooth && r.spread === 0.5);
+  const smoothCompass = results.filter((r) => r.smooth && r.spread === 0);
+  const passAll = (rs) => rs.length > 0 && rs.every((r) => r.passFolded && r.passStretch);
+  return {
+    kind: "direction-checks", at: new Date().toISOString(), mode, ring, limits: { folded: 0.1, stretch: 3 },
+    ms: Math.round(performance.now() - t0), results, seams, wembley,
+    summary: { byReachPassesEverywhere: passAll(smoothDefault), compassPassesEverywhere: passAll(smoothCompass) },
+  };
+}
+
 // What selftest.js and bench.js (and scripts/lab_headless.mjs) use.
 const labApi = {
   S, OPT, camera, setOrigin, requestScene, waitScene, morphTo, fitFor, reachBox,
   storeResult, allResults, percentile,
-  runSelfTest: runSelfTestNow, runBench: runBenchNow, runCensus: runCensusNow,
+  runSelfTest: runSelfTestNow, runBench: runBenchNow, runCensus: runCensusNow, directionChecks,
   onFrame(fn) { (S.frameListeners = S.frameListeners || []).push(fn); return () => { S.frameListeners = S.frameListeners.filter((f) => f !== fn); }; },
   onDraw(fn) { (S.drawListeners = S.drawListeners || []).push(fn); return () => { S.drawListeners = S.drawListeners.filter((f) => f !== fn); }; },
 };
@@ -558,6 +663,7 @@ async function boot() {
     fetch("../example.json").then((r) => r.json()),
   ]);
   S.network = network; S.example = example;
+  if (OPT.field === "real") await loadRealFields();
   const first = originById(OPT.origin);
   S.worker = new Worker(new URL("../../shared/mesh/worker.js", import.meta.url), { type: "module" });
   S.worker.onmessage = onWorker;

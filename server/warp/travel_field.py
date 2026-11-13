@@ -67,7 +67,7 @@ class TravelFieldService:
         self.cache = cache
         self._inflight: dict[tuple, asyncio.Task] = {}
 
-    async def get(self, lon: float, lat: float, mode: str, window: str | None) -> dict:
+    async def get(self, lon: float, lat: float, mode: str, window: str | None, *, smooth: bool = True) -> dict:
         lon, lat = round(lon, 4), round(lat, 4)
         data = None
         if mode == "transit":
@@ -77,13 +77,14 @@ class TravelFieldService:
             window = window if window in WINDOWS else default_window()
         else:
             window = None
-        key = (lon, lat, mode, window, data.build if data else None)
+            smooth = True
+        key = (lon, lat, mode, window, data.build if data else None, smooth)
         cached = self.cache.get(key)
         if cached is not None:
             return cached
         task = self._inflight.get(key)
         if task is None:
-            task = asyncio.create_task(self._build(lon, lat, mode, window, data))
+            task = asyncio.create_task(self._build(lon, lat, mode, window, data, smooth))
             self._inflight[key] = task
             task.add_done_callback(lambda _t, k=key: self._inflight.pop(k, None))
         result = await asyncio.shield(task)
@@ -98,7 +99,8 @@ class TravelFieldService:
             for values in spec["values"]))
         return [f for r in replies for f in r.get("features", [])]
 
-    async def _build(self, lon: float, lat: float, mode: str, window: str | None, data) -> dict:
+    async def _build(self, lon: float, lat: float, mode: str, window: str | None, data,
+                     smooth: bool = True) -> dict:
         t0 = time.monotonic()
         frame = F.LocalFrame(lon, lat)
         notes: list[str] = []
@@ -135,7 +137,7 @@ class TravelFieldService:
 
         features, (grid, comp) = await asyncio.gather(walking(), composition())
         async with self.slots:
-            body = await asyncio.to_thread(self._transit_field, features, frame, data, grid, comp)
+            body = await asyncio.to_thread(self._transit_field, features, frame, data, grid, comp, smooth)
         log.info("  field built  mode=transit nodes=%d  %.0fms", body["nx"] * body["ny"],
                  (time.monotonic() - t0) * 1000)
         return {"origin": {"lon": lon, "lat": lat}, "mode": "transit", "window": window,
@@ -143,7 +145,8 @@ class TravelFieldService:
                 "sources": "mapbox+tables" if features else "tables",
                 "limit_minutes": TABLES_LIMIT_MINUTES, "approximate": True,
                 "valid_until": data.valid_until.isoformat(), "notes": notes,
-                "credits": data.status()["credits"], "development_only": data.development_only}
+                "credits": data.status()["credits"], "development_only": data.development_only,
+                "smoothed": smooth}
 
     # ── CPU parts (run in a thread) ───────────────────────────────────
     @staticmethod
@@ -157,9 +160,10 @@ class TravelFieldService:
 
     @staticmethod
     def _transit_field(features: list[dict], frame: F.LocalFrame, data, grid: F.Grid,
-                       composed: tuple) -> dict:
+                       composed: tuple, smooth: bool = True) -> dict:
         comp, filled, row = composed
-        comp = F.dequantise(comp)
+        if smooth:
+            comp = F.dequantise(comp)
         if features:
             regions = F.contour_regions(features, frame, _to_minutes("meters"))
             walk = F.contour_field(regions, grid)

@@ -14,22 +14,29 @@
 //              Out of room, an edge splits only if its midpoint already exists (so the
 //              neighbour that made it still matches), and the rest are counted as skipped.
 //
-// The bearing's own curvature is not tested: on a 48 m edge it moves the chord by under
-// 0.01 minute beyond 500 m from the pin. Jumps in the field (a river, a fast line's edge) are
-// what this catches.
+// With true bearings the test reads minutes alone: the bearing's own curvature moves a 48 m
+// chord by under 0.01 minute beyond 500 m from the pin, so jumps in the field (a river, a
+// fast line's edge) are what it catches. With directions by reach (`angles`), the remap bends
+// bearings sharply where reach is concentrated, so the test reads the whole bent position.
 import { BEYOND, sampleField } from "./field.js";
+import { polarDirection } from "./warp.js";
 
-export function makeEdgeTest(field, maxMinutes, eps) {
+export function makeEdgeTest(field, maxMinutes, eps, angles = null) {
   const t = (x, y) => {
     const v = sampleField(field, x, y);
     return v >= 0 && v < BEYOND && v <= maxMinutes ? v : NaN;
   };
+  const dir = angles ? polarDirection(angles) : null;
   return {
     t,
     split(ax, ay, ta, bx, by, tb) {
       if (!(ta >= 0) || !(tb >= 0)) return false;
-      const tm = t((ax + bx) / 2, (ay + by) / 2);
-      return tm >= 0 && Math.abs(tm - (ta + tb) / 2) > eps;
+      const mx = (ax + bx) / 2, my = (ay + by) / 2;
+      const tm = t(mx, my);
+      if (!(tm >= 0)) return false;
+      if (!dir) return Math.abs(tm - (ta + tb) / 2) > eps;
+      const [dax, day] = dir(ax, ay, ta), [dbx, dby] = dir(bx, by, tb), [dmx, dmy] = dir(mx, my, tm);
+      return Math.hypot(dmx * tm - (dax * ta + dbx * tb) / 2, dmy * tm - (day * ta + dby * tb) / 2) > eps;
     },
   };
 }

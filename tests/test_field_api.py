@@ -164,3 +164,13 @@ def test_default_window_follows_london_time():
     assert default_window(datetime(2026, 11, 16, 13, 0, tzinfo=LONDON)) == "wd13"
     assert default_window(datetime(2026, 11, 16, 21, 0, tzinfo=LONDON)) == "wd19"
     assert default_window(datetime(2026, 11, 15, 9, 0, tzinfo=LONDON)) == "sa13"
+
+
+def test_unsmoothed_transit_keeps_whole_minutes(transit_client):
+    pin = {"longitude": A[0], "latitude": A[1], "mode": "transit", "window": "wd08"}
+    raw = transit_client.post(FIELD, json={**pin, "smooth": False}).json()
+    smooth = transit_client.post(FIELD, json=pin).json()
+    assert raw["smoothed"] is False and smooth["smoothed"] is True
+    m, _ = _decode(raw)
+    far = m[np.isfinite(m)]
+    assert far.size and np.allclose(far[far > 31], np.round(far[far > 31]))   # beyond 2 km: whole minutes

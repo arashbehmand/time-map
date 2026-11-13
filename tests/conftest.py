@@ -26,18 +26,19 @@ BODY_MARKER = "UPSTREAM-BODY-MARKER"
 FORBIDDEN = (TILES_TOKEN, ROUTING_TOKEN, "access_token", "api.mapbox.com", BODY_MARKER)
 
 
-def circle_isochrones(lon: float, lat: float, minutes: list[int]) -> dict:
-    """A FeatureCollection of circular contours, shaped like Mapbox's reply."""
+def circle_isochrones(lon: float, lat: float, minutes: list[int], metric: str = "time") -> dict:
+    """A FeatureCollection of circular contours, shaped like Mapbox's reply. `metric`
+    "distance" reads the values as metres (radius = the distance), "time" as minutes."""
     feats = []
     for m in minutes:
-        r_deg = m * 0.004
+        r_deg = m / 111_320 if metric == "distance" else m * 0.004
         ring = [
             [lon + r_deg * math.cos(t) / math.cos(math.radians(lat)), lat + r_deg * math.sin(t)]
             for t in (2 * math.pi * i / 64 for i in range(65))
         ]
         feats.append({
             "type": "Feature",
-            "properties": {"contour": m},
+            "properties": {"contour": m, "metric": metric},
             "geometry": {"type": "Polygon", "coordinates": [ring]},
         })
     return {"type": "FeatureCollection", "features": feats}
@@ -137,7 +138,11 @@ class MockMapbox:
     def ok(self, api: str, request: httpx.Request) -> httpx.Response:
         if api == "isochrone":
             lon, lat = map(float, request.url.path.rsplit("/", 1)[-1].split(","))
-            minutes = [int(m) for m in request.url.params["contours_minutes"].split(",")]
+            params = request.url.params
+            if "contours_meters" in params:
+                metres = [int(m) for m in params["contours_meters"].split(",")]
+                return httpx.Response(200, json=circle_isochrones(lon, lat, metres, "distance"))
+            minutes = [int(m) for m in params["contours_minutes"].split(",")]
             return httpx.Response(200, json=circle_isochrones(lon, lat, minutes))
         if api == "matrix":
             return httpx.Response(200, json=matrix_reply(request))

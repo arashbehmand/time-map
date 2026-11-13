@@ -1,9 +1,13 @@
 """
 Mapbox Isochrone client.
 
-One request per call (travel times are capped at 4 values of at most 60 minutes, which is
-what Mapbox accepts). Results are cached in a bounded LRU cache for 5 minutes, keyed by
-(lon4, lat4, profile, times); a cache hit costs no budget.
+One request per call: at most 4 contours, in minutes (at most 60) or in metres (at most
+100,000), which is what Mapbox accepts. Results are cached in a bounded LRU cache for 5
+minutes, keyed by (lon4, lat4, profile, unit, values, denoise); a cache hit costs no budget.
+
+`denoise`: Mapbox's default (1.0) returns only the largest piece of each contour. The travel-
+time field asks for 0, so every piece, island and hole comes back; the raw /api/isochrones
+endpoint keeps the default.
 """
 from __future__ import annotations
 
@@ -42,25 +46,36 @@ class MapboxClient:
         lat: float,
         profile: str,
         minutes: Sequence[int],
+        *,
+        unit: str = "minutes",
+        denoise: float | None = None,
     ) -> dict:
-        sorted_minutes = tuple(sorted(set(int(m) for m in minutes)))
-        cache_key = (round(lon, 4), round(lat, 4), profile, sorted_minutes)
+        """`minutes`: the contour values, in `unit` ("minutes" or "meters")."""
+        if unit not in ("minutes", "meters"):
+            raise ValueError("unit must be minutes or meters")
+        values = tuple(sorted(set(int(m) for m in minutes)))
+        if not 1 <= len(values) <= 4:
+            raise ValueError("Mapbox takes 1 to 4 contours per request")
+        cache_key = (round(lon, 4), round(lat, 4), profile, unit, values, denoise)
         cached = self.cache.get(cache_key)
         if cached is not None:
             log.info("  isochrones (cache hit)")
             return cached
 
+        params = {
+            f"contours_{unit}": ",".join(map(str, values)),
+            "polygons": "true",
+            "access_token": self.token,
+        }
+        if denoise is not None:
+            params["denoise"] = f"{float(denoise):g}"
         async with self.guard.upstream("isochrone", 1):
             resp = await mapbox_send(
                 self.client,
                 f"{ISOCHRONE_URL}/{profile}/{lon},{lat}",
                 api="isochrone",
                 profile=profile,
-                params={
-                    "contours_minutes": ",".join(map(str, sorted_minutes)),
-                    "polygons": "true",
-                    "access_token": self.token,
-                },
+                params=params,
             )
         data = json_or_fail(resp, api="isochrone", profile=profile)
         features = data.get("features") if isinstance(data, dict) else None

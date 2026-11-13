@@ -100,6 +100,11 @@ class Gate:
             self._tn = network(self.b)
         return self._tn
 
+    def points_sha256(self) -> str:
+        from transit.fetch import sha256_file
+
+        return sha256_file(self.b.out / "points.csv")
+
     def rng(self, tag: str) -> np.random.Generator:
         return np.random.default_rng([self.seed, zlib.crc32(tag.encode())])
 
@@ -607,6 +612,8 @@ async def run(g: Gate, parts: list[str], margin: float = settings.RANKING_MARGIN
                  "band_offsets": list(g.band_offsets), "margin": margin, "keyless": not key,
                  "rate_per_min": rate, "started_at": datetime.now().isoformat(timespec="seconds"),
                  "service_dates": json.loads((g.b.out / "dates.json").read_text())}
+    # Pairs and groups store point indexes; a rescore checks they still name the same points.
+    rep["points_sha256"] = g.points_sha256()
     man = g.b.out / "manifest.json"
     if man.exists():
         rep["timetable_as_of"] = json.loads(man.read_text())["inputs"].get("timetable_as_of")
@@ -662,11 +669,52 @@ async def run(g: Gate, parts: list[str], margin: float = settings.RANKING_MARGIN
     return rep
 
 
+def points_mismatch(rep: dict, points_sha256: str, lon: np.ndarray, lat: np.ndarray) -> str | None:
+    """
+    Why a saved report's point indexes no longer name the same points, or None. A report that
+    recorded points.csv's sha256 must match it; an older one is checked through its table-point
+    origins, which also stored their coordinates.
+    """
+    if rep.get("points_sha256"):
+        return None if rep["points_sha256"] == points_sha256 else "points.csv has changed since that run"
+    bad = checked = 0
+    for d in rep.get("bands", {}).values():
+        for q in d["pairs"]:
+            i = q.get("origin_point")
+            if i is None:
+                continue
+            checked += 1
+            if i >= len(lon) or haversine_m(q["origin"][0], q["origin"][1], lon[i], lat[i]) > 1.0:
+                bad += 1
+    if bad:
+        return f"{bad} of {checked} saved table-point origins no longer sit at their point index"
+    return None if checked else "the report records nothing to check its point indexes against"
+
+
+def rescore_scope(rep: dict, args) -> None:
+    """
+    A rescore keeps the scope of the run it rescores (sample, quick look or not, departures,
+    margin): its cached medians were made with those. A conflicting option is refused.
+    """
+    prov = bool(rep.get("provisional", "provisional" in (rep.get("label") or "")))
+    deps = len(rep.get("band_offsets") or settings.TFL_DEPARTURE_OFFSETS_MIN)
+    saved = {"sample": rep.get("sample", "a"), "provisional": prov, "departures": deps,
+             "margin": rep.get("margin")}
+    given = {"sample": args.sample, "provisional": args.provisional or None,
+             "departures": args.departures, "margin": args.margin}
+    clash = [k for k, v in given.items() if v is not None and saved[k] is not None and v != saved[k]]
+    if clash:
+        raise SystemExit(f"--rescore keeps the saved run's {', '.join(clash)} "
+                         f"({', '.join(f'{k}={saved[k]}' for k in clash)}): drop the conflicting option")
+    args.sample, args.provisional = saved["sample"], prov
+    args.departures, args.margin = deps, saved["margin"]
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m transit.gate", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--build", required=True)
-    p.add_argument("--sample", choices=tuple(settings.SEEDS), default="a",
+    p.add_argument("--sample", choices=tuple(settings.SEEDS), default=None,
                    help="a: the gate; b: a fresh sample, only after fixing something sample a found")
     p.add_argument("--part", default="cases,bands,ranking")
     p.add_argument("--estimate", action="store_true")
@@ -680,6 +728,13 @@ def main(argv=None) -> int:
                    help="score a previous run's pairs again (gate/<run>/report.json) with the current "
                         "tables, from cached TfL replies only: no requests are sent")
     args = p.parse_args(argv)
+    saved_run = None
+    if args.rescore:
+        from transit.build import Build
+
+        saved_run = json.loads((Build(args.build).out / args.rescore).read_text())
+        rescore_scope(saved_run, args)
+    args.sample = args.sample or "a"
     label = None
     if args.provisional:
         args.departures = args.departures or settings.PROVISIONAL["band_departures"]
@@ -700,8 +755,12 @@ def main(argv=None) -> int:
         print(json.dumps(estimate(g, margin), indent=2))
         return 0
     rescore = None
-    if args.rescore:
-        rescore = json.loads((g.b.out / args.rescore).read_text())
+    if saved_run is not None:
+        why = points_mismatch(saved_run, g.points_sha256(), g.lon, g.lat)
+        if why:
+            raise SystemExit(f"cannot rescore {args.rescore}: {why}, so its pairs and groups would "
+                             "name other places")
+        rescore = saved_run
         rescore["path"] = args.rescore
     rep = asyncio.run(run(g, args.part.split(","), margin, label, rescore, provisional=args.provisional))
     name = args.sample + ("-provisional" if args.provisional else "") + ("-rescored" if rescore else "")

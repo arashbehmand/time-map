@@ -586,3 +586,127 @@ def test_journeys_pass_needs_every_journey_within_and_on_its_mode():
     assert not journeys_pass(js[:2] + [{"delta_wd08": 2.0, "line_family_ok": False}], 8.0)
     assert not journeys_pass(js[:2] + [{"delta_wd08": math.inf, "line_family_ok": True}], 8.0)
     assert not journeys_pass([], 8.0)
+
+
+# ── wrap-up review fixes ────────────────────────────────────────────
+def test_a_new_table_drops_a_leftover_checkpoint(tmp_path, monkeypatch):
+    r5, calls = _stub_routing(monkeypatch)
+    pts = pd.DataFrame({"idx": [0, 1, 2], "snap_lon": [0.0, 1.0, 2.0], "snap_lat": [0.0, 0.0, 0.0]})
+    ok = np.array([True, True, True])
+    out, dep = tmp_path / "tt_wd08.npy", datetime(2026, 12, 9, 8)
+    r5.table_window(None, pts, ok, dep, out, threads=1, fingerprint={"settings": {}})
+    out.unlink()                                 # a damaged table removed by hand; .done left
+    info = r5.table_window(None, pts, ok, dep, out, threads=1, fingerprint={"settings": {}})
+    assert len(calls) == 6 and info["complete"]
+    assert (np.load(out)[[0, 1, 2]] != 255).all()
+
+
+def _complete_build(tmp_path, monkeypatch):
+    """A build folder with four stub tables and the files the package stage needs."""
+    from transit import build, manifest, settings
+
+    r5, _ = _stub_routing(monkeypatch)
+    for attr in ("RAW", "WORK", "OUT"):
+        monkeypatch.setattr(settings, attr, tmp_path / attr.lower())
+    b = build.Build("2026-11-12")
+    (b.out / "dates.json").write_text(json.dumps({"weekday": "2026-12-09", "saturday": "2026-12-12"}))
+    pts = pd.DataFrame({"idx": [0, 1, 2], "snap_lon": [0.0, 1.0, 2.0], "snap_lat": [0.0, 0.0, 0.0]})
+    ok = np.array([True, True, True])
+    fps, outputs = {}, {}
+    for w in settings.WINDOWS:
+        p = b.out / f"tt_{w}.npy"
+        r5.table_window(None, pts, ok, datetime(2026, 12, 9, 8), p, threads=1, fingerprint={"w": w})
+        fps[w] = {"w": w}
+        outputs[f"tt_{w}"] = manifest.output_entry(p)
+    np.save(b.out / "point_ok.npy", ok)
+    for name in ("points.csv", "walksheds.npz"):
+        (b.out / name).write_bytes(b"x")
+        outputs[name] = manifest.output_entry(b.out / name)
+    outputs["point_ok.npy"] = manifest.output_entry(b.out / "point_ok.npy")
+    (b.out / "manifest.json").write_text(json.dumps({"tables_fingerprints": fps, "outputs": outputs}))
+    return build, b, r5, pts, ok
+
+
+def test_package_refuses_tables_changed_after_the_manifest(tmp_path, monkeypatch):
+    build, b, r5, pts, ok = _complete_build(tmp_path, monkeypatch)
+    # a pilot of one window after the manifest: incomplete, another fingerprint
+    r5.table_window(None, pts, ok, datetime(2026, 12, 9, 8), b.out / "tt_wd08.npy", threads=1,
+                    fingerprint={"w": "pilot"}, limit_origins=1)
+    with pytest.raises(SystemExit, match="tt_wd08.npy changed after the manifest"):
+        build.stage_package(b, None)
+
+
+def test_package_refuses_a_file_edited_after_the_manifest(tmp_path, monkeypatch):
+    build, b, *_ = _complete_build(tmp_path, monkeypatch)
+    (b.out / "walksheds.npz").write_bytes(b"y")
+    with pytest.raises(SystemExit, match=r"\['walksheds.npz'\] changed after the manifest"):
+        build.stage_package(b, None)
+
+
+def test_manifest_refuses_tables_built_from_other_inputs(tmp_path, monkeypatch):
+    build, b, *_ = _complete_build(tmp_path, monkeypatch)
+    now = {"settings": {}, "code": "c", "points_sha256": "p", "prepared_sha256": {"gbt": "new"},
+           "osm_clip_sha256": "o", "departure": None}
+    monkeypatch.setattr(build, "table_fingerprint", lambda b, w: dict(now))
+    for w in ("wd08", "wd13", "wd19", "sa13"):
+        old = {**now, "departure": b.window_start(w).isoformat(),
+               "prepared_sha256": {"gbt": "old" if w == "wd13" else "new"}}
+        (b.out / f"tt_{w}.fingerprint.json").write_text(json.dumps({"inputs": old, "complete": True}))
+    with pytest.raises(SystemExit, match=r"tt_wd13.npy was built from other inputs .*prepared_sha256"):
+        build.stage_manifest(b, None)
+
+
+def test_stage_keys_include_options_and_the_region():
+    import argparse
+
+    from transit import build, settings
+
+    args = argparse.Namespace(redate=True, today=None, no_tfl=False, gb_transit_tag=None, with_tfl_txc=True)
+    assert build.stage_options("dates", args) == {"redate": True, "today": None, "no_tfl": False}
+    assert build.stage_options("fetch", args)["with_tfl_txc"] is True
+    assert build.stage_options("network", args) == {}
+    b = argparse.Namespace(prepped=lambda f: f, raw_feed=lambda f: f, out=settings.OUT, raw=settings.RAW,
+                           osm_clip="c", id="2026-11-12")
+    assert settings.REGION_GEOJSON in build.stage_inputs(b, "prep")[0]
+    assert settings.REGION_GEOJSON in build.stage_inputs(b, "points")[0]
+
+
+def test_files_placed_by_hand_stay_reusable(tmp_path):
+    from transit.fetch import placed_by_hand, record_local
+
+    f = tmp_path / "itm_london_gtfs.zip"
+    f.write_bytes(b"feed")
+    assert placed_by_hand(f)
+    first = record_local(f, "placed by hand")
+    assert placed_by_hand(f) and record_local(f, "placed by hand") == first
+    f.write_bytes(b"other feed")
+    with pytest.raises(SystemExit, match="placed by hand .* has changed"):
+        record_local(f, "placed by hand")
+
+
+def test_rescore_checks_that_point_indexes_still_name_the_same_points():
+    from transit.gate import points_mismatch
+
+    lon, lat = np.array([0.0, 0.1, 0.2]), np.array([51.5, 51.5, 51.5])
+    old = {"bands": {"wd08": {"pairs": [{"origin_point": 1, "origin": [0.1, 51.5]},
+                                         {"origin_point": None, "origin": [0.3, 51.6]}]}}}
+    assert points_mismatch(old, "x", lon, lat) is None
+    shifted = {"bands": {"wd08": {"pairs": [{"origin_point": 2, "origin": [0.1, 51.5]}]}}}
+    assert "no longer sit" in points_mismatch(shifted, "x", lon, lat)
+    assert points_mismatch({"points_sha256": "a"}, "a", lon, lat) is None
+    assert "changed" in points_mismatch({"points_sha256": "a"}, "b", lon, lat)
+
+
+def test_rescore_keeps_the_saved_runs_scope():
+    import argparse
+
+    from transit.gate import rescore_scope
+
+    rep = {"sample": "a", "label": "provisional quick look, not the gate", "band_offsets": [0, 20, 40],
+           "margin": 5.0}
+    args = argparse.Namespace(sample=None, provisional=False, departures=None, margin=None)
+    rescore_scope(rep, args)
+    assert (args.sample, args.provisional, args.departures, args.margin) == ("a", True, 3, 5.0)
+    bad = argparse.Namespace(sample=None, provisional=False, departures=6, margin=None)
+    with pytest.raises(SystemExit, match="departures"):
+        rescore_scope(rep, bad)

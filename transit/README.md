@@ -158,7 +158,9 @@ transit/.venv/bin/python -m transit.gate --build <id> --sample b     # only afte
 `--rescore gate/<run>/report.json` scores a previous run's pairs and ranking groups again with
 the current tables, from cached replies only (no request is sent): use it after changing the
 model. A contender the new tables add, which the earlier run never asked about, makes its group
-"incomplete" rather than a pass.
+"incomplete" rather than a pass. A rescore keeps the saved run's sample, departures, margin and
+quick-look status (a conflicting option is refused), and refuses a run whose point indexes no
+longer name the same points.
 
 `--provisional` is a one-hour quick look for when there is no key: 30 pairs per band
 instead of 100, departures every 20 minutes instead of 10, 12 ranking groups instead of 50,

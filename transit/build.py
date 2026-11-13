@@ -172,7 +172,9 @@ def app_key() -> str | None:
 def stage_fetch(b: Build, args) -> None:
     from transit.fetch import fetch
 
-    fetch(b.id, gb_transit_tag=args.gb_transit_tag, with_tfl_txc=args.with_tfl_txc)
+    # A clip made from another polygon or extract has to be remade from England.
+    fetch(b.id, gb_transit_tag=args.gb_transit_tag, with_tfl_txc=args.with_tfl_txc,
+          need_england=not clip_is_current(b))
 
 
 CORE_AGENCIES = r"(?i)london underground|docklands|london trams|london overground|elizabeth line"
@@ -280,17 +282,9 @@ def stage_prep(b: Build, args) -> None:
     for fid, (_, _, rtypes) in FEEDS.items():
         info["feeds"][fid] = prep_feed(b.raw_feed(fid), b.prepped(fid), [wd, sat], clip, fid, rtypes)
 
-    import shapely.geometry
-
     england = b.raw / "osm" / "england-latest.osm.pbf"
     stamp = osm_timestamp(england)
-    england_meta = england.with_name(england.name + ".meta.json")
-    poly_text = json.dumps({"type": "Feature", "properties": {},
-                            "geometry": shapely.geometry.mapping(clip)})
-    # The clip is remade when its polygon or the England extract it came from changes.
-    identity = {"polygon_sha256": hashlib.sha256(poly_text.encode()).hexdigest(),
-                "england_sha256": json.loads(england_meta.read_text()).get("sha256")
-                if england_meta.exists() else None}
+    poly_text, identity = clip_identity(b)
     clip_json = b.work / "clip.json"
     if b.osm_clip.exists() and clip_json.exists() and json.loads(clip_json.read_text()) != identity:
         if not england.exists():
@@ -311,6 +305,29 @@ def stage_prep(b: Build, args) -> None:
         england.unlink()
         log.info("deleted the England PBF (its sha256 and md5 stay in its .meta.json)")
     b.write_json("prep.json", info)
+
+
+def clip_identity(b: Build) -> tuple[str, dict]:
+    """The clip polygon (GeoJSON text) and what the clip must have been made from."""
+    import shapely.geometry
+
+    from transit.points import buffered, load_region
+
+    clip = buffered(load_region(), settings.BUFFER_OSM_M)
+    poly_text = json.dumps({"type": "Feature", "properties": {},
+                            "geometry": shapely.geometry.mapping(clip)})
+    england_meta = b.raw / "osm" / "england-latest.osm.pbf.meta.json"
+    # The clip is remade when its polygon or the England extract it came from changes.
+    return poly_text, {"polygon_sha256": hashlib.sha256(poly_text.encode()).hexdigest(),
+                       "england_sha256": json.loads(england_meta.read_text()).get("sha256")
+                       if england_meta.exists() else None}
+
+
+def clip_is_current(b: Build) -> bool:
+    """True when the OSM clip exists and was made from the current polygon and extract."""
+    clip_json = b.work / "clip.json"
+    return b.osm_clip.exists() and clip_json.exists() and \
+        json.loads(clip_json.read_text()) == clip_identity(b)[1]
 
 
 def osm_timestamp(england: Path) -> str | None:
@@ -585,10 +602,10 @@ def gonogo_markdown(b: Build, result: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def table_fingerprint(b: Build, window: str) -> dict:
+def table_fingerprint(b: Build, window: str | None) -> dict:
     """Everything a table depends on. A table made from anything else is rebuilt, not resumed."""
     return {"settings": settings.snapshot(), "code": code_hash(STAGE_CODE["tables"]),
-            "departure": b.window_start(window).isoformat(),
+            "departure": b.window_start(window).isoformat() if window else None,
             "points_sha256": sha256(b.out / "points.csv"),
             "prepared_sha256": {f: sha256(b.prepped(f)) for f in FEEDS},
             "osm_clip_sha256": sha256(b.osm_clip)}
@@ -672,9 +689,16 @@ def stage_manifest(b: Build, args) -> None:
         if not fp.exists() or not json.loads(fp.read_text()).get("complete"):
             raise SystemExit(f"tt_{w}.npy is missing or incomplete: run the tables stage to the end first")
         fps[w] = json.loads(fp.read_text())["inputs"]
+    # Each table must have been built from the current settings, code, points, feeds and clip
+    # (re-running prep and then one window would otherwise mix inputs).
+    now = table_fingerprint(b, None)
+    for w, f in fps.items():
+        want = {**now, "departure": b.window_start(w).isoformat()}
+        differ = sorted(k for k in set(want) | set(f) if want.get(k) != f.get(k))
+        if differ:
+            raise SystemExit(f"tt_{w}.npy was built from other inputs than the current ones "
+                             f"({', '.join(differ)}): run the tables stage again")
     built_with = [f["settings"] for f in fps.values()]
-    if any(x != built_with[0] for x in built_with):
-        raise SystemExit("the four tables were built with different settings: rebuild them")
     srcs = json.loads((b.raw / "sources.json").read_text())
     prep = b.read_json("prep.json")
     inputs = {"raw": srcs["files"], "gb_transit_release": srcs.get("gb_transit_release"),
@@ -758,9 +782,23 @@ def stage_package(b: Build, args) -> None:
     missing = [f.name for f in files if not f.exists()]
     if missing:
         raise SystemExit(f"cannot package: missing {missing}")
-    # The manifest stage refuses incomplete tables, so a manifest with their record is enough.
-    if "tables_fingerprints" not in b.read_json("manifest.json"):
+    from transit.r5 import fingerprint_path
+
+    m = b.read_json("manifest.json")
+    if "tables_fingerprints" not in m:
         raise SystemExit("cannot package: the manifest has no complete-table record; run the manifest stage")
+    # The files must still be the ones the manifest describes: a table rebuilt (or cut short by
+    # a pilot) after the manifest was written is refused.
+    for w in settings.WINDOWS:
+        fp_path = fingerprint_path(b.out / f"tt_{w}.npy")
+        fp = json.loads(fp_path.read_text()) if fp_path.exists() else {}
+        if not fp.get("complete") or fp.get("inputs") != m["tables_fingerprints"].get(w):
+            raise SystemExit(f"cannot package: tt_{w}.npy changed after the manifest was written; "
+                             "run the manifest stage again")
+    changed = [e["file"] for e in m["outputs"].values() if sha256(b.out / e["file"]) != e["sha256"]]
+    if changed:
+        raise SystemExit(f"cannot package: {changed} changed after the manifest was written; "
+                         "run the manifest stage again")
     lic = b.out / "LICENSE-DATA.txt"
     text = LICENCE_TEXT if licences_cleared() else LICENCE_PENDING
     lic.write_text(text.format(build=b.id, credits="\n".join(f"- {a}" for a in attribution())))
@@ -803,6 +841,18 @@ RUNNERS = {"fetch": stage_fetch, "dates": stage_dates, "prep": stage_prep, "chec
            "package": stage_package}
 
 
+# Options that change what a stage does: they are part of its key, so `all --redate` re-picks
+# the dates and `all --with-tfl-txc` downloads TfL's zip even when nothing else changed.
+STAGE_OPTIONS = {
+    "fetch": ("gb_transit_tag", "with_tfl_txc"), "dates": ("redate", "today", "no_tfl"),
+    "prep": ("keep_england",), "check": ("no_tfl", "allow_missing", "allow_stale_tfl"),
+}
+
+
+def stage_options(name: str, args) -> dict:
+    return {o: getattr(args, o, None) for o in STAGE_OPTIONS.get(name, ())}
+
+
 def stage_inputs(b: Build, name: str) -> tuple[list[Path], list[Path]]:
     """(inputs, outputs) per stage, for skipping unchanged stages in `all`."""
     prepped = [b.prepped(f) for f in FEEDS]
@@ -810,10 +860,12 @@ def stage_inputs(b: Build, name: str) -> tuple[list[Path], list[Path]]:
     io = {
         "fetch": ([], [b.raw / "sources.json"]),
         "dates": (raw, [b.out / "dates.json"]),
-        "prep": (raw + [b.out / "dates.json"], prepped + [b.osm_clip, b.out / "prep.json"]),
+        "prep": (raw + [b.out / "dates.json", settings.REGION_GEOJSON],
+                 prepped + [b.osm_clip, b.out / "prep.json"]),
         "check": (prepped, [b.out / "feeds-check.json"]),
         "network": (prepped + [b.osm_clip], [b.out / "network.json"]),
-        "points": (prepped + [b.osm_clip, b.out / "dates.json"], [b.out / "points.csv"]),
+        "points": (prepped + [b.osm_clip, b.out / "dates.json", settings.REGION_GEOJSON],
+                   [b.out / "points.csv"]),
         "journeys": (prepped + [b.osm_clip, b.out / "dates.json"], [b.out / "journeys.json"]),
         "tables": (prepped + [b.osm_clip, b.out / "dates.json", b.out / "points.csv"],
                    [b.out / f"tt_{w}.npy" for w in settings.WINDOWS]),
@@ -867,7 +919,8 @@ def main(argv: list[str] | None = None) -> int:
     names = STAGES if run_all else tuple(s for s in STAGES if s in args.stage)
     for name in names:
         inputs, outputs = stage_inputs(b, name)
-        key = digest([i for i in inputs if i.exists()], {"stage": name}, stage=name)
+        extra = {"stage": name, "options": stage_options(name, args)}
+        key = digest([i for i in inputs if i.exists()], extra, stage=name)
         if run_all and not args.force and stage_done(b, name, key, outputs):
             log.info("skip %s (unchanged)", name)
             continue
@@ -879,7 +932,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         if rc:
             return rc
-        key = digest([i for i in inputs if i.exists()], {"stage": name}, stage=name)
+        key = digest([i for i in inputs if i.exists()], extra, stage=name)
         mark_done(b, name, key, started)
     return 0
 

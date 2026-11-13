@@ -94,12 +94,29 @@ def download(url: str, dest: Path, headers: dict | None = None, params: dict | N
 
 
 def record_local(path: Path, note: str) -> dict:
-    """Metadata for a file placed by hand."""
+    """
+    Metadata for a file placed by hand. Recorded once; on later runs the file must still have
+    the recorded sha256 (a build's inputs do not change under it).
+    """
+    meta_file = _meta_path(path)
+    if meta_file.exists():
+        meta = json.loads(meta_file.read_text())
+        if meta.get("sha256") != sha256_file(path):
+            raise SystemExit(f"{path} was placed by hand with sha256 {meta.get('sha256')} and has "
+                             "changed since: use a new build id, or delete its .meta.json")
+        log.info("have %s (placed by hand)", path.name)
+        return meta
     meta = {"file": path.name, "url": None, "note": note, "size": path.stat().st_size,
             "sha256": sha256_file(path),
             "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    _meta_path(path).write_text(json.dumps(meta, indent=2))
+    meta_file.write_text(json.dumps(meta, indent=2))
     return meta
+
+
+def placed_by_hand(path: Path) -> bool:
+    """A file with no metadata, or metadata recorded for a file placed by hand (no URL)."""
+    meta_file = _meta_path(path)
+    return path.exists() and (not meta_file.exists() or json.loads(meta_file.read_text()).get("url") is None)
 
 
 def github_release(repo: str, tag: str | None) -> dict:
@@ -120,8 +137,13 @@ def check_disk(path: Path, min_free_gb: float) -> float:
     return free
 
 
-def fetch(build: str, gb_transit_tag: str | None = None, with_tfl_txc: bool = False) -> dict:
-    """Download the inputs for one build into data/raw/<build>/ and write sources.json."""
+def fetch(build: str, gb_transit_tag: str | None = None, with_tfl_txc: bool = False,
+          need_england: bool = False) -> dict:
+    """
+    Download the inputs for one build into data/raw/<build>/ and write sources.json.
+    need_england: the OSM clip has to be remade, so the England extract is needed even when
+    a clip exists and the extract was deleted after clipping.
+    """
     raw = settings.RAW / build
     check_disk(settings.DATA, settings.MIN_FREE_GB)
     src = load_sources()
@@ -148,7 +170,7 @@ def fetch(build: str, gb_transit_tag: str | None = None, with_tfl_txc: bool = Fa
     # (bods/itm_london_gtfs.zip) is used as it is.
     bods = src["bods"]
     bods_dest = raw / "bods" / bods["file"]
-    if bods_dest.exists() and not _meta_path(bods_dest).exists():
+    if placed_by_hand(bods_dest):
         out["files"]["bods/" + bods["file"]] = record_local(bods_dest, "placed by hand")
     else:
         params = {"api_key": os.environ["BODS_API_KEY"]} if os.environ.get("BODS_API_KEY") else None
@@ -160,7 +182,7 @@ def fetch(build: str, gb_transit_tag: str | None = None, with_tfl_txc: bool = Fa
     pbf = raw / "osm" / osm["file"]
     md5 = download(osm["url"] + ".md5", raw / "osm" / (osm["file"] + ".md5"))
     clipped = settings.WORK / build / "london.osm.pbf"
-    if clipped.exists() and not pbf.exists():
+    if clipped.exists() and not pbf.exists() and not need_england:
         log.info("England PBF already clipped and deleted; keeping its recorded metadata")
         out["files"]["osm/" + osm["file"]] = json.loads(_meta_path(pbf).read_text())
     else:

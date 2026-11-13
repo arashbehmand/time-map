@@ -311,6 +311,9 @@ def table_window(tn, points, ok: np.ndarray, departure: datetime, out_path: Path
         if table.shape != (n, n):
             raise SystemExit(f"{out_path} has shape {table.shape}, expected {(n, n)}")
     else:
+        # A new table: no checkpoint from an earlier one may survive (a deleted .npy with its
+        # .done left behind would otherwise skip rows that are not in the new file).
+        done_path.unlink(missing_ok=True)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         table = np.lib.format.open_memmap(out_path, mode="w+", dtype=np.uint8, shape=(n, n))
         table[:] = UNREACHABLE

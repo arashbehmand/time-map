@@ -9513,6 +9513,46 @@
      ]
     }
    }
+  },
+  "coldOverNetwork": {
+   "about": "Back-end B, toy transit field, a fresh browser profile so every tile came from the server (and Mapbox): request to first bent frame with the GPU finished. The benchmark rows in realTiles.bench were served from the browser cache.",
+   "origins": [
+    {
+     "origin": "baker-street",
+     "ms": 425,
+     "fetched": 27,
+     "tileKB": 3339,
+     "tessMs": 332
+    },
+    {
+     "origin": "wembley-park",
+     "ms": 323,
+     "fetched": 28,
+     "tileKB": 2251,
+     "tessMs": 121
+    },
+    {
+     "origin": "canary-wharf",
+     "ms": 613,
+     "fetched": 34,
+     "tileKB": 3730,
+     "tessMs": 308
+    },
+    {
+     "origin": "heathrow",
+     "ms": 327,
+     "fetched": 20,
+     "tileKB": 1781,
+     "tessMs": 116
+    },
+    {
+     "origin": "croydon",
+     "ms": 493,
+     "fetched": 41,
+     "tileKB": 2972,
+     "tessMs": 171
+    }
+   ]
   }
  }
 }

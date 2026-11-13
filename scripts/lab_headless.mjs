@@ -9,7 +9,8 @@
 //        --remote-debugging-port=9333 --user-data-dir=/tmp/lab-chrome --enable-gpu --use-angle=metal
 //   3. node scripts/lab_headless.mjs --url "http://127.0.0.1:8765/warp/lab/?backend=b" \
 //        --eval "__lab.runSelfTest()" [--shot out.png] [--size 1440x900] [--dpr 1] [--throttle 4]
-//        [--no-cache]   (bypass the browser's HTTP cache, so cold loads really fetch every tile)
+//        [--no-cache]   (turns off the page's HTTP cache; it does not reach the tile worker, so
+//                        for cold tile loads start Chrome with a fresh --user-data-dir instead)
 //
 // --eval is any expression; it is awaited after the lab is ready. Useful ones:
 //   __lab.runSelfTest()                         gates G1–G5

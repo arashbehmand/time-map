@@ -278,8 +278,7 @@ Back-end B, synthetic geometry, toy transit field, 1000×700 at DPR 1, taken wit
 
 ## Results: real tiles
 
-Mapbox Streets v8 through `/tiles`, the toy transit field, headless Chrome 157 on the M2, with the
-browser cache off for the benchmark. Counts only are kept (`docs/warp-renderer-spike-results.json`,
+Mapbox Streets v8 through `/tiles`, the toy transit field, headless Chrome 157 on the M2. Counts only are kept (`docs/warp-renderer-spike-results.json`,
 `realTiles`); no tile data or screenshot of it is stored.
 
 **The census:** 110 tiles, none missing.
@@ -330,9 +329,17 @@ This scene size has knock-on costs:
 | | B | C |
 |---|---|---|
 | GPU time per bent frame (transit) | 6.2–11.2 ms | 7.6–12.2 ms |
-| New origin, cold tiles (G8), p95 | 544 ms (pass) | 418 ms (pass) |
 | New origin, warm tiles (G7), p95 | 366 ms (**fail**) | 360 ms (**fail**) |
+| New origin, tiles from the browser's cache, p95 | 544 ms | 418 ms |
 | Worker tessellation per transit origin | 140–480 ms | 110–360 ms |
+
+**New origin over the network (G8):** 323–613 ms with B. That passes the 1.5 s gate on desktop
+broadband, but each origin downloads 1.8–3.7 MB.
+
+- This was measured with a fresh browser profile: Baker Street 425 ms, Wembley Park 323, Canary
+  Wharf 613, Heathrow 327, Croydon 493. The server's usage counter rose by exactly the 110 tiles.
+- The benchmark's own cold rows were served from the browser's HTTP cache, which the census had
+  filled. The DevTools cache switch doesn't reach the module worker.
 
 G7 fails because a real transit scene is bigger than the worker's 600k cache, so going back to an
 origin tessellates its tiles again.

@@ -86,6 +86,8 @@ def test_holes_and_islands_survive():
     assert at(-500, 0) < 10                      # west, inside the 10-minute square
     assert at(3000, 0) == pytest.approx(10 + 10 * (3000 - 1000) / (3000 - 1000 + 300), abs=0.6)
     assert np.isnan(at(2600, 0))                 # between the square and the island
+    # A hole in one contour only is slow ground, not an uncertain patch.
+    assert not F.uncertain_patches(t, [10, 20], grid, F.WALK_M_PER_MIN).any()
 
 
 def test_crossing_contours_still_nest():
@@ -108,12 +110,13 @@ def test_merge_takes_walking_only_within_2km():
     comp[np.abs(X) > 2500] = np.inf
     filled = np.zeros(X.shape, bool)
     filled[np.abs(X) == 300] = True
-    out, still = F.merge_near(walk, comp, filled, grid, radius_m=2000)
+    out, still, unsure = F.merge_near(walk, comp, filled, grid, radius_m=2000)
     assert out[np.abs(X) <= 1000].tolist() == walk[np.abs(X) <= 1000].tolist()
     assert (out[(np.abs(X) > 1400) & (np.abs(X) <= 2000)] == 20).all()   # transit is faster
     assert (out[(np.abs(X) > 2000) & (np.abs(X) <= 2500)] == 20).all()   # beyond 2 km: transit only
     assert np.isinf(out[np.abs(X) > 2500]).all()
     assert not still.any()                          # walking replaced the filled nodes
+    assert not unsure.any()
 
 
 def test_dequantise_stays_within_half_a_minute():
@@ -173,3 +176,130 @@ def test_a_grid_can_reach_further_one_way_than_the_other():
     g = F.Grid.covering(100, -500, -500, 56_000, 500, max_half=800)
     assert g.x0 == -500 and g.x0 + (g.nx - 1) * 100 >= 56_000
     assert F.Grid.covering(100, -500, -500, 56_000, 500).nx == 5 + 300 + 1   # default: ±300 cells
+
+
+# ── Uncertain patches ────────────────────────────────────────────────
+def _rect(x0, y0, x1, y1, holes=(), contour=10):
+    """A rectangle in lon/lat from local metres (y south), with rectangular holes."""
+    def ring(a0, b0, a1, b1):
+        pts = [(a0, b0), (a1, b0), (a1, b1), (a0, b1), (a0, b0)]
+        return [[float(v) for v in ORIGIN.from_local(x, y)] for x, y in pts]
+    return {"type": "Feature", "properties": {"contour": contour},
+            "geometry": {"type": "Polygon", "coordinates": [ring(x0, y0, x1, y1), *(ring(*h) for h in holes)]}}
+
+
+def _contours(spec):
+    """[(minutes, half size, holes)] → (field, grid, contour minutes)."""
+    feats = [_rect(-h, -h, h, h, holes, contour=m) for m, h, holes in spec]
+    regions = F.contour_regions(feats, ORIGIN, float)
+    grid = F.Grid.covering(100, -4000, -4000, 4000, 4000)
+    return F.contour_field(regions, grid), grid, [m for m, _ in regions]
+
+
+# King's Cross: the platforms (x −150…150, 150–450 m north) are left out of every contour up
+# to 50 minutes; only the 60-minute one covers them.
+PLATFORMS = (-150, -450, 150, -150)
+KX = [(5, 120, ()), (10, 600, (PLATFORMS,)), (15, 900, (PLATFORMS,)), (20, 1200, (PLATFORMS,)),
+      (30, 1800, (PLATFORMS,)), (40, 2400, (PLATFORMS,)), (50, 3000, (PLATFORMS,)), (60, 3600, ())]
+
+
+def _node(grid, x, y):
+    xs, ys = grid.axes()
+    return int(np.argmin(np.abs(ys - y))), int(np.argmin(np.abs(xs - x)))
+
+
+def test_the_platforms_are_an_uncertain_patch_drawn_between_their_rim():
+    t, grid, levels = _contours(KX)
+    before = t.copy()
+    mask = F.uncertain_patches(t, levels, grid, F.WALK_M_PER_MIN)
+    patch = [_node(grid, x, y) for x in (-100, 0, 100) for y in (-200, -300, -400)]
+    assert all(mask[n] for n in patch) and mask.sum() == len(patch)
+    assert all(t[n] > 50 for n in patch)               # the interpolation's time, kept
+    drawn, mask2 = F.fill_patches(t, mask)
+    assert (mask2 == mask).all() and np.array_equal(t, before, equal_nan=True)
+    rim = [_node(grid, x, y) for x in (-200, 200) for y in (-200, -300, -400)] + \
+          [_node(grid, x, y) for x in (-100, 0, 100) for y in (-100, -500)]
+    lo, hi = min(t[n] for n in rim), max(t[n] for n in rim)
+    assert all(lo - 1e-6 <= drawn[n] <= hi + 1e-6 and drawn[n] < 15 for n in patch)
+    assert np.isnan(drawn[~mask]).all()
+    assert not mask[grid.origin_index()]
+
+
+def test_a_big_walkable_patch_is_kept_by_the_walk_in_allowance():
+    # A park 1,200 m across, in holes of the 10- and 15-minute contours, covered at 20.
+    park = (-600, 900, 600, 2100)
+    t, grid, levels = _contours([(5, 300, ()), (10, 2500, (park,)), (15, 3000, (park,)), (20, 3500, ())])
+    assert not F.uncertain_patches(t, levels, grid, F.WALK_M_PER_MIN).any()
+    # Only the size keeps it: with no time to walk in, the same ground would be a patch.
+    assert F.uncertain_patches(t, levels, grid, 1e9).any()
+
+
+def test_a_slow_inlet_open_to_the_outside_is_not_a_patch():
+    # Cut out of 10–50 minutes all the way to their edges, covered at 60: the way out is
+    # outward, along the inlet itself. Each cut contour is three rectangles around the inlet.
+    feats = [_rect(-120, -120, 120, 120, contour=5), _rect(-3600, -3600, 3600, 3600, contour=60)]
+    for m, h in ((10, 600), (15, 900), (20, 1200), (30, 1800), (40, 2400), (50, 3000)):
+        feats += [_rect(-h, -h, -150, h, contour=m), _rect(150, -h, h, h, contour=m),
+                  _rect(-150, -150, 150, h, contour=m)]
+    regions = F.contour_regions(feats, ORIGIN, float)
+    grid = F.Grid.covering(100, -4000, -4000, 4000, 4000)
+    t = F.contour_field(regions, grid)
+    assert t[_node(grid, 0, -1000)] > 50                  # slow all along the inlet
+    assert not F.uncertain_patches(t, [m for m, _ in regions], grid, F.WALK_M_PER_MIN).any()
+
+
+def test_an_enclosed_hole_with_no_data_is_a_patch_and_keeps_no_data():
+    hole = (-150, 250, 150, 550)
+    t, grid, levels = _contours([(5, 120, ())] + [(m, h, (hole,)) for m, h in
+                                                  ((10, 600), (15, 900), (20, 1200), (30, 1800),
+                                                   (40, 2400), (50, 3000), (60, 3600))])
+    inside = [_node(grid, x, y) for x in (-100, 0, 100) for y in (300, 400, 500)]
+    assert all(np.isnan(t[n]) for n in inside)
+    mask = F.uncertain_patches(t, levels, grid, F.WALK_M_PER_MIN)
+    drawn, mask = F.fill_patches(t, mask)
+    assert all(mask[n] and 0 < drawn[n] < 15 for n in inside)
+    assert all(np.isnan(t[n]) for n in inside)
+    assert np.isnan(t[_node(grid, 3900, 3900)]) and not mask[_node(grid, 3900, 3900)]   # outside
+
+
+def test_a_patch_walk_never_beats_a_table_time():
+    grid = F.Grid.covering(100, -3000, 0, 3000, 0)
+    X, _ = grid.mesh()
+    walk = np.abs(X) / F.WALK_M_PER_MIN
+    unsure = np.zeros(X.shape, bool)
+    at = lambda x: (0, int(np.argmin(np.abs(X[0] - x))))   # noqa: E731
+    for x in (300, -300, 2500):
+        walk[at(x)] = 50.0
+        unsure[at(x)] = True
+    comp = np.full(X.shape, 20.0)
+    comp[at(300)] = 55.0
+    comp[at(-300)] = np.nan
+    out, _, still = F.merge_near(walk, comp, np.zeros(X.shape, bool), grid, 2000, unsure)
+    assert out[at(300)] == 55 and not still[at(300)]       # the tables win, even when slower
+    assert out[at(-300)] == 50 and still[at(-300)]         # nothing else: kept, still uncertain
+    assert out[at(2500)] == 20 and not still[at(2500)]     # beyond 2 km: the tables alone
+
+
+def test_patches_survive_the_wire_and_the_crop():
+    t, grid, levels = _contours(KX)
+    mask = F.uncertain_patches(t, levels, grid, F.WALK_M_PER_MIN)
+    drawn, mask = F.fill_patches(t, mask)
+    m, filled, g, mask_c, drawn_c = F.crop(t, np.zeros(t.shape, bool), grid, 300, mask, drawn)
+    assert mask_c.sum() == mask.sum()
+    obj = F.encode_uncertain(mask_c, drawn_c)
+    back, back_drawn = F.decode_uncertain(obj, m.shape)
+    assert (back == mask_c).all()
+    assert np.allclose(back_drawn[back], np.round(drawn_c[mask_c] * 10) / 10)
+    assert F.encode_uncertain(np.zeros(m.shape, bool), drawn_c) is None
+    with pytest.raises(ValueError):
+        F.decode_uncertain({**obj, "drawn_b64": ""}, m.shape)
+
+
+def test_way_out_is_the_best_path_out():
+    t = np.array([[np.nan, np.nan, np.nan, np.nan, np.nan],
+                  [np.nan, 5.0, 6.0, 7.0, np.nan],
+                  [np.nan, 6.0, 40.0, 3.0, np.nan],
+                  [np.nan, 4.0, 6.0, 9.0, np.nan],
+                  [np.nan, np.nan, np.nan, np.nan, np.nan]])
+    w = F.way_out(t)
+    assert w[2, 2] == 6.0 and w[1, 1] == 5.0 and np.isposinf(w[0, 0])

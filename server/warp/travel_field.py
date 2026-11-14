@@ -10,6 +10,10 @@ of the warp page (#5, W-02). See server/warp/field.py for the grid and the wire 
             the faster of walking and the London tables within 2 km of the pin, and the
             tables alone beyond it. No Matrix call. London only, behind the licence flag.
 
+Walking, cycling and driving fields, and transit's walking near field, carry their uncertain
+patches (server/warp/field.py: ground the contours leave out, drawn small on the bent map);
+inside 2 km a patch's walking time never beats a time from the tables.
+
 Every field is cached for 5 minutes by (pin to 4 decimal places, mode, window, build), and
 concurrent identical requests share one build; a field built without its walking near field
 (a refused or failed Mapbox call) is not cached. A build whose licences are not cleared
@@ -44,10 +48,15 @@ WALK_METRES = ((333, 667, 1000, 1333), (2000, 2667, 3333, 4000))
 TIME_MINUTES = ((5, 10, 15, 20), (30, 40, 50, 60))
 NEAR_FIELD_M = 2000.0
 MARGIN_M = 1000.0
+# speed_m_per_min: how fast you get into an uncertain patch from its edge (field.py's walk-in
+# allowance): walking at the field's own 4 km/h, cycling 15 km/h, driving 24 km/h.
 MODES = {
-    "walking": {"profile": "walking", "unit": "meters", "values": WALK_METRES, "cell": 100.0},
-    "cycling": {"profile": "cycling", "unit": "minutes", "values": TIME_MINUTES, "cell": 200.0},
-    "driving": {"profile": "driving", "unit": "minutes", "values": TIME_MINUTES, "cell": 400.0},
+    "walking": {"profile": "walking", "unit": "meters", "values": WALK_METRES, "cell": 100.0,
+                "speed_m_per_min": F.WALK_M_PER_MIN},
+    "cycling": {"profile": "cycling", "unit": "minutes", "values": TIME_MINUTES, "cell": 200.0,
+                "speed_m_per_min": 250.0},
+    "driving": {"profile": "driving", "unit": "minutes", "values": TIME_MINUTES, "cell": 400.0,
+                "speed_m_per_min": 400.0},
 }
 MAPBOX_LIMIT_MINUTES = 60
 TABLES_LIMIT_MINUTES = 180
@@ -178,8 +187,9 @@ class TravelFieldService:
         grid = F.Grid.covering(spec["cell"], *F.regions_box(regions, MARGIN_M))
         minutes = F.contour_field(regions, grid)
         filled = np.zeros(minutes.shape, dtype=bool)
-        minutes, filled, grid = F.crop(minutes, filled, grid, MARGIN_M)
-        return {**grid.header(), "minutes_b64": F.encode(minutes, filled)}
+        unsure, drawn = _patches(minutes, regions, grid, spec["speed_m_per_min"])
+        minutes, filled, grid, unsure, drawn = F.crop(minutes, filled, grid, MARGIN_M, unsure, drawn)
+        return _body(grid, minutes, filled, unsure, drawn)
 
     @staticmethod
     def _transit_field(features: list[dict], frame: F.LocalFrame, data, grid: F.Grid,
@@ -188,9 +198,11 @@ class TravelFieldService:
         if features:
             regions = F.contour_regions(features, frame, _to_minutes("meters"))
             walk = F.contour_field(regions, grid)
+            walk_unsure, _ = _patches(walk, regions, grid, MODES["walking"]["speed_m_per_min"], fill=False)
         else:
             walk = np.full(comp.shape, np.nan)
-        minutes, filled = F.merge_near(walk, comp, filled, grid, NEAR_FIELD_M)
+            walk_unsure = np.zeros(comp.shape, dtype=bool)
+        minutes, filled, unsure = F.merge_near(walk, comp, filled, grid, NEAR_FIELD_M, walk_unsure)
         if smooth:
             # After the merge, and only where the tables won: walking times stay as they are.
             from_tables = np.isfinite(minutes) & (minutes == comp)
@@ -198,9 +210,30 @@ class TravelFieldService:
         oj, oi = grid.origin_index()
         minutes[oj, oi] = 0.0
         filled[oj, oi] = False
-        minutes, filled, grid = F.crop(minutes, filled, grid, MARGIN_M)
-        return {**grid.header(), "minutes_b64": F.encode(minutes, filled),
-                "stations": _stations(data, row, frame, grid)}
+        unsure[oj, oi] = False
+        # Drawn from the merged field: a patch's rim may be the tables' times.
+        drawn, unsure = F.fill_patches(minutes, unsure)
+        minutes, filled, grid, unsure, drawn = F.crop(minutes, filled, grid, MARGIN_M, unsure, drawn)
+        return {**_body(grid, minutes, filled, unsure, drawn), "stations": _stations(data, row, frame, grid)}
+
+
+def _patches(minutes: np.ndarray, regions, grid: F.Grid, speed: float, fill: bool = True):
+    """Uncertain patches of a field built from contours, and their drawn minutes (field.py)."""
+    t0 = time.monotonic()
+    unsure = F.uncertain_patches(minutes, [m for m, _ in regions], grid, speed)
+    drawn = np.full(minutes.shape, np.nan)
+    if fill:
+        drawn, unsure = F.fill_patches(minutes, unsure)
+    log.debug("  uncertain patches  nodes=%d  %.0fms", int(unsure.sum()), (time.monotonic() - t0) * 1000)
+    return unsure, drawn
+
+
+def _body(grid: F.Grid, minutes: np.ndarray, filled: np.ndarray, unsure: np.ndarray, drawn: np.ndarray) -> dict:
+    body = {**grid.header(), "minutes_b64": F.encode(minutes, filled)}
+    patches = F.encode_uncertain(unsure, drawn)
+    if patches:
+        body["uncertain"] = patches
+    return body
 
 
 def _stations(data, row: np.ndarray, frame: F.LocalFrame, grid: F.Grid) -> list[dict]:

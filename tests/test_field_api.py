@@ -256,3 +256,69 @@ def test_only_walking_replies_are_kept_raw(mapbox, client):
     assert kept == {"walking"}
     assert client.post(FIELD, json={"longitude": -0.1, "latitude": 51.5, "mode": "cycling"}).status_code == 200
     assert mapbox.count("isochrone") == 4                   # the cycling field itself was cached
+
+
+# ── Uncertain patches (King's Cross's platforms) ─────────────────────
+PLATFORMS = (-150, -450, 150, -150)        # local metres around the pin (y south)
+
+
+def _platform_isochrones(request: httpx.Request) -> httpx.Response:
+    """The mock's circles, with the platforms cut out of every contour but the last."""
+    from conftest import circle_isochrones
+    lon, lat = map(float, request.url.path.rsplit("/", 1)[-1].split(","))
+    params = request.url.params
+    if "contours_meters" in params:
+        values, metric, last, metres = [int(m) for m in params["contours_meters"].split(",")], "distance", 4000, 1.0
+    else:
+        values, metric, last, metres = [int(m) for m in params["contours_minutes"].split(",")], "time", 60, 0.004 * 111_320
+    reply = circle_isochrones(lon, lat, values, metric)
+    frame = F.LocalFrame(lon, lat)
+    x0, y0, x1, y1 = PLATFORMS
+    hole = [[float(v) for v in frame.from_local(x, y)] for x, y in ((x0, y0), (x0, y1), (x1, y1), (x1, y0), (x0, y0))]
+    for f, v in zip(reply["features"], values):
+        if v != last and v * metres > 600:
+            f["geometry"]["coordinates"].append(hole)
+    return httpx.Response(200, json=reply)
+
+
+def _patches(body):
+    shape = (body["ny"], body["nx"])
+    mask, drawn = F.decode_uncertain(body.get("uncertain"), shape)
+    minutes, _ = F.decode(body["minutes_b64"], shape)
+    js, is_ = np.nonzero(mask)
+    xs = body["x0"] + is_ * body["cell"]
+    ys = body["y0"] + js * body["cell"]
+    return mask, drawn, minutes, xs, ys
+
+
+@pytest.mark.parametrize("mode", ["walking", "cycling", "driving"])
+def test_the_platforms_come_back_as_an_uncertain_patch(mapbox, client, mode):
+    mapbox.behaviour["isochrone"] = _platform_isochrones
+    body = client.post(FIELD, json={"longitude": -0.1233, "latitude": 51.5308, "mode": mode}).json()
+    assert mapbox.count("isochrone") == 2 and mapbox.count("matrix") == 0
+    mask, drawn, minutes, xs, ys = _patches(body)
+    assert mask.any()
+    x0, y0, x1, y1 = PLATFORMS
+    assert ((xs >= x0) & (xs <= x1) & (ys >= y0) & (ys <= y1)).all()   # only the platforms
+    assert (minutes[mask] > 45).all()                    # the provider's estimate, kept
+    assert (drawn[mask] < 15).all()                      # drawn between the ground around them
+
+
+def test_without_patches_there_is_no_key(mapbox, client):
+    body = client.post(FIELD, json={"longitude": -0.12, "latitude": 51.5, "mode": "walking"}).json()
+    assert "uncertain" not in body
+
+
+def test_transit_never_lets_a_patch_walk_beat_the_tables(mapbox, transit_client):
+    mapbox.behaviour["isochrone"] = _platform_isochrones
+    pin = {"longitude": A[0], "latitude": A[1]}
+    walk = transit_client.post(FIELD, json={**pin, "mode": "walking"}).json()
+    body = transit_client.post(FIELD, json={**pin, "mode": "transit", "window": "wd08"}).json()
+    assert mapbox.count("isochrone") == 2 and mapbox.count("matrix") == 0
+    wmask, _, wmin, wxs, wys = _patches(walk)
+    assert wmask.any()
+    mask, _, minutes, _, _ = _patches(body)
+    for x, y, t in zip(wxs, wys, wmin[wmask]):
+        j, i = round((y - body["y0"]) / body["cell"]), round((x - body["x0"]) / body["cell"])
+        # Either the tables' own time (never the patch's 50 minutes) or the walk, still uncertain.
+        assert (minutes[j, i] < t and not mask[j, i]) or (mask[j, i] and minutes[j, i] == pytest.approx(t, abs=0.1))

@@ -60,5 +60,5 @@ test("tables expire the day after valid_until, in London", () => {
   assert.equal(V.expired("2026-12-12", new Date("2026-12-12T23:30:00Z")), false);   // GMT: still the 12th
   assert.equal(V.expired("2026-12-12", new Date("2026-12-13T00:30:00Z")), true);
   assert.equal(V.expired(null), false);
-  assert.ok(Math.abs(V.refineEps(8.4) - 0.5 / 16.8) < 1e-12);
+  assert.ok(Math.abs(V.refineEps(8.4) - 0.5 / (8.4 * 2)) < 1e-12);      // half a pixel one level in
 });

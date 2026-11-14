@@ -28,7 +28,10 @@ import { polarDirection } from "./warp.js";
 
 export const MAX_DEPTH = 4;
 
-export function makeEdgeTest(field, maxMinutes, eps, angles = null) {
+// `far` (layout units): beyond this radius the tolerance grows with it, eps × radius / far. The
+// outer rings of a view framed closer in (squash's ground scale) are seen whole only zoomed out,
+// where the same error is that much smaller on screen. The test still reads only the edge's ends.
+export function makeEdgeTest(field, maxMinutes, eps, angles = null, { far = Infinity } = {}) {
   const t = (x, y) => {
     const v = sampleField(field, x, y);
     return v >= 0 && v < BEYOND && v <= maxMinutes ? v : NaN;
@@ -41,9 +44,10 @@ export function makeEdgeTest(field, maxMinutes, eps, angles = null) {
       const mx = (ax + bx) / 2, my = (ay + by) / 2;
       const tm = t(mx, my);
       if (!(tm >= 0)) return false;
-      if (!dir) return Math.abs(tm - (ta + tb) / 2) > eps;
+      const e = tm > far ? (eps * tm) / far : eps;
+      if (!dir) return Math.abs(tm - (ta + tb) / 2) > e;
       const [dax, day] = dir(ax, ay, ta), [dbx, dby] = dir(bx, by, tb), [dmx, dmy] = dir(mx, my, tm);
-      return Math.hypot(dmx * tm - (dax * ta + dbx * tb) / 2, dmy * tm - (day * ta + dby * tb) / 2) > eps;
+      return Math.hypot(dmx * tm - (dax * ta + dbx * tb) / 2, dmy * tm - (day * ta + dby * tb) / 2) > e;
     },
   };
 }

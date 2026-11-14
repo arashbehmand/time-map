@@ -190,11 +190,27 @@ each pocket folds over its station. Squash is on the bent map behind `?layouts=1
   stations, show by their colour. No single ring per level can split "within" from "beyond"
   in a field with pockets: these rings leave 26–77% of the places within 30 or 45 minutes
   outside them; rings through the last such place would let in 21–61% slower places.
-- **The view** reaches out to where 99% of the places within the chosen time are drawn (82 at
-  Baker Street for 45 minutes), so nothing within it fades away.
+- **Rings spaced by ground reached.** Inside 15 minutes the map is drawn as it is (radius =
+  minutes). Beyond, the area inside a ring grows with the ground drawn within it, at the
+  middle's own ground per area, so the space between two rings is the ground they add: a wide
+  band means many more places. Walking at one speed comes out unchanged (its ground grows as
+  the square of the minutes). Public transport reaches far more ground by 45 minutes, so at
+  Baker Street the 45 ring sits about 9 times further out than the 15 ring. `?ringscale=minutes`
+  shows the rings spaced by minutes instead.
+- **The view** opens on where places two thirds of the way out are typically drawn (the 30
+  ring for 45 minutes), may zoom in two steps (the mesh is refined to half a pixel one step in,
+  a pixel two in) and out as far as wanted. Places within the chosen time are all on the map
+  (to the 99th percentile), and the refinement tolerance grows beyond the framed ring, where the
+  map is only seen whole zoomed out. The colour bar gives each band the length of the ground it
+  adds, on both views.
 - **Both workers build it** from the field (the scene's and the band layer's, side by side),
-  so the page never stalls on it. At Baker Street, switching to squash takes 0.72–0.85 s and
-  a new pin while bent 0.91–1.02 s (1.2 s each before, with a 73 ms stall on the page).
+  so the page never stalls on it; the tap index is built just after the band layer is sent. At
+  Baker Street, switching to squash takes 1.0–1.4 s and a new pin while bent 1.05–1.35 s (fold:
+  0.65–0.7 s); taps answer in under 10 ms.
+- **Tried and dropped for the ring spacing:** area in proportion to ground everywhere (the
+  15-minute middle shrank to a dot and streets streaked outward), halfway between that and
+  minutes (no better), and spacing each ring so places keep their shape (the rings grew out of
+  control).
 
 | Origin, weekday 08–09 | Fold, 45-minute ring | Squash, 45-minute ring | Squash, whole view |
 |---|---|---|---|

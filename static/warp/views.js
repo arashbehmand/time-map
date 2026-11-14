@@ -43,11 +43,13 @@ export const FADE_MS = 300;       // the ordinary map dissolves into the mesh be
 export const RING_FROM_U = 0.9;   // the exact rings appear over the last tenth of the morph
 export const BAND_OPACITY = 0.38;
 
-// The mesh is refined to half a pixel at the largest px-per-minute it is drawn at. The bent
-// view is framed at k (px per minute) and may zoom in one level more (k × 2), no further.
-export const BENT_ZOOM_IN = 1;
+// The bent view is framed at k (px per minute) and may zoom in two levels more (k × 4), no
+// further. The mesh is refined to half a pixel one level in (k × 2): a pixel at the deepest
+// zoom. Refining for two levels quadrupled the work on central London (and filled the budget).
+export const BENT_ZOOM_IN = 2;
+export const REFINE_ZOOM_IN = 1;
 export function refineEps(kFit) {
-  return 0.5 / (kFit * 2 ** BENT_ZOOM_IN);
+  return 0.5 / (kFit * 2 ** REFINE_ZOOM_IN);
 }
 
 // The day after `validUntil` (YYYY-MM-DD), in London, the tables are expired.

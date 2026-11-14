@@ -12,6 +12,8 @@
 // sheetIndex(field, warp, {maxMinutes}) does the same over the field's own cells (two
 // triangles each; cells with a corner unknown, past the ring or filled in are left out).
 const BUCKET = 0.5;
+// Bucket keys as numbers (strings made the index the slowest part of building the bent view).
+const bkey = (bx, by) => (bx + 32768) * 65536 + (by + 32768);
 
 export function meshSheetIndex({ pos, minutes, index }, warp, { merge = 300 } = {}) {
   const n = pos.length / 2;
@@ -31,7 +33,7 @@ export function meshSheetIndex({ pos, minutes, index }, warp, { merge = 300 } = 
     const bx0 = Math.floor(Math.min(tx[a], tx[b], tx[c]) / BUCKET), bx1 = Math.floor(Math.max(tx[a], tx[b], tx[c]) / BUCKET);
     const by0 = Math.floor(Math.min(ty[a], ty[b], ty[c]) / BUCKET), by1 = Math.floor(Math.max(ty[a], ty[b], ty[c]) / BUCKET);
     for (let bx = bx0; bx <= bx1; bx++) for (let by = by0; by <= by1; by++) {
-      const key = `${bx},${by}`;
+      const key = bkey(bx, by);
       let list = buckets.get(key);
       if (!list) buckets.set(key, (list = []));
       list.push(id);
@@ -45,7 +47,7 @@ export function meshSheetIndex({ pos, minutes, index }, warp, { merge = 300 } = 
     const b0 = Math.floor((lx - r) / BUCKET), b1 = Math.floor((lx + r) / BUCKET);
     const c0 = Math.floor((ly - r) / BUCKET), c1 = Math.floor((ly + r) / BUCKET);
     for (let bx = b0; bx <= b1; bx++) for (let by = c0; by <= c1; by++) {
-      for (const id of buckets.get(`${bx},${by}`) || []) {
+      for (const id of buckets.get(bkey(bx, by)) || []) {
         if (seen.has(id)) continue;
         seen.add(id);
         const ia = tri[3 * id], ib = tri[3 * id + 1], ic = tri[3 * id + 2];

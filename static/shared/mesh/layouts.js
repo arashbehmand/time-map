@@ -21,8 +21,10 @@
 //                        NaN breaks where a direction has no such place on the map.
 //   squashReach(field, R, maxMinutes)   how far out squash draws the places within maxMinutes
 //                        (the 99th percentile of R over them), so the view can reach that far.
-//   squashLayout(field, maxMinutes, opts)   R, its reach and the polar warp spec over R: what
-//                        the page and both workers build from the same field.
+//   squashLayout(field, maxMinutes, opts)   R, its reach, the radius to frame on and the polar
+//                        warp spec over R: what the page and both workers build from the same
+//                        field. With `scale: "ground"` (groundScale) the rings are spaced by the
+//                        ground reached instead of the minutes.
 import { BEYOND, createField, sampleField } from "./field.js";
 
 const WALK_M_PER_MIN = 4000 / 60;
@@ -132,8 +134,44 @@ export function bentRings(f, warp, levels, { bearings = 720, step = 25, smooth =
   });
 }
 
-export function squashLayout(f, maxMinutes, { minSlope, angles = null } = {}) {
-  const R = squashField(f, minSlope > 0 ? { minSlope } : {});
-  const reach = squashReach(f, R, maxMinutes);
-  return { R, reach, spec: { kind: "polar", field: R, maxMinutes: reach, angles } };
+// Ring radius by ground reached (`scale: "ground"`, the warp page's default): radius = R inside
+// `inner` minutes, so the middle is drawn exactly as it is; beyond, the area inside a ring grows
+// with the ground drawn within it, at the inner disc's own ground per area: inner × √(A(R) ÷
+// A(inner)). Each band's area is then the ground it adds. Where ground grows as the square of
+// the minutes (walking at one speed), this is R itself: round rings, nothing changed.
+export function groundScale(R, inner = 15) {
+  const ts = [];
+  for (let k = 0; k < R.minutes.length; k++) {
+    const t = R.minutes[k];
+    if (known(t) && !(R.filled && R.filled[k])) ts.push(t);
+  }
+  ts.sort((a, b) => a - b);
+  const count = (t) => { let lo = 0, hi = ts.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] <= t) lo = m + 1; else hi = m; } return lo; };
+  const a0 = Math.max(1, count(inner));
+  return (t) => (t <= inner ? t : inner * Math.sqrt(count(t) / a0));
+}
+
+// `frame`: the radius the view is framed on: the reach for `scale: "minutes"`; with the ground
+// scale, where places two thirds of maxMinutes away are drawn (the outer rings sit far out:
+// zoom out for them).
+export function squashLayout(f, maxMinutes, { minSlope, angles = null, scale = "minutes" } = {}) {
+  let R = squashField(f, minSlope > 0 ? { minSlope } : {});
+  let reach = squashReach(f, R, maxMinutes), frame = reach;
+  if (scale === "ground") {
+    const g = groundScale(R);
+    const m = new Float32Array(R.minutes.length);
+    for (let k = 0; k < m.length; k++) m[k] = known(R.minutes[k]) ? g(R.minutes[k]) : R.minutes[k];
+    R = createField({ ...R, minutes: m });
+    if (f.filled) R.filled = f.filled;
+    reach = g(reach);
+    // Framed on where places two thirds of the way out are typically drawn (pockets push that
+    // ring out beyond g(T) in many directions).
+    const T = Math.round((2 * maxMinutes) / 3), at = [];
+    for (let k = 0; k < m.length; k++) {
+      if (Math.abs(f.minutes[k] - T) <= 0.5 && !(f.filled && f.filled[k]) && known(m[k])) at.push(m[k]);
+    }
+    at.sort((a, b) => a - b);
+    frame = Math.min(reach, at.length ? at[at.length >> 1] : g(T));
+  }
+  return { R, reach, frame, spec: { kind: "polar", field: R, maxMinutes: reach, angles } };
 }

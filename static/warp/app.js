@@ -212,12 +212,31 @@ function showBands(key, fc) {
   map.getSource("bands").setData(fc);
 }
 
+// The colour bar: each band as long as the ground it adds (its area on the normal map), so the
+// bar shows how much more you reach in each step, not just the minutes.
 function buildBandLegend(lv) {
   const el = $("band-legend");
+  const f = S.active && S.active.field;
+  const ground = new Float64Array(lv.length);
+  if (f) {
+    for (let k = 0; k < f.minutes.length; k++) {
+      const t = f.minutes[k];
+      if (!(t >= 0 && t <= lv[lv.length - 1]) || (f.filled && f.filled[k])) continue;
+      let b = 0;
+      while (lv[b] < t) b++;
+      ground[b]++;
+    }
+  }
+  const total = ground.reduce((a, b) => a + b, 0);
+  let lastLabel = -Infinity, at = 0;
   el.replaceChildren(...lv.map((m, i) => {
     const s = document.createElement("span");
     s.style.background = bandColor(i, lv.length);
-    if (m % 15 === 0 || i === lv.length - 1) s.dataset.label = `${m}`;
+    const share = total ? ground[i] / total : 1 / lv.length;
+    s.style.flex = `${Math.max(share, 0.004)} 1 0`;
+    at += share;
+    // Majors only, and none crowding the one before (the first bands can be thin).
+    if ((m % 15 === 0 || i === lv.length - 1) && at - lastLabel > 0.08) { s.dataset.label = `${m}`; lastLabel = at; }
     return s;
   }));
 }
@@ -245,7 +264,8 @@ function foldSpec(entry) {
   if (spread > 0) spec.angles = angularSpread(entry.field, S.outer, { spread });
   return spec;
 }
-const squashOpts = () => ({ minSlope: Number(Q.get("squashslope")) > 0 ? Number(Q.get("squashslope")) / 1000 : 0 });
+const squashOpts = () => ({ minSlope: Number(Q.get("squashslope")) > 0 ? Number(Q.get("squashslope")) / 1000 : 0,
+                             scale: Q.get("ringscale") === "minutes" ? "minutes" : "ground" });
 
 // What the worker needs (plain arrays; it rebuilds the field and the warp).
 function plainField(f) {
@@ -357,7 +377,7 @@ function installMesh(p, whole) {
     const R = createField({ origin: f.origin, cell: f.cell, nx: f.nx, ny: f.ny, x0: f.x0, y0: f.y0, minutes: L.R });
     p.spec = { ...p.spec, field: R, maxMinutes: L.reach };
     p.warp = createWarp(p.spec);
-    p.kRef *= p.outer / L.reach;
+    p.kRef *= p.outer / L.frame;
     p.squashed = true;
   }
   r.setWarp(p.spec);

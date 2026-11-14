@@ -130,7 +130,7 @@ function warpFrom(spec) {
 // The field the mesh is refined against (refine.js): sent with every scene, back-end B too.
 function refineFrom(spec) {
   if (!spec) return null;
-  return { field: fieldFrom(spec.field), maxMinutes: spec.maxMinutes, eps: spec.eps, maxDepth: spec.maxDepth,
+  return { field: fieldFrom(spec.field), maxMinutes: spec.maxMinutes, eps: spec.eps, maxDepth: spec.maxDepth, far: spec.far,
            angles: spec.angles || null };
 }
 
@@ -158,8 +158,8 @@ async function buildScene(msg) {
   // band-layer worker builds it, and refined to the same half pixel at its wider framing.
   if (msg.layout === "squash" && msg.refine) {
     const sq = squashLayout(createField(msg.refine.field), msg.refine.maxMinutes, { ...msg.squash, angles: msg.refine.angles || null });
-    const eps = msg.refine.eps * (sq.reach / msg.refine.maxMinutes);
-    msg = { ...msg, refine: { ...msg.refine, field: sq.R, maxMinutes: sq.reach, eps },
+    const eps = msg.refine.eps * (sq.frame / msg.refine.maxMinutes);
+    msg = { ...msg, refine: { ...msg.refine, field: sq.R, maxMinutes: sq.reach, eps, far: sq.frame },
             warp: msg.warp ? { ...msg.warp, field: sq.R, maxMinutes: sq.reach } : null };
   }
   const warp = warpFrom(msg.warp);
@@ -262,6 +262,8 @@ function fieldMessage(msg) {
       self.postMessage(sheets.result.message, sheets.result.copy());
       return;
     }
+    const ms = {}, tick = (k, t0) => { ms[k] = Math.round(now() - t0); return now(); };
+    let t0 = now();
     const f = fieldOf(msg.field);
     const angles = msg.angles || null;
     // Squash (layouts.js) bends by its own field, out to its own reach, and draws bent rings;
@@ -269,19 +271,23 @@ function fieldMessage(msg) {
     // band minutes are always the field's own.
     const sq = msg.layout === "squash" ? squashLayout(f, msg.maxMinutes, { ...msg.squash, angles }) : null;
     const bendBy = sq ? sq.R : f, reach = sq ? sq.reach : msg.maxMinutes;
-    const eps = msg.eps * (reach / msg.maxMinutes);
+    const frame = sq ? sq.frame : msg.maxMinutes;
+    const eps = msg.eps * (frame / msg.maxMinutes);
     const warp = createWarp({ kind: "polar", field: bendBy, maxMinutes: reach, angles });
+    t0 = tick("squash", t0);
     const m = bandMesh(f, msg.box);
     const n = m.pos.length / 2;
     const r = refineFills({ pos: m.pos, index: m.index, style: new Float32Array(n), zoom: new Uint8Array(n) },
-      makeEdgeTest(bendBy, reach, eps, angles), { maxDepth: MAX_DEPTH });
+      makeEdgeTest(bendBy, reach, eps, angles, { far: sq ? sq.frame : Infinity }), { maxDepth: MAX_DEPTH });
+    t0 = tick("bandMesh", t0);
     const minutes = new Float32Array(r.pos.length / 2);
     minutes.set(m.minutes);
     for (let v = n; v < minutes.length; v++) minutes[v] = sampleField(f, r.pos[2 * v], r.pos[2 * v + 1]);
     const mesh = { pos: r.pos, minutes, index: r.index };
     const targets = msg.cpu ? targetsFor(warp, mesh.pos) : null;
-    const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped, reach,
-                      lines: sq ? bentRings(f, warp, msg.levels) : null };
+    const lines = sq ? bentRings(f, warp, msg.levels) : null;
+    t0 = tick("rings", t0);
+    const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped, reach, frame, lines, ms };
     // The index keeps pos and minutes, so the page gets copies.
     const copy = () => {
       const out = { pos: mesh.pos.slice(), minutes: mesh.minutes.slice(), index: mesh.index.slice(), targets: targets ? targets.slice() : null,
@@ -289,8 +295,11 @@ function fieldMessage(msg) {
       Object.assign(message, out);
       return [out.pos.buffer, out.minutes.buffer, out.index.buffer, ...(out.targets ? [out.targets.buffer] : []), ...(out.R ? [out.R.buffer] : [])];
     };
-    sheets = { key: msg.key, index: meshSheetIndex(mesh, warp), result: { message, copy } };
+    // The band layer goes first; the overlap index (only needed by a tap) is built right after,
+    // and a tap that comes in meanwhile waits for it in the worker's queue.
+    sheets = { key: msg.key, index: null, mesh, warp, result: { message, copy } };
     self.postMessage(message, copy());
+    sheets.index = meshSheetIndex(mesh, warp);
   } else {
     const hits = sheets && sheets.key === msg.key ? sheets.index.query(msg.lx, msg.ly, msg.r) : null;
     self.postMessage({ type: "sheets-result", id: msg.id, key: msg.key, hits });

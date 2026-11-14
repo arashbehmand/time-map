@@ -76,3 +76,26 @@ test("squash's rings: one closed bent circle per level, every point that many mi
   assert.ok(east < 25, `east radius ${east}`);
   assert.ok(Math.abs(sampleField(field, 20 * WALK, 0) - 20) < 0.5);
 });
+
+test("the ground scale keeps the middle as it is, and walking at one speed unchanged", () => {
+  // Walking only: ground grows as the square of the minutes, so the scale is the identity.
+  const plain = fieldFromFunction({ origin, cell: 100, halfSize: 4000 }, (x, y) => Math.hypot(x, y) / WALK);
+  const a = squashLayout(plain, 45), b = squashLayout(plain, 45, { scale: "ground" });
+  let worst = 0;
+  for (let k = 0; k < plain.minutes.length; k++) {
+    if (plain.minutes[k] <= 45) worst = Math.max(worst, Math.abs(b.R.minutes[k] - a.R.minutes[k]));
+  }
+  assert.ok(worst < 1, `walking moved by ${worst} minutes`);
+  // With a pocket: inside 15 minutes nothing moves; beyond, the rings spread out by ground, and
+  // the view is framed on the 30-minute ring, not the outer edge.
+  const m = squashLayout(field, 45), g = squashLayout(field, 45, { scale: "ground" });
+  for (let k = 0; k < field.minutes.length; k++) {
+    if (m.R.minutes[k] >= 0 && m.R.minutes[k] <= 15) assert.equal(g.R.minutes[k], m.R.minutes[k]);
+  }
+  assert.ok(g.frame < g.reach && g.frame > 25, `frame ${g.frame}, reach ${g.reach}`);
+  for (let k = 1; k < g.R.minutes.length; k++) {
+    if (m.R.minutes[k] > 15 && m.R.minutes[k - 1] > 15 && m.R.minutes[k] > m.R.minutes[k - 1]) {
+      assert.ok(g.R.minutes[k] >= g.R.minutes[k - 1], "the order outward is kept");
+    }
+  }
+});

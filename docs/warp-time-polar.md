@@ -174,70 +174,76 @@ run: with `?polar=1` the overlap and the tap list are there to test. A fold-free
 ## Trial: squash, another layout for transit's pockets
 
 Around each station the minutes drop, then rise again as you walk away, so along a line out
-from the pin the time doesn't only grow. The fold draws every place at its own minutes, so
-each pocket folds over its station. Squash is on the bent map behind `?layouts=1`
-(`static/shared/mesh/layouts.js`); the default is still the fold.
+from the pin the time doesn't only grow. The fold (the issue's time-polar view) draws every
+place at its own minutes, so each pocket folds over its station. Squash gives up "distance =
+minutes" to stop that. It is on the bent map behind `?layouts=1` (`static/shared/mesh/layouts.js`);
+the default is still the fold, and transit's bend stays hidden. It is not the issue's view: if
+it is to ship for transit, #5 needs the owner to accept it in place of "distance = minutes".
 
-- **The bend.** Along each line out from the pin, a place sits at its own minutes while they
-  keep rising. Where they drop below the slowest place met so far (a pocket's shadow), the
-  distance keeps climbing at 3 minutes per km instead, until the minutes catch up. So places
-  never come back closer and nothing overlaps, and a field without pockets is drawn exactly
-  as the fold, with round rings (walking from King's Cross: round, but for a notch where the
-  railway lands block the way).
-- **The rings bend instead of the map overlapping.** Along each of 720 directions a ring
-  passes through the first place that many minutes away, so every point of it is exactly
-  that many minutes away and everything inside it is quicker. Quick spots further out, near
-  stations, show by their colour. No single ring per level can split "within" from "beyond"
-  in a field with pockets: these rings leave 26–77% of the places within 30 or 45 minutes
-  outside them; rings through the last such place would let in 21–61% slower places.
-- **Rings spaced by ground reached.** Inside 15 minutes the map is drawn as it is (radius =
-  minutes). Beyond, the area inside a ring grows with the ground drawn within it, at the
-  middle's own ground per area, so the space between two rings is the ground they add: a wide
-  band means many more places. Walking at one speed comes out unchanged (its ground grows as
-  the square of the minutes). Public transport reaches far more ground by 45 minutes, so at
-  Baker Street the 45 ring sits about 9 times further out than the 15 ring. `?ringscale=minutes`
-  shows the rings spaced by minutes instead.
-- **The view** opens on where places two thirds of the way out are typically drawn (the 30
-  ring for 45 minutes), may zoom in two steps (the mesh is refined to half a pixel one step in,
-  a pixel two in) and out as far as wanted. Places within the chosen time are all on the map
-  (to the 99th percentile), and the refinement tolerance grows beyond the framed ring, where the
-  map is only seen whole zoomed out. The colour bar gives each band the length of the ground it
-  adds, on both views.
-- **Both workers build it** from the field (the scene's and the band layer's, side by side),
-  so the page never stalls on it; the tap index is built just after the band layer is sent. At
-  Baker Street, switching to squash takes 1.0–1.4 s and a new pin while bent 1.05–1.35 s (fold:
-  0.65–0.7 s); taps answer in under 10 ms.
-- **Walled-off ground is cut down first.** A place slower than all the ground around it (a
-  station's platforms and tracks, a railway yard) is lowered to the way out around it, so it
-  implodes instead of pushing everything behind it outward. Walking from King's Cross, the
-  platforms 300 m north read 28–50 minutes against 10–12 for the streets beyond them, and
-  pushed the whole sector past the outer ring; cut, they sit in a small bump inside the 15
-  ring. With the cut, squash over the whole view at the five transit origins is 0.2–0.6%
-  folded at 1.6–2.7:1 (weekday 08–09, by reach), inside both of Direction 4's limits.
-- **Pulling every pocket in instead (`?squashmode=implode`)**: a place sits at the quickest time
-  at or beyond it, so stations keep their own minutes, but the ordinary streets between
-  stations get squeezed into spokes: 7.6–12.4% folded at 17–24:1. Kept as a trial, not used.
-- **Tried and dropped for the ring spacing:** area in proportion to ground everywhere (the
-  15-minute middle shrank to a dot and streets streaked outward), halfway between that and
-  minutes (no better), and spacing each ring so places keep their shape (the rings grew out of
-  control).
+- **The cut.** A place standing at least 5 minutes above the way out around it (a station's
+  platforms in a walking field, whose times the contour interpolation invents) is lowered to that
+  way out, so it doesn't push everything behind it outward. Slow streets between stations (most
+  of them under 3 minutes above their way out) keep their minutes; unknown holes and "beyond"
+  ground are never crossed or changed. Walking from King's Cross, the platforms read 28–50
+  minutes against 10–12 for the streets beyond them and blew the north sector past the outer
+  ring; cut, they sit in a small bump inside the 15 ring. A layout filter only: colours,
+  labels and taps keep each place's own minutes.
+- **The bend.** Along each line out from the pin, a place sits at its own (cut) minutes while
+  they keep rising; where they drop below the slowest place met so far (a pocket's shadow), the
+  distance keeps climbing at 3 minutes per km until the minutes catch up. Unknown ground is
+  stepped over, not restarted from. A field without pockets is drawn exactly as the fold.
+- **Rings spaced by places reached.** Inside 15 minutes the radius is the minutes. Beyond, it
+  grows with the number of places within each time (the true minutes, as the colour bar counts
+  them), at the middle's own places per area, so a wide band means many more places. Walking at
+  one speed comes out unchanged. `?ringscale=minutes` spaces the rings by minutes instead.
+- **The rings bend.** Along each of 720 directions a ring passes through the first place that
+  many minutes away (true minutes, stepping over unknown ground and the cut patches), drawn where
+  squash puts it, with no smoothing. Every vertex is a place exactly that many minutes away, and
+  every place nearer the pin along that direction is quicker except the cut patches. Quicker
+  places beyond a ring (near stations) and the cut patches inside one show by their colour; the
+  page's note says so.
+- **The view** opens on where places two thirds of the way out are typically drawn, may zoom in
+  two steps (refined to half a pixel one step in, a pixel two in; beyond the framed ring the
+  tolerance grows to at most two pixels at the deepest zoom), and covers the places within the
+  chosen time to the 99th percentile (about 1% are past its edge).
+- **Both workers build it** from the same field, filled-node flags included, so the map, bands,
+  rings, labels and taps share one layout.
 
-| Origin, weekday 08–09 | Fold, 45-minute ring | Squash, 45-minute ring | Squash, whole view |
-|---|---|---|---|
-| Baker Street | 52.0%, 5.5:1 | 1.0%, 3.4:1 | 1.1%, 2.6:1 |
-| Wembley Park | 43.5%, 4.6:1 | 0.9%, 4.1:1 | 1.6%, 3.4:1 |
-| Canary Wharf | 57.2%, 5.7:1 | 1.5%, 3.6:1 | 1.3%, 2.5:1 |
-| Heathrow | 36.4%, 5.3:1 | 0.2%, 5.6:1 | 0.9%, 4.6:1 |
-| Croydon | 43.9%, 6.3:1 | 1.5%, 3.6:1 | 1.5%, 3.4:1 |
+**Measured on what a reader reads** (code at 3c4a2f6 + e54f1ad; transit, weekday 08–09, by
+reach, T = 45 minutes; `diagnostics.layoutChecks`). These are shares of the places within 45
+minutes (true minutes, filled ground left out), drawn wherever the layout puts them. They are
+not Direction 4's numbers: that rule measures the fold's 45-minute disc, which squash doesn't
+have.
 
-Folded share, then median stretch (limits 10% and 3:1). A gentler climb in the pockets puts
-more places at their own minutes (up to 27% within 45 minutes, against 6–14% at 3 min/km), but
-squeezes the pockets: at 1 min/km the stretch is 8–12:1 and 3–5% folds. An earlier version
-that climbed everywhere, not just in pockets, bent the rings along fast lines with no pockets.
-A third layout, islands (each pocket cut out as a small map on its ring), passed both checks
-but drew the islands as specks, and was dropped.
+| Origin | Fold: overlap, stretch | Squash: overlap, stretch | Squash: outside the 45 ring | Squash: slower inside it | Squash: off the view |
+|---|---|---|---|---|---|
+| Baker Street | 56.4%, 5.6:1 | 1.4%, 3.7:1 | 36.4% | 1.0% | 1.0% |
+| Wembley Park | 48.5%, 4.6:1 | 1.3%, 3.8:1 | 20.1% | 1.0% | 1.0% |
+| Canary Wharf | 64.1%, 5.7:1 | 1.4%, 3.5:1 | 29.3% | 0.9% | 0.9% |
+| Heathrow | 60.6%, 5.3:1 | 0.7%, 4.7:1 | 73.3% | 6.0% | 0.9% |
+| Croydon | 49.5%, 6.3:1 | 2.2%, 4.0:1 | 57.2% | 0.7% | 1.1% |
+
+- **Overlap** is the share of their drawn area covered twice or more, whatever the orientation.
+  The fold's rings are exact (nothing within 45 outside its ring, nothing slower inside), but it
+  overlaps itself over half its area. Squash hardly overlaps; its stretch is lower but over 3:1
+  at all five origins; and 20–73% of the places within 45 minutes are drawn beyond the 45 ring.
+  So squash's rings show the shape of the main reach, not "everything you can get to in 45
+  minutes".
+- **The renderer on squash** (lab, `?layout=squash`, real tiles, back-end B): G1 ≤ 0.004 px, G2
+  pass, G3 ≤ 0.061 px over 1,000 cells against squash's own radius, G4 99.9–100% within 1 px,
+  G5 pass, at all five origins.
+- **Timing** at Baker Street, warm tiles: switching to squash 1.41 s, a new pin while bent 1.42–
+  1.47 s (fold: 0.69–0.74 s); the squash layout itself 140–210 ms per field in each worker.
+- **Tried and dropped:** islands (each pocket cut out as a small map on its ring: specks);
+  pulling every pocket in (stations at their own minutes, but the streets between them
+  squeezed into spokes: 7.6–12.4% folded at 17–24:1); area in proportion to ground everywhere,
+  halfway between that and minutes, and spacing each ring so places keep their shape (worse or
+  unstable). Earlier figures in this section, measured over the whole view before the cut's
+  threshold and the shared field, are withdrawn.
 
 ## Done when
+
+Every row is about the shipped path: the normal map, and the fold where the map bends.
 
 | Done when | Result |
 |---|---|
@@ -247,7 +253,7 @@ but drew the islands as specks, and was dropped.
 | No Matrix calls; at most two isochrone requests per new origin | **Met, live and in the tests.** Live usage counter: a new transit pin +2 isochrone, 0 Matrix; walking and another window at that pin +0. Concurrent walk and transit requests share the calls in flight (`tests/test_field_api.py`) |
 | After a pan, an update within 500 ms p95, no blocking overlay | **Met on desktop with real tiles.** 50 pans: next drawn frame p95 21 ms (normal map) and 22 ms (bent), 0 API requests. A new walking pin draws its bands in p50 583 ms (max 658), with nothing covering the map; while bent, the new pin's bent view arrives in p50 838 ms (max 911) |
 | Smooth on a mid-range phone, iOS Safari included | **Not measured** (owner) |
-| Direction 4 reported for all five origins, with a decision | **Met.** Table above: transit's bent view stays hidden |
+| Direction 4 reported for all five origins, with a decision | **Met, for the fold** (the issue's time-polar view): it fails everywhere, so transit's bent view stays hidden. Squash is measured separately above, not against Direction 4 |
 
 ### TfL journeys
 

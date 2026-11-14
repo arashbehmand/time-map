@@ -2344,5 +2344,228 @@
     10
    ]
   }
+ },
+ "squash_trial": {
+  "note": "code at 3c4a2f6 + e54f1ad; transit, weekday 08-09, by reach (spread 0.5), T = 45; shares of the places within T minutes (true minutes, filled ground left out), drawn where each layout puts them (static/shared/mesh/diagnostics.js layoutChecks). Not Direction 4's metric.",
+  "layout_checks": [
+   {
+    "origin": "baker-street",
+    "fold": {
+     "T": 45,
+     "cells": 6039,
+     "overlap": 0.564,
+     "stretch": 5.557,
+     "omitted": 0,
+     "outside": 0,
+     "slowInside": 0,
+     "direction4_folded": 0.52,
+     "direction4_stretch": 5.504
+    },
+    "squash": {
+     "T": 45,
+     "cells": 6039,
+     "overlap": 0.014,
+     "stretch": 3.657,
+     "omitted": 0.01,
+     "outside": 0.364,
+     "slowInside": 0.01,
+     "reach": 252.526,
+     "frame": 74.582,
+     "build_ms": 175
+    }
+   },
+   {
+    "origin": "wembley-park",
+    "fold": {
+     "T": 45,
+     "cells": 3905,
+     "overlap": 0.485,
+     "stretch": 4.608,
+     "omitted": 0,
+     "outside": 0,
+     "slowInside": 0,
+     "direction4_folded": 0.435,
+     "direction4_stretch": 4.579
+    },
+    "squash": {
+     "T": 45,
+     "cells": 3905,
+     "overlap": 0.013,
+     "stretch": 3.821,
+     "omitted": 0.01,
+     "outside": 0.201,
+     "slowInside": 0.01,
+     "reach": 208.839,
+     "frame": 73.378,
+     "build_ms": 160
+    }
+   },
+   {
+    "origin": "canary-wharf",
+    "fold": {
+     "T": 45,
+     "cells": 6257,
+     "overlap": 0.641,
+     "stretch": 5.734,
+     "omitted": 0,
+     "outside": 0,
+     "slowInside": 0,
+     "direction4_folded": 0.572,
+     "direction4_stretch": 5.678
+    },
+    "squash": {
+     "T": 45,
+     "cells": 6257,
+     "overlap": 0.014,
+     "stretch": 3.532,
+     "omitted": 0.009,
+     "outside": 0.293,
+     "slowInside": 0.009,
+     "reach": 278.614,
+     "frame": 103.259,
+     "build_ms": 138
+    }
+   },
+   {
+    "origin": "heathrow",
+    "fold": {
+     "T": 45,
+     "cells": 1701,
+     "overlap": 0.606,
+     "stretch": 5.295,
+     "omitted": 0,
+     "outside": 0,
+     "slowInside": 0,
+     "direction4_folded": 0.364,
+     "direction4_stretch": 5.316
+    },
+    "squash": {
+     "T": 45,
+     "cells": 1701,
+     "overlap": 0.007,
+     "stretch": 4.69,
+     "omitted": 0.009,
+     "outside": 0.733,
+     "slowInside": 0.06,
+     "reach": 697.617,
+     "frame": 240.462,
+     "build_ms": 163
+    }
+   },
+   {
+    "origin": "croydon",
+    "fold": {
+     "T": 45,
+     "cells": 4573,
+     "overlap": 0.495,
+     "stretch": 6.314,
+     "omitted": 0,
+     "outside": 0,
+     "slowInside": 0,
+     "direction4_folded": 0.439,
+     "direction4_stretch": 6.32
+    },
+    "squash": {
+     "T": 45,
+     "cells": 4573,
+     "overlap": 0.022,
+     "stretch": 3.996,
+     "omitted": 0.011,
+     "outside": 0.572,
+     "slowInside": 0.007,
+     "reach": 333.829,
+     "frame": 95.198,
+     "build_ms": 182
+    }
+   }
+  ],
+  "lab_gates_real_tiles_backend_b": {
+   "baker-street": {
+    "origin": "baker-street",
+    "G1maxPx": 0.0004,
+    "G2": true,
+    "G3maxPx": 0.061,
+    "G3drawn": 1000,
+    "G4phone": 1,
+    "G4desktop": 0.9993,
+    "G4pass": true,
+    "G5pass": true,
+    "G5failed": [],
+    "refined": 16232,
+    "skipped": 0,
+    "shaded": 4525432
+   },
+   "wembley-park": {
+    "origin": "wembley-park",
+    "G1maxPx": 0.0008,
+    "G2": true,
+    "G3maxPx": 0.061,
+    "G3drawn": 1000,
+    "G4phone": 1,
+    "G4desktop": 1,
+    "G4pass": true,
+    "G5pass": true,
+    "G5failed": [],
+    "refined": 47721,
+    "skipped": 0,
+    "shaded": 3231487
+   },
+   "canary-wharf": {
+    "origin": "canary-wharf",
+    "G1maxPx": 0.0008,
+    "G2": true,
+    "G3maxPx": 0.061,
+    "G3drawn": 1000,
+    "G4phone": 1,
+    "G4desktop": 0.9997,
+    "G4pass": true,
+    "G5pass": true,
+    "G5failed": [],
+    "refined": 30220,
+    "skipped": 0,
+    "shaded": 3699299
+   },
+   "heathrow": {
+    "origin": "heathrow",
+    "G1maxPx": 0.0036,
+    "G2": true,
+    "G3maxPx": 0.06,
+    "G3drawn": 1000,
+    "G4phone": 1,
+    "G4desktop": 0.9993,
+    "G4pass": true,
+    "G5pass": true,
+    "G5failed": [],
+    "refined": 54153,
+    "skipped": 0,
+    "shaded": 3509219
+   },
+   "croydon": {
+    "origin": "croydon",
+    "G1maxPx": 0.0013,
+    "G2": true,
+    "G3maxPx": 0.059,
+    "G3drawn": 1000,
+    "G4phone": 1,
+    "G4desktop": 1,
+    "G4pass": true,
+    "G5pass": true,
+    "G5failed": [],
+    "refined": 35554,
+    "skipped": 0,
+    "shaded": 4071337
+   }
+  },
+  "timing_baker_street_warm_ms": {
+   "switch_to_squash": 1410,
+   "new_pin_while_bent_squash": [
+    1419,
+    1472
+   ],
+   "switch_to_fold": [
+    688,
+    743
+   ]
+  }
  }
 }

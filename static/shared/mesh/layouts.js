@@ -23,14 +23,17 @@
 //                        nodes on the slower side), so nothing is smeared between islands.
 //                        Returns a target grid (field.js) for a "grid" warp.
 //
-//   timeLines(field, warp, levels)   the real minute lines (region boundaries, contours.js)
-//                        carried through a warp into layout units, as one polyline set per
-//                        level with NaN breaks where the warp doesn't place a point. Squash
-//                        draws these instead of rings: its distance from the pin isn't minutes.
+//   bentRings(field, warp, levels)   squash's rings: its distance from the pin isn't minutes, so
+//                        each ring is bent instead. Along each of `bearings` directions it
+//                        passes through the first place that many minutes away (on the
+//                        field's own minutes), drawn where the warp puts it: one closed,
+//                        deformed circle per level, every point of it exactly that many
+//                        minutes away, everything inside it quicker. Quick places further out
+//                        (near stations) show by their colour. Layout-unit polylines with
+//                        NaN breaks where a direction has no such place on the map.
 //   squashReach(field, R, maxMinutes)   how far out squash draws the places within maxMinutes
 //                        (the 99th percentile of R over them), so the view can reach that far.
-import { regionRings } from "./contours.js";
-import { BEYOND, createField, createTargetGrid, GRID_NO_DATA } from "./field.js";
+import { BEYOND, createField, createTargetGrid, GRID_NO_DATA, sampleField } from "./field.js";
 
 const WALK_M_PER_MIN = 4000 / 60;
 
@@ -264,26 +267,48 @@ export function squashReach(f, R, maxMinutes, { share = 0.99, cap = 3 } = {}) {
   return Math.min(cap * maxMinutes, Math.max(maxMinutes, r[Math.min(r.length - 1, Math.floor(share * r.length))]));
 }
 
-// Loops shorter than `minLoop` layout minutes all round (a single grid node's pocket) are left
-// out: they are noise at a 100 m grid, and they clutter the outer lines.
-export function timeLines(f, warp, levels, { minStep = 0.1, minLoop = 1.5 } = {}) {
-  return levels.map((T) => {
-    const out = [];
-    for (const ring of regionRings(f, T)) {
-      const piece = [];
-      let lx = NaN, ly = NaN, open = false, length = 0;
-      for (const [x, y] of ring) {
-        const p = warp.target(x, y);
-        if (!p) { if (open) { piece.push(NaN, NaN); open = false; } continue; }
-        const d = open ? Math.hypot(p[0] - lx, p[1] - ly) : 0;
-        if (open && d < minStep) continue;
-        piece.push(p[0], p[1]);
-        length += d;
-        lx = p[0]; ly = p[1]; open = true;
+export function bentRings(f, warp, levels, { bearings = 720, step = 25, smooth = 2 } = {}) {
+  const lv = [...levels].sort((a, b) => a - b);
+  const rMax = Math.hypot(Math.max(-f.x0, f.x0 + (f.nx - 1) * f.cell), Math.max(-f.y0, f.y0 + (f.ny - 1) * f.cell));
+  // pts[level][bearing]: the layout point of the first place that many minutes away, or null.
+  const pts = lv.map(() => new Array(bearings).fill(null));
+  for (let b = 0; b < bearings; b++) {
+    const a = (2 * Math.PI * b) / bearings, c = Math.cos(a), s = Math.sin(a);
+    let next = 0, r0 = 0, t0 = 0;
+    for (let r = step; r <= rMax && next < lv.length; r += step) {
+      let t1 = sampleField(f, r * c, r * s);
+      if (t1 < 0) break;                              // off the map: no place further out here
+      if (t1 >= BEYOND) t1 = Infinity;                // no time within the tables' limit
+      while (next < lv.length && t1 >= lv[next]) {
+        const T = lv[next];
+        const rr = Number.isFinite(t1) && t1 > t0 ? r0 + ((T - t0) / (t1 - t0)) * (r - r0) : r;
+        pts[next][b] = warp.target(rr * c, rr * s);
+        next++;
       }
-      if (open) piece.push(NaN, NaN);
-      if (length >= minLoop) out.push(...piece);
+      r0 = r; t0 = t1;
     }
+  }
+  return lv.map((T, i) => {
+    const P = pts[i];
+    // A light median on the radius over neighbouring directions, so one ray that threads a
+    // fast corridor doesn't spike the ring.
+    const rad = P.map((p) => (p ? Math.hypot(p[0], p[1]) : NaN));
+    const out = [];
+    let first = null, open = false;
+    for (let b = 0; b <= bearings; b++) {
+      const k = b % bearings, p = P[k];
+      if (!p) { if (open) { out.push(NaN, NaN); open = false; } continue; }
+      const near = [];
+      for (let d = -smooth; d <= smooth; d++) { const v = rad[(k + d + bearings) % bearings]; if (!Number.isNaN(v)) near.push(v); }
+      near.sort((x, y) => x - y);
+      const r = near[near.length >> 1], s = r / Math.max(1e-9, rad[k]);
+      const q = [p[0] * s, p[1] * s];
+      if (b === bearings) { if (open && first) out.push(first[0], first[1]); break; }
+      if (!first && b === 0) first = q;
+      out.push(q[0], q[1]);
+      open = true;
+    }
+    if (open) out.push(NaN, NaN);
     return { minutes: T, xy: Float32Array.from(out) };
   });
 }

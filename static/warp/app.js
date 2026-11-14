@@ -540,8 +540,8 @@ function drawRings(cam, outer) {
   ctx.restore();
 }
 
-// Squash: the real minute lines, bent with the map (layouts.js timeLines), where the fold draws
-// rings. Each major line is labelled at its highest point on screen.
+// Squash: bent rings (layouts.js bentRings), where the fold draws circles. Each major ring is
+// labelled at its highest point on screen.
 function drawTimeLines(cam, lines, outer) {
   const a = Math.max(0, Math.min(1, (S.u - V.RING_FROM_U) / (1 - V.RING_FROM_U)));
   if (a <= 0) return;

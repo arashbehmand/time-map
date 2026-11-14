@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fieldFromFunction } from "../../static/shared/mesh/field.js";
 import { foldDiagnostics } from "../../static/shared/mesh/diagnostics.js";
-import { islandLayout, squashField, squashReach, timeLines } from "../../static/shared/mesh/layouts.js";
+import { bentRings, islandLayout, squashField, squashReach } from "../../static/shared/mesh/layouts.js";
 import { createWarp } from "../../static/shared/mesh/warp.js";
 import { sampleField } from "../../static/shared/mesh/field.js";
 
@@ -50,21 +50,27 @@ test("islands: the pin's ground is time-polar, the pocket an undistorted map on 
   assert.ok(foldDiagnostics({ kind: "grid", grid: L.grid, field, maxMinutes: 45 }).foldedShare < foldDiagnostics(fold).foldedShare);
 });
 
-test("squash's lines join places of one time, and its view reaches the places it pushes out", () => {
+test("squash's rings: one closed bent circle per level, every point that many minutes away", () => {
   const R = squashField(field);
   const reach = squashReach(field, R, 45);
   assert.ok(reach > 45, "the pocket's far side is drawn past 45");
   const warp = createWarp({ kind: "polar", field: R, maxMinutes: reach });
-  const [line] = timeLines(field, warp, [20]);
-  let n = 0, loops = 0;
-  for (let i = 0; i < line.xy.length; i += 2) {
-    if (Number.isNaN(line.xy[i])) { loops++; continue; }
-    // Back from layout units to a place: along its bearing, the squashed time is its radius.
-    const r = Math.hypot(line.xy[i], line.xy[i + 1]);
-    assert.ok(r >= 20 - 0.6, "a 20-minute place is drawn at least 20 out (squash never undercuts)");
-    n++;
+  const rings = bentRings(field, warp, [20, 10], { smooth: 0 });
+  assert.deepEqual(rings.map((r) => r.minutes), [10, 20]);
+  for (const { minutes, xy } of rings) {
+    const n = xy.length / 2;
+    assert.ok(Number.isNaN(xy[xy.length - 1]) && n === 720 + 2, "720 directions, closed, one piece");
+    assert.ok(Math.abs(xy[0] - xy[2 * 720]) < 1e-6 && Math.abs(xy[1] - xy[2 * 720 + 1]) < 1e-6);
+    let prev = null;
+    for (let i = 0; i < 720; i++) {
+      const ang = Math.atan2(xy[2 * i + 1], xy[2 * i]);
+      if (prev !== null) assert.ok(((ang - prev + 3 * Math.PI) % (2 * Math.PI)) - Math.PI > 0, "goes round the pin once");
+      prev = ang;
+      assert.ok(Math.hypot(xy[2 * i], xy[2 * i + 1]) >= minutes - 0.6, "squash never draws a place nearer than its minutes");
+    }
   }
-  assert.ok(n > 50);
-  assert.equal(loops, 2, "the main line and the pocket's own loop");
-  assert.ok(Math.abs(sampleField(field, 4000 + 10 * WALK, 0) - 20) < 0.5, "the pocket really holds 20-minute places");
+  // East, the 20-minute ring stops at the first 20-minute place: before the pocket, not past it.
+  const east = Math.hypot(rings[1].xy[0], rings[1].xy[1]);
+  assert.ok(east < 25, `east radius ${east}`);
+  assert.ok(Math.abs(sampleField(field, 20 * WALK, 0) - 20) < 0.5);
 });

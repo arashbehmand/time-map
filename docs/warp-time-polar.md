@@ -180,10 +180,14 @@ each pocket folds over its station. Two other layouts are on the bent map behind
 
 - **Squash.** A place's distance is the slowest time met so far along its direction from the
   pin, rising at least 3 minutes per km, so places never come back closer and nothing
-  overlaps. Distance stops being minutes, so the rings are replaced by the real minute lines,
-  bent with the map: each joins places exactly that many minutes away, and quick spots near
-  stations show as small loops beyond the main lines. The view reaches out to where 99% of
-  the places within the chosen time are drawn (82 at Baker Street for 45 minutes).
+  overlaps. Distance stops being minutes, so the rings bend: along each of 720 directions a
+  ring passes through the first place that many minutes away, so every point of it is exactly
+  that many minutes away and everything inside it is quicker. Quick spots further out, near
+  stations, show by their colour. The view reaches out to where 99% of the places within the
+  chosen time are drawn (82 at Baker Street for 45 minutes).
+  No single ring per level can split "within" from "beyond" in a field with pockets: at the
+  five origins these rings leave 26–77% of the places within 30 or 45 minutes outside them;
+  rings through the last such place instead would let in 21–61% slower places.
 - **Islands.** Each pocket is cut out and drawn as a small undistorted map on the ring of its
   station's time. It passes both checks, but at the size the rings allow the islands are
   specks, and most can't find a free place on their ring.

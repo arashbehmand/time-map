@@ -100,6 +100,12 @@ test("the hill cut: walled-off ground is lowered to the way round it, nothing el
   assert.equal(c.minutes[at(-1500, 0)], f.minutes[at(-1500, 0)], "a slow ridge open to the edge stays");
   assert.equal(c.minutes[at(400, -300)], NO_DATA, "the hole stays unknown");
   assert.equal(c.minutes[at(0, 2800)], BEYOND, "beyond stays beyond");
+  // Squash's rings step over the cut dome: north, the 15 ring is at the streets' 15 minutes
+  // (1 km), not at the dome's edge 150 m out.
+  const sq = squashLayout(f, 30);
+  const [ring] = bentRings(sq.ringSource, createWarp(sq.spec), [15]);
+  const north = 540;                                             // 720 bearings; y is south
+  assert.ok(Math.abs(ring.src[2 * north + 1] + 1000) < 60, `north at ${ring.src[2 * north + 1]} m`);
   for (let k = 0; k < f.minutes.length; k++) {
     if (f.minutes[k] >= 0 && f.minutes[k] < BEYOND) {
       assert.ok(c.minutes[k] <= f.minutes[k], "never raised");

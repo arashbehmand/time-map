@@ -26,12 +26,15 @@
 //                        puts it. Every vertex is a place exactly that many minutes away (no
 //                        smoothing), and every place nearer the pin along that direction is
 //                        quicker. Quicker places further out (near stations) sit beyond the ring.
-//                        `src` holds each vertex's place (local metres), for checking.
+//                        `src` holds each vertex's place (local metres), for checking. Squash
+//                        passes `ringSource`: the true minutes with the cut patches unknown, so
+//                        a ring steps over walled-off ground instead of spiking into it (those
+//                        patches sit inside a ring, in their own colour).
 //   squashLayout(field, maxMinutes, opts)   all of it: R, its reach, the radius to frame on,
 //                        the by-reach bearing table (built on R, the quantity the warp looks it
 //                        up with) and the polar warp spec. Both workers build it from the same
 //                        field, filled-node flags included.
-import { BEYOND, createField, sampleField } from "./field.js";
+import { BEYOND, createField, NO_DATA, sampleField } from "./field.js";
 import { angularSpread } from "./warp.js";
 
 const known = (t) => t >= 0 && t < BEYOND;
@@ -250,5 +253,8 @@ export function squashLayout(f, maxMinutes, { minSlope, spread = 0, scale = "min
     frame = Math.min(reach, at.length ? at[at.length >> 1] : g(T));
   }
   const angles = spread > 0 ? angularSpread(R, reach, { spread }) : null;
-  return { R, reach, frame, cut, spec: { kind: "polar", field: R, maxMinutes: reach, angles } };
+  const ringMinutes = Float32Array.from(f.minutes);
+  for (let k = 0; k < ringMinutes.length; k++) if (cut.minutes[k] !== f.minutes[k]) ringMinutes[k] = NO_DATA;
+  const ringSource = createField({ ...f, minutes: ringMinutes });
+  return { R, reach, frame, cut, ringSource, spec: { kind: "polar", field: R, maxMinutes: reach, angles } };
 }

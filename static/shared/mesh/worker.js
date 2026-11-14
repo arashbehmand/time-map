@@ -306,8 +306,9 @@ function buildLayers(msg) {
     for (let v = n; v < minutes.length; v++) minutes[v] = sampleField(f, r.pos[2 * v], r.pos[2 * v + 1]);
     const mesh = { pos: r.pos, minutes, index: r.index };
     const targets = msg.cpu ? targetsFor(warp, mesh.pos) : null;
-    // The rings through the first place that many minutes away on the true minutes.
-    const lines = sq ? bentRings(f, warp, msg.levels) : null;
+    // The rings through the first place that many minutes away on the true minutes, stepping
+    // over the cut (walled-off) patches.
+    const lines = sq ? bentRings(sq.ringSource, warp, msg.levels) : null;
     t0 = tick("rings", t0);
     const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped, reach, frame, lines, ms,
                       angles: sq ? sq.spec.angles : null };

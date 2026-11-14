@@ -506,7 +506,11 @@ def test_the_licence_flag_decides_the_archive_and_publishing(monkeypatch):
         assert build.licences_cleared() is False
         with pytest.raises(SystemExit, match="publish refused"):
             build.stage_publish(None, SimpleNamespace(confirm=True))
+    # Cleared, but the clause 3.3.2 notice not settled: still no release.
     monkeypatch.setattr(build, "sources", lambda: {"publication": {"licences_cleared": True}})
+    with pytest.raises(SystemExit, match="rsp_notice"):
+        build.stage_publish(None, SimpleNamespace(confirm=True))
+    monkeypatch.setattr(build, "sources", lambda: {"publication": {"licences_cleared": True, "rsp_notice": "none"}})
     with pytest.raises(SystemExit, match="--confirm"):
         build.stage_publish(None, SimpleNamespace(confirm=False))
 

@@ -141,6 +141,7 @@ function requestField({ frame = false, delay = 0 } = {}) {
     } catch (e) {
       if (e && e.code === "outside_transit_area") { toWalking(T.LONDON_ONLY); return; }
       if (e && e.code === "transit_unavailable") { toWalking(T.NO_TRANSIT); return; }
+      if (e && e.code === "no_transit_access") { S.notice = friendly(e); dirty = true; }
       setStatus(friendly(e), "error");
       if (e && e.name !== "AbortError") clearField();
       return;
@@ -152,7 +153,9 @@ function requestField({ frame = false, delay = 0 } = {}) {
       clearField();
       return;
     }
-    remember(snap.key, entry);
+    // A transit field built without its walking near field (a Mapbox hiccup) is shown but not
+    // kept: the next visit asks again, as the server's cache does.
+    if (!(entry.json.notes || []).includes("near_field_missing")) remember(snap.key, entry);
     S.timings.push({ kind: "field", ms: performance.now() - t0 });
     if (snap.key === currentKey()) activate(snap.key, entry);
   }, delay);
@@ -266,7 +269,7 @@ function foldSpec(entry) {
 }
 const squashOpts = () => ({ minSlope: Number(Q.get("squashslope")) > 0 ? Number(Q.get("squashslope")) / 1000 : 0,
                              scale: Q.get("ringscale") === "minutes" ? "minutes" : "ground",
-                             mode: Q.get("squashmode") === "implode" ? "implode" : "explode" });
+                             spread: V.DIRECTIONS[S.directions] });
 
 // What the worker needs (plain arrays; it rebuilds the field and the warp).
 function plainField(f) {
@@ -296,7 +299,7 @@ function prepareMesh({ retry = false } = {}) {
   S.pendingMesh = { key, gen, entry, layout: S.layout, spec, outer: S.outer, warp: createWarp(spec), frame: entry.frame,
                     kRef: fit.k, zRef: fit.zoom, requestedAt: performance.now(), retried: retry,
                     layers: prev ? prev.layers : null, scene: null };
-  const plain = plainField(entry.field), angles = spec.angles || null;
+  const plain = workerField(entry.field), angles = spec.angles || null;   // the same field to both workers
   // The two workers run side by side: the map's scene in one, the band layer (and squash's
   // own bend, which the scene worker also builds for itself) in the other.
   S.worker.postMessage({
@@ -323,6 +326,20 @@ function onWorker(e) {
   }
   if (msg.type === "bands-result") { showBands(msg.key, msg.fc); return; }
   const p = S.pendingMesh;
+  if (msg.type === "error" && msg.job === "bands") {
+    // The normal map's bands failed: say so, rather than leaving the last pin's bands up.
+    if (S.active && msg.key === `${S.active.key}|${levels().join(",")}`) {
+      const src = map && map.getSource("bands");
+      if (src) src.setData({ type: "FeatureCollection", features: [] });
+      setStatus(T.BANDS_FAILED, "error");
+    }
+    return;
+  }
+  if (msg.type === "error" && (msg.job === "sheets-query" || msg.job === "sheets-index")) {
+    const w = sheetWaiters.get(msg.id);
+    if (w) { sheetWaiters.delete(msg.id); w([]); }
+    return;
+  }
   if (msg.type === "error") {
     if (p && (msg.gen === p.gen || msg.key === p.key)) {
       S.pendingMesh = null;                 // so pressing Bend again asks again
@@ -363,7 +380,7 @@ function tryInstall(p, whole) {
   const missing = (p.scene.stats || {}).missing || 0;
   if (missing > 0 && !p.retried) {
     setStatus(T.TILES_MISSING, "busy");
-    setTimeout(() => { if (S.mesh && S.mesh.key === p.key && !S.pendingMesh) prepareMesh({ retry: true }); }, 5000);
+    setTimeout(() => { if (S.bent && S.mesh && S.mesh.key === p.key && !S.pendingMesh) prepareMesh({ retry: true }); }, 5000);
   } else if (statusEl.textContent === T.TILES_MISSING || statusEl.textContent === T.PREPARING) {
     setStatus(missing > 0 ? T.TILES_FAILED : "");
   }
@@ -376,7 +393,7 @@ function installMesh(p, whole) {
     // Squash's bend, as the field worker built it: the view is framed out to its reach.
     const f = p.entry.field;
     const R = createField({ origin: f.origin, cell: f.cell, nx: f.nx, ny: f.ny, x0: f.x0, y0: f.y0, minutes: L.R });
-    p.spec = { ...p.spec, field: R, maxMinutes: L.reach };
+    p.spec = { ...p.spec, field: R, maxMinutes: L.reach, angles: L.angles || null };
     p.warp = createWarp(p.spec);
     p.kRef *= p.outer / L.frame;
     p.squashed = true;
@@ -388,6 +405,7 @@ function installMesh(p, whole) {
   r.setScene(p.scene);
   S.mesh = { ...p };
   S.mesh.labels = labelsFor(S.mesh);
+  if (S.bent || S.u > 0) capZoom(S.mesh);   // a new view while bent: its own zoom limit
   if (whole && statusEl.textContent === T.PREPARING) setStatus("");
   dirty = true;
   if (whole) maybeStartBend();            // bend only once every tile is in
@@ -423,8 +441,8 @@ function setBent(on) {
 }
 
 // While the bent map covers it, the normal map's layers are hidden, so MapLibre fetches no
-// tiles for a map nobody sees; the bent view may zoom in one level past its framing, no more
-// (the mesh is refined for that, views.refineEps).
+// tiles for a map nobody sees; the bent view may zoom in two levels past its framing, no more
+// (views.BENT_ZOOM_IN; the mesh is refined for that, views.refineEps).
 let basemapShown = true;
 function showBasemap(on) {
   if (!map || basemapShown === on) return;
@@ -439,6 +457,19 @@ function flatNow() {
   if (map) map.setMaxZoom(null);
 }
 
+// The bent view's zoom limit, for the view drawn now. MapLibre jumps to a new maximum below the
+// current zoom, so the map eases down to it first.
+function capZoom(m) {
+  if (!map || !m) return;
+  const cap = m.zRef + V.BENT_ZOOM_IN;
+  if (map.getZoom() > cap + 1e-6) {
+    map.once("moveend", () => { if (S.mesh === m && (S.bent || S.u > 0)) map.setMaxZoom(cap); });
+    map.easeTo({ zoom: cap, duration: prefersReducedMotion() ? 0 : V.FADE_MS });
+  } else {
+    map.setMaxZoom(cap);
+  }
+}
+
 // Bend once the scene for the field drawn now is ready.
 function maybeStartBend() {
   if (!S.bent || S.dragging || !S.mesh || !S.active || S.mesh.entry.key !== S.active.key) return;
@@ -451,7 +482,7 @@ function maybeStartBend() {
 function animateTo(target) {
   S.anim = { to: target, start: performance.now(), u0: S.u, f0: S.fade, reduce: prefersReducedMotion() };
   if (target === 0) showBasemap(true);
-  else if (S.mesh && map) map.setMaxZoom(S.mesh.zRef + V.BENT_ZOOM_IN);
+  else capZoom(S.mesh);
 }
 
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
@@ -651,12 +682,13 @@ function loop(now) {
 function updateLegend() {
   const bentNow = S.u > 0.5;
   const outer = bentNow && S.mesh ? S.mesh.outer : S.outer;
+  const layout = bentNow && S.mesh ? S.mesh.layout : S.layout;    // the view drawn, not the next
   setText($("from"), T.fromLine(S.origin));
   setText($("sentence"), S.dragging ? "Drop the pin where you want to start."
-    : T.sentence(S.mode, outer, ringPlan(outer), bentNow, S.layout));
+    : T.sentence(S.mode, outer, ringPlan(outer), bentNow, layout));
   const limits = S.origin.example ? T.EXAMPLE_NOTE : T.limits(S.active && S.active.json);
   setText($("limits"), S.notice ? `${S.notice} ${limits}` : limits);
-  setText($("beyond"), T.beyond(outer, S.layout));
+  setText($("beyond"), T.beyond(outer, layout));
   show($("beyond"), S.bent || bentNow);    // on the normal map, further places are shown, uncoloured
   const offered = !!bendOffered();
   show(toggleBtn, offered);
@@ -695,12 +727,26 @@ function showTapList(heading, items, note = "") {
 }
 function hideTapList() { show($("tap-list"), false); S.tapMark = null; S.tapSeq++; dirty = true; }
 
+// Always answers: [] after SHEETS_WAIT_MS, or when the worker fails.
+const SHEETS_WAIT_MS = 3000;
 function querySheets(key, lx, ly, r) {
   const id = ++sheetsSeq;
   return new Promise((resolve) => {
     sheetWaiters.set(id, resolve);
+    setTimeout(() => { if (sheetWaiters.delete(id)) resolve([]); }, SHEETS_WAIT_MS);
     S.fieldWorker.postMessage({ type: "sheets-query", id, key, lx, ly, r });
   });
+}
+
+// A worker that fails to load or dies says so as an event, not a message: nothing it was asked
+// will come back, so the page stops waiting.
+function onWorkerFailure() {
+  for (const [id, w] of sheetWaiters) { sheetWaiters.delete(id); w([]); }
+  const p = S.pendingMesh;
+  if (p) {
+    S.pendingMesh = null;
+    if (!S.mesh || S.mesh.key !== p.key) { if (S.bent) setBent(false); setStatus(T.BEND_FAILED, "error"); }
+  }
 }
 
 // Name a place under the finger: a station or place label within 400 m, else where it is.
@@ -747,7 +793,8 @@ async function tapAt(px, py) {
         items.push(`${l.text}: ${T.minutesText(t)}`);
       }
     }
-    showTapList(T.tapHeading(items), items, items.length > 1 ? T.OVERLAP_NOTE : "");
+    const note = items.length > 1 ? (m.layout === "squash" ? T.SQUASH_TAP_NOTE : T.OVERLAP_NOTE) : "";
+    showTapList(T.tapHeading(items), items, note);
     return items;
   }
   if (!S.active) return [];
@@ -956,6 +1003,11 @@ function initControls() {
   $("window-select").addEventListener("change", (e) => { S.window = e.target.value; S.notice = ""; requestField(); });
   // A tab left open: check the tables again when it comes back (they may have expired).
   document.addEventListener("visibilitychange", () => { if (!document.hidden) loadTransitStatus(); });
+  // And while it stays open and in view: the tables can expire at midnight in London.
+  setInterval(() => {
+    const j = S.active && S.active.json;
+    if (!document.hidden && j && j.mode === "transit" && V.expired(j.valid_until)) loadTransitStatus();
+  }, 10 * 60_000);
   toggleBtn.addEventListener("click", () => setBent(!S.bent));
   $("tap-close").addEventListener("click", hideTapList);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("tap-list").hidden) hideTapList(); });
@@ -967,12 +1019,15 @@ function initControls() {
   buildOuterChips();
 }
 
+let statusRetryMs = 5000;
 async function loadTransitStatus() {
+  const later = () => { setTimeout(loadTransitStatus, statusRetryMs); statusRetryMs = Math.min(5 * 60_000, statusRetryMs * 3); };
   try {
     const resp = await fetch("/api/transit/status");
-    if (!resp.ok) return;
+    if (!resp.ok) { later(); return; }
     S.transit = await resp.json();
-  } catch { return; }
+  } catch { later(); return; }
+  statusRetryMs = 5000;
   if (S.transit.loading) { setTimeout(loadTransitStatus, 3000); return; }
   if (!S.transit.available || V.expired(S.transit.valid_until)) {
     show($("transit-chip"), false);
@@ -1078,6 +1133,10 @@ function initRenderer() {
     onRestored: () => { S.mesh = null; S.pendingMesh = null; setStatus(""); dirty = true; },
   });
   S.renderer = r;
+  // The field worker contours the normal map's bands, which every device draws.
+  S.fieldWorker = new Worker("/shared/mesh/worker.js", { type: "module" });
+  S.fieldWorker.onmessage = onWorker;
+  S.fieldWorker.onerror = S.fieldWorker.onmessageerror = onWorkerFailure;
   if (!r.supported) {
     document.body.classList.add("no-bend");
     setStatus(T.NO_BEND, "error");
@@ -1085,8 +1144,7 @@ function initRenderer() {
   }
   S.worker = new Worker("/shared/mesh/worker.js", { type: "module" });
   S.worker.onmessage = onWorker;
-  S.fieldWorker = new Worker("/shared/mesh/worker.js", { type: "module" });
-  S.fieldWorker.onmessage = onWorker;
+  S.worker.onerror = S.worker.onmessageerror = onWorkerFailure;
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────

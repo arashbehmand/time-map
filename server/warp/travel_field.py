@@ -67,13 +67,20 @@ def _to_minutes(unit: str):
     return (lambda v: v / F.WALK_M_PER_MIN) if unit == "meters" else float
 
 
+DEGRADED_TTL_S = 30
+
+
 class TravelFieldService:
     def __init__(self, isochrones: MapboxClient, transit: TransitHolder, slots: asyncio.Semaphore,
-                 cache: BoundedTTLCache):
+                 cache: BoundedTTLCache, degraded: BoundedTTLCache | None = None):
         self.isochrones = isochrones
         self.transit = transit
         self.slots = slots
         self.cache = cache
+        # A field built without its walking near field (a Mapbox refusal) is kept for a short
+        # while only: long enough that an outage doesn't send every request back to Mapbox,
+        # short enough that the next visitor after it gets the full field.
+        self.degraded = degraded if degraded is not None else BoundedTTLCache(maxsize=24, ttl=DEGRADED_TTL_S)
         self._inflight: dict[tuple, asyncio.Task] = {}
 
     async def get(self, lon: float, lat: float, mode: str, window: str | None, *, smooth: bool = True,
@@ -92,6 +99,8 @@ class TravelFieldService:
             smooth = True
         key = (lon, lat, mode, window, data.build if data else None, smooth)
         cached = self.cache.get(key)
+        if cached is None:
+            cached = self.degraded.get(key)
         if cached is not None:
             return cached
         task = self._inflight.get(key)
@@ -100,8 +109,7 @@ class TravelFieldService:
             self._inflight[key] = task
             task.add_done_callback(lambda _t, k=key: self._inflight.pop(k, None))
         result = await asyncio.shield(task)
-        if not result["notes"]:                 # never keep a degraded field for everyone
-            self.cache.set(key, result)
+        (self.degraded if result["notes"] else self.cache).set(key, result)
         return result
 
     async def _contours(self, lon: float, lat: float, mode: str) -> list[dict]:

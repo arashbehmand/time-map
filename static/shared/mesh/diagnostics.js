@@ -121,3 +121,87 @@ export function ringRadius(spec, { n = 1000, seed = 20261113 } = {}) {
   }
   return { n: got, maxError: worst };
 }
+
+// For a layout whose radius isn't minutes (squash), what a reader reads, measured on the places
+// within T minutes (true minutes; filled-in ground left out), drawn wherever the layout puts
+// them, against the layout's ring for T (layouts.js bentRings). A metric of its own, not
+// Direction 4's (whose denominator is the fold's T-minute disc):
+//   overlap     share of their drawn area covered twice or more, whatever the orientation
+//   stretch     median local stretch over their cells (as Direction 4's)
+//   omitted     share not placed at all (past the view's reach: faded onto its edge)
+//   outside     share drawn beyond the T ring
+//   slowInside  share of the places drawn inside the T ring that are over half a minute slower
+//               than T (the ring is drawn with a quarter-minute allowance)
+// `ring` is {xy} in layout units; places in a direction the ring doesn't cover are left out of
+// outside and slowInside.
+export function layoutChecks(spec, field, T, ring, { step = 2, raster = 800, bins = 720 } = {}) {
+  const warp = createWarp(spec);
+  const f = field, filled = f.filled || null;
+  const ok = (k) => f.minutes[k] >= 0 && f.minutes[k] <= T && !(filled && filled[k]);
+  // The ring's radius by drawn bearing.
+  const ringR = new Float64Array(bins).fill(NaN);
+  for (let i = 0; i + 1 < ring.xy.length; i += 2) {
+    const x = ring.xy[i], y = ring.xy[i + 1];
+    if (Number.isNaN(x)) continue;
+    const b = ((Math.round((Math.atan2(y, x) / (2 * Math.PI)) * bins) % bins) + bins) % bins;
+    ringR[b] = Number.isNaN(ringR[b]) ? Math.hypot(x, y) : Math.max(ringR[b], Math.hypot(x, y));
+  }
+  const max = spec.maxMinutes, px = (2 * max) / raster;
+  const cover = new Uint16Array(raster * raster);
+  const fill = (a, b, c) => {
+    const x0 = Math.max(0, Math.floor((Math.min(a[0], b[0], c[0]) + max) / px));
+    const x1 = Math.min(raster - 1, Math.ceil((Math.max(a[0], b[0], c[0]) + max) / px));
+    const y0 = Math.max(0, Math.floor((Math.min(a[1], b[1], c[1]) + max) / px));
+    const y1 = Math.min(raster - 1, Math.ceil((Math.max(a[1], b[1], c[1]) + max) / px));
+    const side = (p, q, x, y) => (q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0]);
+    for (let j = y0; j <= y1; j++) {
+      const y = -max + (j + 0.5) * px;
+      for (let i = x0; i <= x1; i++) {
+        const x = -max + (i + 0.5) * px;
+        const d1 = side(a, b, x, y), d2 = side(b, c, x, y), d3 = side(c, a, x, y);
+        if ((d1 >= 0 && d2 >= 0 && d3 >= 0) || (d1 <= 0 && d2 <= 0 && d3 <= 0)) cover[j * raster + i]++;
+      }
+    }
+  };
+  const h = f.cell * step, stretch = [];
+  let cells = 0, cellsOmitted = 0;
+  for (let j = 0; j + step < f.ny; j += step) {
+    for (let i = 0; i + step < f.nx; i += step) {
+      const k = j * f.nx + i;
+      if (!(ok(k) && ok(k + step) && ok(k + step * f.nx) && ok(k + step * f.nx + step))) continue;
+      const x = f.x0 + i * f.cell, y = f.y0 + j * f.cell;
+      const q = [warp.target(x, y), warp.target(x + h, y), warp.target(x + h, y + h), warp.target(x, y + h)];
+      cells++;
+      if (q.some((t) => !t)) { cellsOmitted++; continue; }
+      const jac = warp.jacobian(x + h / 2, y + h / 2, h / 2);
+      if (jac) stretch.push(jac.stretch);
+      fill(q[0], q[1], q[2]);
+      fill(q[0], q[2], q[3]);
+    }
+  }
+  let drawn = 0, twice = 0;
+  for (const c of cover) { if (c >= 1) drawn++; if (c >= 2) twice++; }
+  let within = 0, omitted = 0, judged = 0, outside = 0, inside = 0, slowInside = 0;
+  for (let j = 0; j < f.ny; j += step) {
+    for (let i = 0; i < f.nx; i += step) {
+      const k = j * f.nx + i, t = f.minutes[k];
+      if (!(t >= 0 && t < 1e4) || (filled && filled[k])) continue;
+      const p = warp.target(f.x0 + i * f.cell, f.y0 + j * f.cell);
+      if (t <= T) { within++; if (!p) { omitted++; continue; } }
+      if (!p) continue;
+      const b = ((Math.round((Math.atan2(p[1], p[0]) / (2 * Math.PI)) * bins) % bins) + bins) % bins;
+      if (Number.isNaN(ringR[b])) continue;
+      const isInside = Math.hypot(p[0], p[1]) <= ringR[b] + 0.25;
+      if (t <= T) { judged++; if (!isInside) outside++; }
+      if (isInside) { inside++; if (t > T + 0.5) slowInside++; }    // past the ring's own width
+    }
+  }
+  stretch.sort((a, b) => a - b);
+  return {
+    T, cells, overlap: drawn ? twice / drawn : 0,
+    stretch: stretch.length ? stretch[stretch.length >> 1] : null,
+    omitted: within ? omitted / within : 0,
+    outside: judged ? outside / judged : 0,
+    slowInside: inside ? slowInside / inside : 0,
+  };
+}

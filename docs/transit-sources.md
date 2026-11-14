@@ -126,9 +126,14 @@ What this changes:
 - **Build 2026-11-12** was written with the flag false. Its manifest can't be rewritten
   without rebuilding the tables, because the build code changed after they were made. The
   next monthly rebuild (due before its `valid_until`, 2026-12-12) writes a cleared manifest.
-- **If RSP's agreement asks for a clause 3.3.2 notice** in its own words, it goes in
-  the `[gb_transit]` `attribution` list in `transit/sources.toml`, so every build and the page
-  carry it.
+- **The clause 3.3.2 notice is not settled yet** (the owner was asked for RSP's wording).
+  `[publication] rsp_notice` in `transit/sources.toml` holds it, or "none" once RSP says none is
+  needed; while it is empty, `publish` refuses. If RSP asks for one, it also goes in the
+  `[gb_transit]` `attribution` list, so every build and the page carry it. Clause 3.1.5 (no
+  preferential view of one train company) is likewise the owner's to confirm under the
+  agreement they hold.
+- **Manifests record the date** the flag was set (`licences_cleared_on`, from
+  `[publication] cleared_on`).
 - **If either licence lapses,** set the flag back to false: the archive then says it is not
   licensed, `publish` refuses, and the app stops serving the next build.
 

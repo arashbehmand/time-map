@@ -87,3 +87,15 @@ test("the index reads any mesh: the band layer, refined, against a brute force",
     assert.equal(index.query(lx, ly, 0).length, want);
   }
 });
+
+test("hits near each other with different minutes stay separate (squash draws them together)", () => {
+  // Two triangles 150 m apart drawn on the same spot (as squash can draw a pocket's edge next to
+  // slower ground): 20 and 35 minutes. Within 300 m of each other, but not the same place.
+  const pos = Float32Array.from([0, 0, 100, 0, 0, 100, 150, 0, 250, 0, 150, 100]);
+  const minutes = Float32Array.from([20, 20, 20, 35, 35, 35]);
+  const index = Uint32Array.from([0, 1, 2, 3, 4, 5]);
+  const warp = { target: (x, y) => [(x >= 150 ? x - 150 : x) / 10, y / 10] };
+  const hits = meshSheetIndex({ pos, minutes, index }, warp).query(2, 2, 0.1);
+  assert.deepEqual(hits.map((h) => Math.round(h.minutes)).sort(), [20, 35]);
+  assert.equal(meshSheetIndex({ pos, minutes, index }, warp, { mergeMinutes: Infinity }).query(2, 2, 0.1).length, 1);
+});

@@ -15,7 +15,7 @@ export function spacingWords(plan) {
 }
 
 export function sentence(mode, outer, plan, bent, layout = "fold") {
-  if (bent && layout === "squash") return `Each bent ring runs through the nearest places that many minutes away in every direction, a ring ${spacingWords(plan)}. The space between two rings is the ground they add, so a wide band means many more places.`;
+  if (bent && layout === "squash") return `Each bent ring runs through the first place that many minutes away in each direction, a ring ${spacingWords(plan)}. The space between two rings grows with the places they add, so a wide band means many more places.`;
   if (bent) return `Distance from the pin now means travel time: a ring ${spacingWords(plan)}.`;
   return `The coloured bands show where you can ${VERBS[mode]} to within ${outer} minutes, a band ${spacingWords(plan)}.`;
 }
@@ -58,9 +58,11 @@ export const DIRECTION_NOTES = {
 
 export const LAYOUT_NOTES = {
   fold: "Fold: every place sits at its own minutes. Where a fast line makes far places as quick as nearer ones, the map overlaps itself.",
-  squash: "Squash: going outward, places never come back closer, so nothing overlaps. The middle is drawn as it is; further out, each band gets room for the ground it adds. Quick spots near stations, beyond a ring, show by their colour. Zoom out to see the outer rings.",
+  squash: "Squash: going outward, places almost never come back closer, so the map hardly overlaps. The middle is drawn as it is; further out, distance isn't minutes, and the rings bend to follow them. Colour is always each place's own time: many quicker places near stations are drawn beyond their ring, and a few much slower patches that are hard to get into (behind tracks, say) are drawn inside one. Zoom out to see the outer rings.",
 };
 
+export const SQUASH_TAP_NOTE = "These places are drawn close together; each has its own time.";
+export const BANDS_FAILED = "The travel-time bands couldn't be drawn. Move the pin to try again.";
 export const OVERLAP_NOTE = "Where the map overlaps itself, different places are the same number of minutes away in the same direction.";
 
 export function minutesText(m) {

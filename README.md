@@ -366,7 +366,11 @@ Deploy checklist (the app logs a warning at startup for each item it can detect)
 - `GEOCODER_USER_AGENT` with a contact address, as Nominatim's policy asks.
 - `TRANSIT_DIR` pointing at a build whose manifest says `licences_cleared: true` (the owner
   holds the rail and TfL licences, `docs/transit-sources.md`); build 2026-11-12 predates the
-  flag, so use the next monthly build. Never set `TRANSIT_ALLOW_UNCLEARED` on a public server.
+  flag, so use the next monthly build. Never set `TRANSIT_ALLOW_UNCLEARED` on a server anyone
+  else can reach: a tunnel or a proxy on the same machine that adds no forwarding header
+  makes every visitor look local.
+- The RSP clause 3.3.2 notice settled (`[publication] rsp_notice` in `transit/sources.toml`; until
+  then `transit.build publish` refuses), and shown with the transit credits if RSP asks for it.
 - Mapbox's terms for drawing Streets tiles with our own renderer (the bent map) confirmed
   (`docs/provider-terms.md`).
 - No CORS origin to configure: the API is same-origin only, so there is no allow-list.

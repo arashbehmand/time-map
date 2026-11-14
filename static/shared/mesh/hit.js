@@ -7,7 +7,10 @@
 // the same triangles the bands are drawn with. A vertex the warp doesn't place (unknown, past
 // the outer ring) drops its triangles. query(lx, ly, r) returns every triangle within r layout
 // units of the point, as source places, merged into sheets: hits whose sources are within
-// `merge` metres of each other are one sheet (the one nearest the finger is kept).
+// `merge` metres of each other and whose minutes differ by at most `mergeMinutes` are one sheet
+// (the one nearest the finger is kept). The minutes check matters where the layout's radius
+// isn't minutes (squash): two places under the finger can then be near each other and still
+// differ in time.
 //
 // sheetIndex(field, warp, {maxMinutes}) does the same over the field's own cells (two
 // triangles each; cells with a corner unknown, past the ring or filled in are left out).
@@ -15,7 +18,7 @@ const BUCKET = 0.5;
 // Bucket keys as numbers (strings made the index the slowest part of building the bent view).
 const bkey = (bx, by) => (bx + 32768) * 65536 + (by + 32768);
 
-export function meshSheetIndex({ pos, minutes, index }, warp, { merge = 300 } = {}) {
+export function meshSheetIndex({ pos, minutes, index }, warp, { merge = 300, mergeMinutes = 2 } = {}) {
   const n = pos.length / 2;
   const tx = new Float64Array(n), ty = new Float64Array(n), ok = new Uint8Array(n);
   for (let v = 0; v < n; v++) {
@@ -64,7 +67,7 @@ export function meshSheetIndex({ pos, minutes, index }, warp, { merge = 300 } = 
     hits.sort((p, q) => p.distance - q.distance || p.minutes - q.minutes);
     const sheets = [];
     for (const hit of hits) {
-      if (!sheets.some((s) => Math.hypot(s.x - hit.x, s.y - hit.y) <= merge)) sheets.push(hit);
+      if (!sheets.some((s) => Math.hypot(s.x - hit.x, s.y - hit.y) <= merge && Math.abs(s.minutes - hit.minutes) <= mergeMinutes)) sheets.push(hit);
     }
     return sheets;
   }

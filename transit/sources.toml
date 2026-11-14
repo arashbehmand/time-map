@@ -9,7 +9,7 @@ feed = "gtfs-rail-and-tfl.zip"
 auth = "none (GitHub release)"
 licence = "Rail Settlement Plan data licence (RDG); NRE Knowledgebase licence; Open Government Licence v3.0 (NaPTAN); TfL Transport Data Service terms"
 attribution = ["Powered by TfL Open Data", "Contains OS data (c) Crown copyright and database rights", "Geomni UK Map data (c) and database rights", "Contains public sector information licensed under the Open Government Licence v3.0", "Timetable data from Rail Delivery Group / Rail Settlement Plan"]
-may_publish_derived = "unknown: only RSP's licence template was read, not the agreement for the free timetable; the source timetable itself may never be passed on (clause 3.3.3)"
+may_publish_derived = "yes, under the owner's RSP agreement (confirmed 2026-11-13; [publication] below), with the clause 3.3.2 notice once settled; the source timetable itself may never be passed on (clause 3.3.3)"
 
 [bods]
 name = "Bus Open Data Service: London region GTFS (ITO World conversion)"
@@ -63,6 +63,11 @@ attribution = ["Powered by TfL Open Data"]
 # timetables are never published.
 [publication]
 licences_cleared = true
+cleared_on = "2026-11-13"
+# The notice RSP's clause 3.3.2 asks derived output to carry, in RSP's words, or "none" once RSP
+# has said none is needed. Empty: not settled, so `publish` refuses (serving the app is not
+# held back: the app shows the credits in the manifest).
+rsp_notice = ""
 
 # ── Lines that must be present with trips on both service dates ──────
 # Each sentinel matches routes by agency (regex on agency_name), route (regex on

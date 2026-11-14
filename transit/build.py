@@ -743,6 +743,7 @@ def stage_manifest(b: Build, args) -> None:
         b.read_json("network.json"), stages, feed_ends, attribution(), table_settings=built_with[0])
     m["tables_fingerprints"] = fps
     m["licences_cleared"] = licences_cleared()
+    m["licences_cleared_on"] = sources().get("publication", {}).get("cleared_on")
     manifest.write(b.out / "manifest.json", m)
     log.info("manifest written; valid until %s", m["valid_until"])
 
@@ -817,6 +818,10 @@ def stage_publish(b: Build, args) -> None:
         raise SystemExit("publish refused: sources.toml [publication] licences_cleared is false (the rail "
                          "agreement and TfL's derived-data terms have not been read, only RSP's "
                          "template; docs/transit-sources.md)")
+    if not str(sources().get("publication", {}).get("rsp_notice", "")).strip():
+        raise SystemExit("publish refused: sources.toml [publication] rsp_notice is empty (the notice "
+                         "RSP's clause 3.3.2 asks derived output to carry is not settled; "
+                         "docs/transit-sources.md)")
     if not args.confirm:
         raise SystemExit("publish needs --confirm: the licences in docs/transit-sources.md must allow "
                          "publishing derived tables, and the owner must agree")

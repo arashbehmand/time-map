@@ -23,9 +23,13 @@ FORWARDED = ("x-forwarded-for", "forwarded", "x-real-ip")
 
 def is_local(request: Request) -> bool:
     """The request comes from this machine and through no proxy: the only place a build whose
-    licences are not cleared may be served (TRANSIT_ALLOW_UNCLEARED)."""
+    licences are not cleared may be served (TRANSIT_ALLOW_UNCLEARED). A proxy or tunnel on the
+    same machine that adds none of these headers looks local, so the override never belongs on
+    a reachable server (README)."""
     host = request.client.host if request.client else ""
-    return host.startswith(LOOPBACK) and not any(h in request.headers for h in FORWARDED)
+    settings = getattr(request.app.state, "settings", None)
+    headers = (*FORWARDED, settings.client_ip_header) if settings else FORWARDED
+    return host.startswith(LOOPBACK) and not any(h in request.headers for h in headers)
 
 
 @router.post("/travel-time-field", dependencies=[per_ip("travel_time_field")])

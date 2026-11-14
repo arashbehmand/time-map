@@ -13,7 +13,7 @@ from server.cache import BoundedTTLCache
 from server.transit.provider import TransitHolder
 from server.warp import field as F
 from server.warp.mapbox_client import MapboxClient
-from server.warp.travel_field import TravelFieldService, default_window
+from server.warp.travel_field import DEGRADED_TTL_S, TravelFieldService, default_window
 
 FIELD = "/api/travel-time-field"
 
@@ -112,14 +112,18 @@ def test_without_tables_transit_is_unavailable(mapbox, client):
     assert mapbox.count() == 0
 
 
-def test_a_refused_near_field_still_gives_the_tables_and_is_not_kept(mapbox, transit_client):
+def test_a_refused_near_field_still_gives_the_tables_and_is_kept_only_briefly(mapbox, transit_client, clock):
     pin = {"longitude": A[0], "latitude": A[1], "mode": "transit", "window": "wd08"}
     mapbox.behaviour["isochrone"] = 429
     body = transit_client.post(FIELD, json=pin).json()
     assert body["sources"] == "tables" and body["notes"] == ["near_field_missing"]
+    calls = mapbox.count("isochrone")
+    again = transit_client.post(FIELD, json=pin).json()       # an outage: not asked again at once
+    assert again["notes"] == ["near_field_missing"] and mapbox.count("isochrone") == calls
     mapbox.behaviour.pop("isochrone")
-    again = transit_client.post(FIELD, json=pin).json()       # not served from the cache
-    assert again["sources"] == "mapbox+tables" and again["notes"] == []
+    clock.t += DEGRADED_TTL_S + 1
+    later = transit_client.post(FIELD, json=pin).json()       # then the full field
+    assert later["sources"] == "mapbox+tables" and later["notes"] == []
 
 
 def test_status_with_tables(transit_client):
@@ -217,6 +221,9 @@ def test_an_uncleared_build_is_served_to_this_machine_only(dev_app):
     # Through a proxy on this machine is not this machine.
     proxied = local.post(FIELD, json=pin, headers={"X-Forwarded-For": "203.0.113.9"})
     assert proxied.status_code == 503
+    # Nor through one that names the client with the deployment's own header.
+    dev_app.state.settings = dev_app.state.settings.with_(client_ip_header="cf-connecting-ip")
+    assert local.post(FIELD, json=pin, headers={"CF-Connecting-IP": "203.0.113.9"}).status_code == 503
 
 
 def test_inside_london_but_out_of_reach_is_its_own_answer(mapbox, transit_client):

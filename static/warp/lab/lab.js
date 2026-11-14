@@ -14,6 +14,7 @@ import { directionFour, ringRadius } from "../../shared/mesh/diagnostics.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "../../shared/mesh/labels.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "../../shared/mesh/pipeline.js";
 import { MAX_DEPTH } from "../../shared/mesh/refine.js";
+import { squashLayout } from "../../shared/mesh/layouts.js";
 import { createMeshRenderer } from "../../shared/mesh/renderer.js";
 import { maplibreStyle } from "../../shared/mesh/schema-streets-v8.js";
 import { angularSpread, createWarp, dotScale, targetsFor } from "../../shared/mesh/warp.js";
@@ -39,6 +40,7 @@ const OPT = {
   // direction the share of the circle it holds of the area reachable on each ring; the
   // default, 0.5, goes halfway.
   spread: Q.has("spread") ? Math.min(1, Math.max(0, Number(Q.get("spread")) || 0)) : 0.5,
+  layout: Q.get("layout") === "squash" ? "squash" : "fold",   // squash: the warp page's trial layout
   budget: Number(Q.get("budget")) || DEFAULT_BUDGET,
   mode: Q.get("mode") || "transit",
   window: Q.get("window") || "wd08",
@@ -188,8 +190,12 @@ function originById(id) {
 // switches when that scene arrives (activate), so nothing is drawn with mismatched origins.
 function setOrigin(id, { frame: reframe = true, clear = false } = {}) {
   const origin = originById(id);
-  const spec = makeWarpSpec(OPT.field, origin, S.network, { example: S.example, maxMinutes: OPT.max, real: S.real });
-  if (spec.kind === "polar" && OPT.spread > 0) spec.angles = angularSpread(spec.field, spec.maxMinutes ?? OPT.max, { spread: OPT.spread });
+  let spec = makeWarpSpec(OPT.field, origin, S.network, { example: S.example, maxMinutes: OPT.max, real: S.real });
+  if (spec.kind === "polar" && OPT.layout === "squash") {
+    // The page's squash (ground scale, by-reach table on R): the gates then check the renderer
+    // against squash's own radius, out to its reach.
+    spec = { ...squashLayout(spec.field, spec.maxMinutes ?? OPT.max, { spread: OPT.spread, scale: "ground" }).spec };
+  } else if (spec.kind === "polar" && OPT.spread > 0) spec.angles = angularSpread(spec.field, spec.maxMinutes ?? OPT.max, { spread: OPT.spread });
   const warp = createWarp(spec);
   const el = S.map.getContainer();
   const max = spec.maxMinutes ?? OPT.max;

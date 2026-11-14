@@ -265,7 +265,8 @@ function foldSpec(entry) {
   return spec;
 }
 const squashOpts = () => ({ minSlope: Number(Q.get("squashslope")) > 0 ? Number(Q.get("squashslope")) / 1000 : 0,
-                             scale: Q.get("ringscale") === "minutes" ? "minutes" : "ground" });
+                             scale: Q.get("ringscale") === "minutes" ? "minutes" : "ground",
+                             mode: Q.get("squashmode") === "implode" ? "implode" : "explode" });
 
 // What the worker needs (plain arrays; it rebuilds the field and the warp).
 function plainField(f) {

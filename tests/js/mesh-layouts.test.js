@@ -99,3 +99,27 @@ test("the ground scale keeps the middle as it is, and walking at one speed uncha
     }
   }
 });
+
+test("imploding: slow ground gives way, quick places keep their minutes, rings come out round", () => {
+  const sq = squashLayout(field, 45, { mode: "implode" });
+  const R = sq.R.minutes, t = field.minutes, nx = field.nx;
+  for (let k = 0; k < t.length; k++) if (t[k] >= 0) assert.ok(R[k] <= t[k] + 1e-4, "never further out than its minutes");
+  const j = Math.round(-field.y0 / field.cell), i0 = Math.round(-field.x0 / field.cell);
+  const at = (m) => j * nx + i0 + Math.round(m / field.cell);
+  assert.ok(Math.abs(R[at(4000)] - 10) < 1e-4, "the station stays at its 10 minutes");
+  assert.ok(R[at(3000)] < t[at(3000)] - 5, "the slow ground before it is pulled in");
+  for (let i = i0 + 1; i < nx; i++) assert.ok(R[j * nx + i] >= R[j * nx + i - 1] - 1e-4, "never back closer going out");
+  // A walled-off hill beside the pin (a station's tracks) implodes; nothing behind it moves.
+  const hill = fieldFromFunction({ origin, cell: 100, halfSize: 3000 },
+    (x, y) => Math.hypot(x, y) / WALK + (Math.hypot(x, y + 300) < 150 ? 40 : 0));
+  const h = squashLayout(hill, 30, { mode: "implode" }).R;
+  const north = (m) => Math.round((-m - hill.y0) / hill.cell) * hill.nx + Math.round(-hill.x0 / hill.cell);
+  assert.ok(h.minutes[north(300)] < 6, "the hill is drawn at the streets' minutes");
+  assert.ok(Math.abs(h.minutes[north(1500)] - hill.minutes[north(1500)]) < 1e-4, "behind it: its own minutes");
+  // Rings through the last place N minutes away: round where nothing quicker lies beyond.
+  const plain = fieldFromFunction({ origin, cell: 100, halfSize: 4000 }, (x, y) => Math.hypot(x, y) / WALK);
+  const p = squashLayout(plain, 45, { mode: "implode" });
+  for (const { minutes, xy } of bentRings(plain, createWarp(p.spec), [15, 30], { last: true })) {
+    for (let i = 0; i < 720; i++) assert.ok(Math.abs(Math.hypot(xy[2 * i], xy[2 * i + 1]) - minutes) < 0.05);
+  }
+});

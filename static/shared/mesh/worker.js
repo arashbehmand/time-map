@@ -285,7 +285,9 @@ function fieldMessage(msg) {
     for (let v = n; v < minutes.length; v++) minutes[v] = sampleField(f, r.pos[2 * v], r.pos[2 * v + 1]);
     const mesh = { pos: r.pos, minutes, index: r.index };
     const targets = msg.cpu ? targetsFor(warp, mesh.pos) : null;
-    const lines = sq ? bentRings(f, warp, msg.levels) : null;
+    // Exploding: through the first place N minutes away, round the cut hills. Imploding:
+    // through the last, so every place within N is inside the N ring.
+    const lines = sq ? bentRings(sq.cut, warp, msg.levels, { last: sq.implode }) : null;
     t0 = tick("rings", t0);
     const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped, reach, frame, lines, ms };
     // The index keeps pos and minutes, so the page gets copies.

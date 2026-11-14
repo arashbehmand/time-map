@@ -207,6 +207,16 @@ each pocket folds over its station. Squash is on the bent map behind `?layouts=1
   so the page never stalls on it; the tap index is built just after the band layer is sent. At
   Baker Street, switching to squash takes 1.0–1.4 s and a new pin while bent 1.05–1.35 s (fold:
   0.65–0.7 s); taps answer in under 10 ms.
+- **Walled-off ground is cut down first.** A place slower than all the ground around it (a
+  station's platforms and tracks, a railway yard) is lowered to the way out around it, so it
+  implodes instead of pushing everything behind it outward. Walking from King's Cross, the
+  platforms 300 m north read 28–50 minutes against 10–12 for the streets beyond them, and
+  pushed the whole sector past the outer ring; cut, they sit in a small bump inside the 15
+  ring. With the cut, squash over the whole view at the five transit origins is 0.2–0.6%
+  folded at 1.6–2.7:1 (weekday 08–09, by reach), inside both of Direction 4's limits.
+- **Pulling every pocket in instead (`?squashmode=implode`)**: a place sits at the quickest time
+  at or beyond it, so stations keep their own minutes, but the ordinary streets between
+  stations get squeezed into spokes: 7.6–12.4% folded at 17–24:1. Kept as a trial, not used.
 - **Tried and dropped for the ring spacing:** area in proportion to ground everywhere (the
   15-minute middle shrank to a dot and streets streaked outward), halfway between that and
   minutes (no better), and spacing each ring so places keep their shape (the rings grew out of

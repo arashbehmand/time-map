@@ -23,7 +23,7 @@ export const DEFAULT_DIRECTIONS = "reach";
 
 // How the bent map handles places that a fast line makes as quick as nearer ones (layouts.js).
 // A prototype: the choice shows with ?layouts=1 (or ?layout=…); the default stays "fold".
-export const LAYOUTS = ["fold", "squash", "islands"];
+export const LAYOUTS = ["fold", "squash"];
 export const DEFAULT_LAYOUT = "fold";
 
 export const WINDOWS = ["wd08", "wd13", "wd19", "sa13"];

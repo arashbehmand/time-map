@@ -171,40 +171,45 @@ passes either check.**
 run: with `?polar=1` the overlap and the tap list are there to test. A fold-free layout is
 #6's question, not W-02's.
 
-## Trial: two other layouts for transit's pockets
+## Trial: squash, another layout for transit's pockets
 
 Around each station the minutes drop, then rise again as you walk away, so along a line out
 from the pin the time doesn't only grow. The fold draws every place at its own minutes, so
-each pocket folds over its station. Two other layouts are on the bent map behind
-`?layouts=1` (`static/shared/mesh/layouts.js`); the default is still the fold.
+each pocket folds over its station. Squash is on the bent map behind `?layouts=1`
+(`static/shared/mesh/layouts.js`); the default is still the fold.
 
-- **Squash.** A place's distance is the slowest time met so far along its direction from the
-  pin, rising at least 3 minutes per km, so places never come back closer and nothing
-  overlaps. Distance stops being minutes, so the rings bend: along each of 720 directions a
-  ring passes through the first place that many minutes away, so every point of it is exactly
+- **The bend.** Along each line out from the pin, a place sits at its own minutes while they
+  keep rising. Where they drop below the slowest place met so far (a pocket's shadow), the
+  distance keeps climbing at 3 minutes per km instead, until the minutes catch up. So places
+  never come back closer and nothing overlaps, and a field without pockets is drawn exactly
+  as the fold, with round rings (walking from King's Cross: round, but for a notch where the
+  railway lands block the way).
+- **The rings bend instead of the map overlapping.** Along each of 720 directions a ring
+  passes through the first place that many minutes away, so every point of it is exactly
   that many minutes away and everything inside it is quicker. Quick spots further out, near
-  stations, show by their colour. The view reaches out to where 99% of the places within the
-  chosen time are drawn (82 at Baker Street for 45 minutes).
-  No single ring per level can split "within" from "beyond" in a field with pockets: at the
-  five origins these rings leave 26–77% of the places within 30 or 45 minutes outside them;
-  rings through the last such place instead would let in 21–61% slower places.
-- **Islands.** Each pocket is cut out and drawn as a small undistorted map on the ring of its
-  station's time. It passes both checks, but at the size the rings allow the islands are
-  specks, and most can't find a free place on their ring.
+  stations, show by their colour. No single ring per level can split "within" from "beyond"
+  in a field with pockets: these rings leave 26–77% of the places within 30 or 45 minutes
+  outside them; rings through the last such place would let in 21–61% slower places.
+- **The view** reaches out to where 99% of the places within the chosen time are drawn (82 at
+  Baker Street for 45 minutes), so nothing within it fades away.
+- **Both workers build it** from the field (the scene's and the band layer's, side by side),
+  so the page never stalls on it. At Baker Street, switching to squash takes 0.72–0.85 s and
+  a new pin while bent 0.91–1.02 s (1.2 s each before, with a 73 ms stall on the page).
 
-| Origin, weekday 08–09, 45 minutes | Fold | Squash | Islands |
+| Origin, weekday 08–09 | Fold, 45-minute ring | Squash, 45-minute ring | Squash, whole view |
 |---|---|---|---|
-| Baker Street | 52.0%, 5.5:1 | 0.9%, 3.3:1 | 2.6%, 1.0:1 |
-| Wembley Park | 43.5%, 4.6:1 | 0.8%, 4.0:1 | 2.2%, 1.0:1 |
-| Canary Wharf | 57.2%, 5.7:1 | 1.5%, 3.6:1 | 2.2%, 1.0:1 |
-| Heathrow | 36.4%, 5.3:1 | 0.2%, 5.5:1 | 0.2%, 1.0:1 |
-| Croydon | 43.9%, 6.3:1 | 1.4%, 3.6:1 | 3.4%, 1.0:1 |
+| Baker Street | 52.0%, 5.5:1 | 1.0%, 3.4:1 | 1.1%, 2.6:1 |
+| Wembley Park | 43.5%, 4.6:1 | 0.9%, 4.1:1 | 1.6%, 3.4:1 |
+| Canary Wharf | 57.2%, 5.7:1 | 1.5%, 3.6:1 | 1.3%, 2.5:1 |
+| Heathrow | 36.4%, 5.3:1 | 0.2%, 5.6:1 | 0.9%, 4.6:1 |
+| Croydon | 43.9%, 6.3:1 | 1.5%, 3.6:1 | 1.5%, 3.4:1 |
 
-Folded share, then median stretch (limits 10% and 3:1); squash measured before its view was
-widened. Why squash needed lines instead of rings: a circle at its 30 held only 13–56% of the
-places within 30 minutes, and only 0–59% of the places on it were 30 minutes away. Inside 45,
-21–37% of places sat at their own minutes; the median one was 2.4–5.1 minutes too far out.
-The 15 circle was right (70–100%), as walking dominates there.
+Folded share, then median stretch (limits 10% and 3:1). A gentler climb in the pockets puts
+more places at their own minutes (up to 27% within 45 minutes, against 6–14% at 3 min/km), but
+squeezes the pockets: at 1 min/km the stretch is 8–12:1 and 3–5% folds. An earlier version
+that climbed everywhere, not just in pockets, bent the rings along fast lines with no pockets.
+A third layout, islands (each pocket cut out as a small map on its ring), passed both checks
+but drew the islands as specks, and was dropped.
 
 ## Done when
 

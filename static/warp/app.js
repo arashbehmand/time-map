@@ -18,8 +18,8 @@ import { tileCover } from "/shared/mesh/cover.js";
 import { decodeField, knownMinutes, nodeAt } from "/shared/mesh/field.js";
 import { fitFor, reachBox } from "/shared/mesh/fit.js";
 import { cameraFromMap, localFrame } from "/shared/mesh/frame.js";
+import { createField } from "/shared/mesh/field.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "/shared/mesh/labels.js";
-import { islandLayout, squashField, squashReach } from "/shared/mesh/layouts.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "/shared/mesh/pipeline.js";
 import { createMeshRenderer } from "/shared/mesh/renderer.js";
 import { bandColor, bandRgb, ringPlan } from "/shared/mesh/rings.js";
@@ -40,7 +40,7 @@ const S = {
   window: V.defaultWindow(),
   outer: V.MODES.walking.defaultOuter,
   directions: V.DEFAULT_DIRECTIONS,
-  layout: V.DEFAULT_LAYOUT,      // fold | squash | islands (a trial: ?layouts=1)
+  layout: V.DEFAULT_LAYOUT,      // fold | squash (a trial: ?layouts=1)
   active: null,          // the field drawn now: {key, json, field, frame}
   bent: false,           // what the person asked for
   u: 0, fade: 0,         // morph (0 ordinary … 1 bent) and the mesh's opacity
@@ -50,7 +50,8 @@ const S = {
   gen: 0,
   dragging: false, dragPos: null,
   transit: { available: false },
-  renderer: null, worker: null,
+  renderer: null, worker: null, // worker: the map's scene; fieldWorker: bands, band layer, taps
+  fieldWorker: null,
   frameWhenReady: false,
   notice: "",            // why the page is showing something else (London only, expired): stays until the next choice
   tapSeq: 0, bandsSeq: 0,
@@ -200,8 +201,8 @@ function updateBands() {
   const lv = levels();
   const key = `${S.active.key}|${lv.join(",")}`;
   buildBandLegend(lv);
-  if (!S.worker) { showBands(key, bandPolygons(S.active.field, S.active.frame, lv, { skipFilled: true })); return; }
-  S.worker.postMessage({ type: "bands", id: ++S.bandsSeq, key, levels: lv, field: workerField(S.active.field) });
+  if (!S.fieldWorker) { showBands(key, bandPolygons(S.active.field, S.active.frame, lv, { skipFilled: true })); return; }
+  S.fieldWorker.postMessage({ type: "bands", id: ++S.bandsSeq, key, levels: lv, field: workerField(S.active.field) });
 }
 
 function showBands(key, fc) {
@@ -236,30 +237,15 @@ function frameView() {
 // ── The bent view: the mesh ──────────────────────────────────────────
 const needsCpuTargets = () => !(S.renderer && S.renderer.mode === "gpu");
 
-// The bent view's warp for the chosen layout (layouts.js): `spec` for the page and the
-// renderer, `fit` (the plain fold) for framing and the tiles, `worker` for the worker when it
-// isn't the fold, whether the mesh is refined against it, and the islands' node mask.
-function meshSpec(entry) {
-  const fold = { kind: "polar", field: entry.field, maxMinutes: S.outer };
+// The fold's warp for the active field (the plain time-polar map). Squash's comes back from
+// the field worker with the band layer (layouts.js squashLayout).
+function foldSpec(entry) {
+  const spec = { kind: "polar", field: entry.field, maxMinutes: S.outer };
   const spread = V.DIRECTIONS[S.directions];
-  if (spread > 0 && S.layout !== "islands") fold.angles = angularSpread(entry.field, S.outer, { spread });
-  if (S.layout === "squash") {
-    const R = squashField(entry.field, Number(Q.get("squashslope")) > 0 ? { minSlope: Number(Q.get("squashslope")) / 1000 } : {});
-    // The view reaches as far out as squash draws the places within the outer time (99% of
-    // them), and the real minute lines replace the rings.
-    const reach = squashReach(entry.field, R, S.outer);
-    const spec = { ...fold, field: R, maxMinutes: reach };
-    return { spec, fit: fold, refine: true, frameMinutes: reach, lines: true,
-             worker: { kind: "polar", field: plainField(R), maxMinutes: reach, angles: fold.angles || null } };
-  }
-  if (S.layout === "islands") {
-    const fill = Number(Q.get("islandfill"));
-    const L = islandLayout(entry.field, { maxMinutes: S.outer, ...(fill > 0 ? { fill } : {}) });
-    const spec = { kind: "grid", grid: L.grid, field: entry.field, maxMinutes: S.outer };
-    return { spec, fit: fold, refine: false, worker: { kind: "grid", grid: L.grid }, mask: L.mask, cut: L.cut, stats: L.stats };
-  }
-  return { spec: fold, fit: fold, refine: true, worker: null };
+  if (spread > 0) spec.angles = angularSpread(entry.field, S.outer, { spread });
+  return spec;
 }
+const squashOpts = () => ({ minSlope: Number(Q.get("squashslope")) > 0 ? Number(Q.get("squashslope")) / 1000 : 0 });
 
 // What the worker needs (plain arrays; it rebuilds the field and the warp).
 function plainField(f) {
@@ -278,31 +264,31 @@ function prepareMesh({ retry = false } = {}) {
   const key = desiredMeshKey();
   if (S.mesh && S.mesh.key === key && !retry) { S.pendingMesh = null; return; }
   if (S.pendingMesh && S.pendingMesh.key === key && !retry) return;
-  const L = meshSpec(entry);
-  const spec = L.spec;
+  const spec = foldSpec(entry);
   measureBox();
-  const fit = fitFor(L.fit, entry.frame, box.w, box.h, S.outer);
-  if (L.frameMinutes) fit.k *= S.outer / L.frameMinutes;
-  const reach = reachBox(L.fit, S.outer);
+  const fit = fitFor(spec, entry.frame, box.w, box.h, S.outer);
+  const reach = reachBox(spec, S.outer);
   const cover = tileCover(entry.frame, reach);
   const eps = V.refineEps(fit.k);
   const gen = ++S.gen;
   const prev = retry && S.mesh && S.mesh.key === key ? S.mesh : null;
-  S.pendingMesh = { key, gen, entry, spec, outer: S.outer, warp: createWarp(spec), frame: entry.frame,
+  S.pendingMesh = { key, gen, entry, layout: S.layout, spec, outer: S.outer, warp: createWarp(spec), frame: entry.frame,
                     kRef: fit.k, zRef: fit.zoom, requestedAt: performance.now(), retried: retry,
                     layers: prev ? prev.layers : null, scene: null };
+  const plain = plainField(entry.field), angles = spec.angles || null;
+  // The two workers run side by side: the map's scene in one, the band layer (and squash's
+  // own bend, which the scene worker also builds for itself) in the other.
   S.worker.postMessage({
     type: "scene", gen, origin: entry.frame.origin, tiles: cover.tiles,
     spacingDiv: DEFAULT_SPACING_DIV, budget: DEFAULT_BUDGET, source: "tiles",
-    warp: needsCpuTargets() ? (L.worker || { kind: "polar", field: plainField(entry.field), maxMinutes: S.outer, angles: spec.angles || null }) : null,
-    refine: L.refine ? { field: L.worker ? L.worker.field : plainField(entry.field), maxMinutes: spec.maxMinutes, eps, angles: spec.angles || null } : null,
-    cut: L.cut || null,
+    layout: S.layout, squash: squashOpts(),
+    warp: needsCpuTargets() ? { kind: "polar", field: plain, maxMinutes: S.outer, angles } : null,
+    refine: { field: plain, maxMinutes: S.outer, eps, angles },
   });
   if (!prev) {
-    S.worker.postMessage({ type: "layers", key, gen, field: workerField(entry.field), maxMinutes: spec.maxMinutes,
-                           lines: L.lines ? levels() : null,
-                           angles: spec.angles || null, eps: L.refine ? eps : null, box: reach, cpu: needsCpuTargets(),
-                           warp: L.worker, mask: L.mask || null });
+    S.fieldWorker.postMessage({ type: "layers", key, gen, field: workerField(entry.field), maxMinutes: S.outer,
+                                angles, eps, box: reach, cpu: needsCpuTargets(),
+                                layout: S.layout, squash: squashOpts(), levels: levels() });
   }
   if (S.bent && !S.mesh) setStatus(T.PREPARING, "busy");
 }
@@ -364,8 +350,17 @@ function tryInstall(p, whole) {
 
 function installMesh(p, whole) {
   const r = S.renderer;
-  r.setWarp(p.spec);
   const L = p.layers;
+  if (p.layout === "squash" && L.R && !p.squashed) {
+    // Squash's bend, as the field worker built it: the view is framed out to its reach.
+    const f = p.entry.field;
+    const R = createField({ origin: f.origin, cell: f.cell, nx: f.nx, ny: f.ny, x0: f.x0, y0: f.y0, minutes: L.R });
+    p.spec = { ...p.spec, field: R, maxMinutes: L.reach };
+    p.warp = createWarp(p.spec);
+    p.kRef *= p.outer / L.reach;
+    p.squashed = true;
+  }
+  r.setWarp(p.spec);
   const bands = { pos: L.pos, minutes: L.minutes, index: L.index, targets: L.targets };
   r.setBandMesh(bands);
   if (p.entry.json.mode === "transit") r.setFoldMesh({ pos: bands.pos, index: bands.index, targets: bands.targets || null });
@@ -646,12 +641,12 @@ function updateLegend() {
   show(toggleBtn, offered);
   setText(toggleBtn, S.bent ? T.BEND_LABEL.on : T.BEND_LABEL.off);
   if (toggleBtn.getAttribute("aria-pressed") !== String(S.bent)) toggleBtn.setAttribute("aria-pressed", String(S.bent));
-  show($("direction-chips"), offered && S.bent && S.layout !== "islands");
+  show($("direction-chips"), offered && S.bent);
   const layouts = Q.get("layouts") === "1" || V.LAYOUTS.includes(Q.get("layout"));
   show($("layout-chips"), offered && S.bent && layouts);
   show($("layout-note"), offered && S.bent && layouts);
   setText($("layout-note"), T.LAYOUT_NOTES[S.layout]);
-  show($("direction-note"), offered && S.bent && S.layout !== "islands");
+  show($("direction-note"), offered && S.bent);
   setText($("direction-note"), T.DIRECTION_NOTES[S.directions]);
   show($("overlap-note"), S.bent && S.mode === "transit" && S.layout !== "squash");
   setText($("overlap-note"), T.OVERLAP_NOTE);
@@ -683,7 +678,7 @@ function querySheets(key, lx, ly, r) {
   const id = ++sheetsSeq;
   return new Promise((resolve) => {
     sheetWaiters.set(id, resolve);
-    S.worker.postMessage({ type: "sheets-query", id, key, lx, ly, r });
+    S.fieldWorker.postMessage({ type: "sheets-query", id, key, lx, ly, r });
   });
 }
 
@@ -1069,6 +1064,8 @@ function initRenderer() {
   }
   S.worker = new Worker("/shared/mesh/worker.js", { type: "module" });
   S.worker.onmessage = onWorker;
+  S.fieldWorker = new Worker("/shared/mesh/worker.js", { type: "module" });
+  S.fieldWorker.onmessage = onWorker;
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────

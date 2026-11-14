@@ -22,9 +22,8 @@ export const LIMITS = { folded: 0.10, stretch: 3 };
 //   skipped        cells left out: a corner unknown, past the ring, or filled in (water)
 //   excludeWithin    metres: leave out cells whose centre is this close to the pin (to show how
 //                   much of the folding sits in the walking near field)
-// A "grid" spec (layouts.js islands) is measured the same way; it carries `field` for its cells.
 export function foldDiagnostics(spec, { step = 2, raster = 600, skipFilled = true, excludeWithin = 0 } = {}) {
-  if (!spec.field || (spec.kind !== "polar" && spec.kind !== "grid")) return null;
+  if (spec.kind !== "polar") return null;
   const f = spec.field, max = spec.maxMinutes ?? 45;
   const filled = skipFilled && f.filled ? f.filled : null;
   let cells = 0, skipped = 0;

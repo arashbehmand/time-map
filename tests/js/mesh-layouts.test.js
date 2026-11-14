@@ -1,9 +1,9 @@
-// The two trial layouts for transit's pockets (static/shared/mesh/layouts.js).
+// Squash, the trial layout for transit's pockets (static/shared/mesh/layouts.js).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fieldFromFunction } from "../../static/shared/mesh/field.js";
 import { foldDiagnostics } from "../../static/shared/mesh/diagnostics.js";
-import { bentRings, islandLayout, squashField, squashReach } from "../../static/shared/mesh/layouts.js";
+import { bentRings, squashField, squashLayout, squashReach } from "../../static/shared/mesh/layouts.js";
 import { createWarp } from "../../static/shared/mesh/warp.js";
 import { sampleField } from "../../static/shared/mesh/field.js";
 
@@ -25,29 +25,31 @@ test("squash never shrinks outward, never undercuts a time, and unfolds the pock
   assert.ok(foldDiagnostics({ ...fold, field: R }).foldedShare < 0.002, "squash doesn't");
 });
 
-test("islands: the pin's ground is time-polar, the pocket an undistorted map on its ring", () => {
-  const L = islandLayout(field, { maxMinutes: 45 });
-  assert.equal(L.stats.islands, 1);
-  assert.ok(L.stats.torn > 0, "torn at the border");
-  const { nx, minutes } = field, xy = L.grid.xy, piece = L.cut.label;
-  const pin = Math.round(-field.y0 / field.cell) * nx + Math.round(-field.x0 / field.cell);
-  let checkedPin = 0, checkedIsland = 0;
-  for (let k = 0; k + 1 < minutes.length; k++) {
-    if (piece[k] < 0) continue;
-    if (piece[k] === piece[pin]) {
-      if (minutes[k] > 1) { assert.ok(Math.abs(Math.hypot(xy[2 * k], xy[2 * k + 1]) - minutes[k]) < 1e-3); checkedPin++; }
-    } else if (piece[k + 1] === piece[k]) {
-      // Neighbours one cell apart sit `scale` × one cell's walk apart: one scale, no bending.
-      assert.ok(Math.abs(xy[2 * k + 2] - xy[2 * k] - (L.stats.scale * field.cell) / WALK) < 1e-3);
-      assert.ok(Math.abs(xy[2 * k + 3] - xy[2 * k + 1]) < 1e-3);
-      checkedIsland++;
+test("without pockets, squash is the fold: its own minutes and round rings", () => {
+  const plain = fieldFromFunction({ origin, cell: 100, halfSize: 4000 }, (x, y) => Math.hypot(x, y) / WALK);
+  const { R, reach, spec } = squashLayout(plain, 45);
+  let worst = 0;
+  for (let k = 0; k < plain.minutes.length; k++) worst = Math.max(worst, Math.abs(R.minutes[k] - plain.minutes[k]));
+  assert.ok(worst < 1e-4, `R departs from the minutes by ${worst}`);
+  assert.ok(Math.abs(reach - 45) < 0.5);
+  for (const { minutes, xy } of bentRings(plain, createWarp(spec), [15, 30])) {
+    for (let i = 0; i < 720; i++) {
+      const r = Math.hypot(xy[2 * i], xy[2 * i + 1]);
+      assert.ok(Math.abs(r - minutes) < 0.05, `ring ${minutes} at radius ${r}`);
     }
   }
-  assert.ok(checkedPin > 100 && checkedIsland > 100);
-  // The station's own place sits on its ring (10 minutes).
-  const st = Math.round(-field.y0 / field.cell) * nx + Math.round((4000 - field.x0) / field.cell);
-  assert.ok(Math.abs(Math.hypot(xy[2 * st], xy[2 * st + 1]) - 10) < 1e-3);
-  assert.ok(foldDiagnostics({ kind: "grid", grid: L.grid, field, maxMinutes: 45 }).foldedShare < foldDiagnostics(fold).foldedShare);
+});
+
+test("squash climbs only in a pocket's shadow, and rejoins the minutes after it", () => {
+  // The same pocket on a wider field: walking out of it catches up with the climb near 6.5 km.
+  const wide = fieldFromFunction({ origin, cell: 100, halfSize: 9000 },
+    (x, y) => Math.min(Math.hypot(x, y) / WALK, 10 + Math.hypot(x - 4000, y) / WALK));
+  const R = squashField(wide);
+  const j = Math.round(-wide.y0 / wide.cell), i0 = Math.round(-wide.x0 / wide.cell);
+  const at = (m) => j * wide.nx + i0 + Math.round(m / wide.cell);
+  assert.ok(Math.abs(R.minutes[at(1000)] - wide.minutes[at(1000)]) < 1e-4, "before the pocket: its own minutes");
+  assert.ok(R.minutes[at(4000)] > wide.minutes[at(4000)] + 1, "at the station: pushed out");
+  assert.ok(Math.abs(R.minutes[at(8000)] - wide.minutes[at(8000)]) < 1e-4, "past the pocket: its own minutes again");
 });
 
 test("squash's rings: one closed bent circle per level, every point that many minutes away", () => {

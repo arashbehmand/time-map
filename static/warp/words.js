@@ -59,7 +59,6 @@ export const DIRECTION_NOTES = {
 export const LAYOUT_NOTES = {
   fold: "Fold: every place sits at its own minutes. Where a fast line makes far places as quick as nearer ones, the map overlaps itself.",
   squash: "Squash: going outward, places never come back closer, so nothing overlaps. Distance from the pin isn't minutes any more, so the rings bend to follow them. Quick spots near stations, beyond a ring, show by their colour.",
-  islands: "Islands: the ground around each station you reach by train or bus is cut out and drawn as a small map on the ring of its time. The gaps between islands are slow ground.",
 };
 
 export const OVERLAP_NOTE = "Where the map overlaps itself, different places are the same number of minutes away in the same direction.";

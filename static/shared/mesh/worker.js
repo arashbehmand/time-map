@@ -8,7 +8,7 @@ import { createField, createTargetGrid, sampleField } from "./field.js";
 import { censusTile, LINE_VERTS, packScene, spacingForZoom, tessellateTile, vectorTileFeatures } from "./pipeline.js";
 import { TILE_URL } from "./schema-streets-v8.js";
 import { meshSheetIndex } from "./hit.js";
-import { bentRings } from "./layouts.js";
+import { bentRings, squashLayout } from "./layouts.js";
 import { makeEdgeTest, MAX_DEPTH, refineFills } from "./refine.js";
 import { createWarp, targetsFor } from "./warp.js";
 
@@ -119,9 +119,10 @@ async function loadMesh(t, opts, counters) {
   return { key, mesh };
 }
 
+const fieldFrom = (f) => (f.kind === "field" ? f : createField(f));
 function warpFrom(spec) {
   if (!spec) return null;
-  if (spec.kind === "polar") return createWarp({ kind: "polar", field: createField(spec.field), maxMinutes: spec.maxMinutes, angles: spec.angles || null });
+  if (spec.kind === "polar") return createWarp({ kind: "polar", field: fieldFrom(spec.field), maxMinutes: spec.maxMinutes, angles: spec.angles || null });
   if (spec.kind === "grid") return createWarp({ kind: "grid", grid: createTargetGrid(spec.grid) });
   return null;
 }
@@ -129,7 +130,7 @@ function warpFrom(spec) {
 // The field the mesh is refined against (refine.js): sent with every scene, back-end B too.
 function refineFrom(spec) {
   if (!spec) return null;
-  return { field: createField(spec.field), maxMinutes: spec.maxMinutes, eps: spec.eps, maxDepth: spec.maxDepth,
+  return { field: fieldFrom(spec.field), maxMinutes: spec.maxMinutes, eps: spec.eps, maxDepth: spec.maxDepth,
            angles: spec.angles || null };
 }
 
@@ -153,6 +154,14 @@ async function buildScene(msg) {
 
   const t0 = now();
   const frame = localFrame(origin);
+  // Squash (layouts.js) bends by its own field: built here from the minutes, as the page's
+  // band-layer worker builds it, and refined to the same half pixel at its wider framing.
+  if (msg.layout === "squash" && msg.refine) {
+    const sq = squashLayout(createField(msg.refine.field), msg.refine.maxMinutes, { ...msg.squash, angles: msg.refine.angles || null });
+    const eps = msg.refine.eps * (sq.reach / msg.refine.maxMinutes);
+    msg = { ...msg, refine: { ...msg.refine, field: sq.R, maxMinutes: sq.reach, eps },
+            warp: msg.warp ? { ...msg.warp, field: sq.R, maxMinutes: sq.reach } : null };
+  }
   const warp = warpFrom(msg.warp);
   const refine = refineFrom(msg.refine);
   const opts = { source, spacingDiv };
@@ -164,7 +173,7 @@ async function buildScene(msg) {
   const pack = (partial) => {
     const meshes = loaded.filter(Boolean);
     const missingTiles = tiles.filter((t, i) => settled[i] && !loaded[i]).map(tileId);
-    const scene = packScene(meshes, frame, { budget, warp, refine, cut: msg.cut || null });
+    const scene = packScene(meshes, frame, { budget, warp, refine });
     scene.stats = { ...scene.stats, ...counters, cover: tiles.length, loaded: meshes.length,
                     missing: missingTiles.length, missingTiles, partial, totalMs: now() - t0,
                     resident, peakResident, backend: warp ? "cpu" : "gpu" };
@@ -254,29 +263,31 @@ function fieldMessage(msg) {
       return;
     }
     const f = fieldOf(msg.field);
-    // The layout's own warp when it isn't the plain fold (layouts.js): squash bends by another
-    // field, islands by a target grid. The band minutes are always the field's own.
-    const warp = msg.warp ? warpFrom(msg.warp)
-      : createWarp({ kind: "polar", field: f, maxMinutes: msg.maxMinutes, angles: msg.angles || null });
-    const m = bandMesh(f, msg.box, { mask: msg.mask || null });
+    const angles = msg.angles || null;
+    // Squash (layouts.js) bends by its own field, out to its own reach, and draws bent rings;
+    // its R and reach go back to the page, which bends its labels and taps the same way. The
+    // band minutes are always the field's own.
+    const sq = msg.layout === "squash" ? squashLayout(f, msg.maxMinutes, { ...msg.squash, angles }) : null;
+    const bendBy = sq ? sq.R : f, reach = sq ? sq.reach : msg.maxMinutes;
+    const eps = msg.eps * (reach / msg.maxMinutes);
+    const warp = createWarp({ kind: "polar", field: bendBy, maxMinutes: reach, angles });
+    const m = bandMesh(f, msg.box);
     const n = m.pos.length / 2;
-    const bendBy = msg.warp && msg.warp.kind === "polar" ? createField(msg.warp.field) : f;
-    const r = msg.eps
-      ? refineFills({ pos: m.pos, index: m.index, style: new Float32Array(n), zoom: new Uint8Array(n) },
-        makeEdgeTest(bendBy, msg.maxMinutes, msg.eps, msg.angles || null), { maxDepth: MAX_DEPTH })
-      : { pos: m.pos, index: m.index, added: 0, skipped: 0 };
+    const r = refineFills({ pos: m.pos, index: m.index, style: new Float32Array(n), zoom: new Uint8Array(n) },
+      makeEdgeTest(bendBy, reach, eps, angles), { maxDepth: MAX_DEPTH });
     const minutes = new Float32Array(r.pos.length / 2);
     minutes.set(m.minutes);
     for (let v = n; v < minutes.length; v++) minutes[v] = sampleField(f, r.pos[2 * v], r.pos[2 * v + 1]);
     const mesh = { pos: r.pos, minutes, index: r.index };
     const targets = msg.cpu ? targetsFor(warp, mesh.pos) : null;
-    const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped,
-                      lines: msg.lines ? bentRings(f, warp, msg.lines) : null };
+    const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped, reach,
+                      lines: sq ? bentRings(f, warp, msg.levels) : null };
     // The index keeps pos and minutes, so the page gets copies.
     const copy = () => {
-      const out = { pos: mesh.pos.slice(), minutes: mesh.minutes.slice(), index: mesh.index.slice(), targets: targets ? targets.slice() : null };
+      const out = { pos: mesh.pos.slice(), minutes: mesh.minutes.slice(), index: mesh.index.slice(), targets: targets ? targets.slice() : null,
+                    R: sq ? sq.R.minutes.slice() : null };
       Object.assign(message, out);
-      return [out.pos.buffer, out.minutes.buffer, out.index.buffer, ...(out.targets ? [out.targets.buffer] : [])];
+      return [out.pos.buffer, out.minutes.buffer, out.index.buffer, ...(out.targets ? [out.targets.buffer] : []), ...(out.R ? [out.R.buffer] : [])];
     };
     sheets = { key: msg.key, index: meshSheetIndex(mesh, warp), result: { message, copy } };
     self.postMessage(message, copy());

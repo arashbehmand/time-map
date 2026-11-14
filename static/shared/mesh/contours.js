@@ -157,8 +157,7 @@ export function bandPolygons(f, frame, levels, opts = {}) {
 // The band layer for the bent map (renderer.setBandMesh): the field's own cells inside `box`
 // (local metres [x0, y0, x1, y1]) whose four corners hold a time (not beyond, not filled in),
 // as triangles over the nodes, with each node's minutes. The renderer colours them by band.
-// `mask` (one byte per node, optional): only nodes set in it (layouts.js islands: not torn).
-export function bandMesh(f, box = null, { skipFilled = true, mask = null } = {}) {
+export function bandMesh(f, box = null, { skipFilled = true } = {}) {
   const { nx, ny, x0, y0, cell, minutes } = f;
   const filled = skipFilled && f.filled ? f.filled : null;
   let i0 = 0, j0 = 0, i1 = nx - 1, j1 = ny - 1;
@@ -169,7 +168,7 @@ export function bandMesh(f, box = null, { skipFilled = true, mask = null } = {})
   // A node the warp places: the warp samples the cell to its lower right (field.js), and a
   // cell with an unknown corner sends the node onto the outer ring as it fades, which would
   // streak the band. So the node and that cell's other three corners must all hold a time.
-  const hasTime = (k) => known(minutes[k]) && !(filled && filled[k]) && !(mask && !mask[k]);
+  const hasTime = (k) => known(minutes[k]) && !(filled && filled[k]);
   const ok = (k) => {
     const i = k % nx, j = Math.floor(k / nx);
     return i + 1 < nx && j + 1 < ny && hasTime(k) && hasTime(k + 1) && hasTime(k + nx) && hasTime(k + nx + 1);

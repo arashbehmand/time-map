@@ -98,24 +98,3 @@ test("refinement keeps a share of the budget when the tiles alone would fill it"
   assert.ok(scene.stats.refined > 0, "refinement got room");
   assert.ok(scene.stats.shaded <= full, "inside the budget");
 });
-
-test("a cut keeps no triangle or segment across two pieces (the islands' tears)", () => {
-  const mesh = tessellateTile(vectorTileFeatures(bytes), { ...TILE, spacingDiv: 64 });
-  const origin = { lon: -0.1571, lat: 51.5226 };
-  const frame = localFrame(origin);
-  const p = tilePlacement(frame, TILE.z, TILE.x, TILE.y, 4096);
-  const cell = 100, x0 = p.ox - 500, y0 = p.oy - 500;
-  const nx = Math.ceil((4096 * p.scale + 1000) / cell), ny = nx;
-  const mid = p.ox + 2048 * p.scale;
-  const label = new Int32Array(nx * ny);
-  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) label[j * nx + i] = x0 + i * cell < mid ? 1 : 2;
-  const side = (x) => (x < mid - cell ? 1 : x > mid + cell ? 2 : 0);
-  const whole = packScene([mesh], frame);
-  const scene = packScene([mesh], frame, { cut: { x0, y0, cell, nx, ny, label } });
-  const road = scene.passes.road;
-  assert.ok(road.count > 0 && road.count < whole.passes.road.count, "the motorway across the middle loses a piece");
-  for (let s = 0; s < road.count; s++) {
-    const a = side(road.seg[4 * s]), b = side(road.seg[4 * s + 2]);
-    assert.ok(!(a && b && a !== b), "no segment spans the cut");
-  }
-});

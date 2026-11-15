@@ -58,7 +58,7 @@ export const DIRECTION_NOTES = {
 
 export const LAYOUT_NOTES = {
   fold: "Fold: every place sits at its own minutes. Where a fast line makes far places as quick as nearer ones, the map overlaps itself.",
-  squash: "Squash: going outward, places almost never come back closer, so the map hardly overlaps. The middle is drawn as it is; further out, distance isn't minutes, and the rings bend to follow them. Colour is always each place's own time: many quicker places near stations are drawn beyond their ring, and a few much slower patches that are hard to get into (behind tracks, say) are drawn inside one. Zoom out to see the outer rings.",
+  squash: "Squash: going outward, places almost never come back closer, so the map hardly overlaps. The middle is drawn as it is; further out, distance isn't minutes, and the rings bend to follow them. Colour is always each place's own time: many quicker places near stations are drawn beyond their ring, a few much slower patches that are hard to get into are drawn inside one, and patches the route data leaves out (behind tracks, say) are drawn small and left uncoloured. Zoom out to see the outer rings.",
 };
 
 export const SQUASH_TAP_NOTE = "These places are drawn close together; each has its own time.";
@@ -69,8 +69,13 @@ export function minutesText(m) {
   return m < 1 ? "under a minute" : `about ${Math.round(m)} min`;
 }
 
+// An uncertain patch (field.js): the route data leaves it out, so it has no time to show; it is
+// left uncoloured, and drawn small on the bent map.
+export const UNCERTAIN_TAP = "No reliable travel time here: the route data leaves this patch out.";
+
 // What a tap on the ordinary map says.
 export function tapGeographic(node, label) {
+  if (node && node.uncertain) return UNCERTAIN_TAP;
   if (!node || node.minutes === -1) return "No travel time here.";
   if (node.filled) return "No street here (water or parkland).";
   if (node.minutes >= 1e4) return "More than 3 hours, or no route in the timetable.";

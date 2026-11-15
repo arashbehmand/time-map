@@ -171,11 +171,12 @@ export function angularSpread(field, maxMinutes, { spread = 1, floor = 0.25, smo
   // Area reached by level (cumulative later), per direction.
   const hist = new Float64Array(M * N);
   const cellArea = field.cell * field.cell;
+  const unsure = field.uncertain || null;     // uncertain patches claim no reach
   for (let j = 0; j < field.ny; j++) {
     const y = field.y0 + j * field.cell;
     for (let i = 0; i < field.nx; i++) {
       const t = field.minutes[j * field.nx + i];
-      if (t < 0 || t > tMax) continue;
+      if (t < 0 || t > tMax || (unsure && unsure[j * field.nx + i])) continue;
       const x = field.x0 + i * field.cell;
       if (Math.hypot(x, y) <= DIR_EPS) continue;
       const b = Math.min(N - 1, Math.floor(((Math.atan2(y, x) + Math.PI) / (2 * Math.PI)) * N));

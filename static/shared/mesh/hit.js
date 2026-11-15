@@ -13,7 +13,8 @@
 // differ in time.
 //
 // sheetIndex(field, warp, {maxMinutes}) does the same over the field's own cells (two
-// triangles each; cells with a corner unknown, past the ring or filled in are left out).
+// triangles each; cells with a corner unknown, past the ring, filled in or in an uncertain
+// patch are left out).
 const BUCKET = 0.5;
 // Bucket keys as numbers (strings made the index the slowest part of building the bent view).
 const bkey = (bx, by) => (bx + 32768) * 65536 + (by + 32768);
@@ -77,14 +78,14 @@ export function meshSheetIndex({ pos, minutes, index }, warp, { merge = 300, mer
 
 export function sheetIndex(f, warp, { maxMinutes = Infinity, merge = 300 } = {}) {
   const { nx, ny, x0, y0, cell, minutes } = f;
-  const filled = f.filled || null;
+  const filled = f.filled || null, unsure = f.uncertain || null;
   const pos = new Float64Array(2 * nx * ny);
   const good = new Uint8Array(nx * ny);
   for (let j = 0; j < ny; j++) {
     for (let i = 0; i < nx; i++) {
       const k = j * nx + i, t = minutes[k];
       pos[2 * k] = x0 + i * cell; pos[2 * k + 1] = y0 + j * cell;
-      good[k] = t >= 0 && t <= maxMinutes && !(filled && filled[k]) ? 1 : 0;
+      good[k] = t >= 0 && t <= maxMinutes && !(filled && filled[k]) && !(unsure && unsure[k]) ? 1 : 0;
     }
   }
   const index = [];

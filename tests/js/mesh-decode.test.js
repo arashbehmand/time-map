@@ -12,7 +12,7 @@ test("decodeField reads tenths, no data, beyond and the filled mark", () => {
   const f = decodeField({ origin: { lon: 0, lat: 51 }, cell: 100, nx: 3, ny: 2, x0: -100, y0: 0, minutes_b64: b64 });
   assert.deepEqual(Array.from(f.minutes).map((v) => Math.round(v * 10) / 10), [0, 12.3, NO_DATA, BEYOND, 179, 3276.5]);
   assert.deepEqual(Array.from(f.filled), [0, 0, 0, 0, 1, 0]);
-  assert.deepEqual(nodeAt(f, 0, 0), { minutes: f.minutes[1], filled: false });
+  assert.deepEqual(nodeAt(f, 0, 0), { minutes: f.minutes[1], filled: false, uncertain: false });
   assert.equal(nodeAt(f, 500, 0), null);
   assert.throws(() => decodeField({ origin: {}, cell: 100, nx: 4, ny: 2, x0: 0, y0: 0, minutes_b64: b64 }));
 });

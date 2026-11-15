@@ -4,7 +4,7 @@
 // fetches it no longer needs are aborted.
 import { bandMesh, bandPolygons } from "./contours.js";
 import { localFrame } from "./frame.js";
-import { createField, createTargetGrid, sampleField } from "./field.js";
+import { createField, createTargetGrid, geometryField, sampleField } from "./field.js";
 import { censusTile, LINE_VERTS, packScene, spacingForZoom, tessellateTile, vectorTileFeatures } from "./pipeline.js";
 import { TILE_URL } from "./schema-streets-v8.js";
 import { meshSheetIndex } from "./hit.js";
@@ -119,7 +119,8 @@ async function loadMesh(t, opts, counters) {
   return { key, mesh };
 }
 
-const fieldFrom = (f) => (f.kind === "field" ? f : createField(f));
+// A polar warp bends by the geometry field (uncertain patches at their drawn minutes).
+const fieldFrom = (f) => geometryField(f.kind === "field" ? f : fieldOf(f));
 function warpFrom(spec) {
   if (!spec) return null;
   if (spec.kind === "polar") return createWarp({ kind: "polar", field: fieldFrom(spec.field), maxMinutes: spec.maxMinutes, angles: spec.angles || null });
@@ -256,6 +257,7 @@ let queuedLayers = null;
 function fieldOf(spec) {
   const f = createField(spec);
   if (spec.filled) f.filled = spec.filled;
+  if (spec.uncertain) { f.uncertain = spec.uncertain; f.drawn = spec.drawn || spec.minutes; }
   return f;
 }
 
@@ -278,7 +280,8 @@ function fieldMessage(msg) {
   } else {
     const kept = sheetsByKey.get(msg.key);
     const hits = kept && kept.index ? kept.index.query(msg.lx, msg.ly, msg.r) : null;
-    self.postMessage({ type: "sheets-result", id: msg.id, key: msg.key, hits });
+    const uncertain = !!(kept && kept.unsure && kept.unsure.query(msg.lx, msg.ly, msg.r).length);
+    self.postMessage({ type: "sheets-result", id: msg.id, key: msg.key, hits, uncertain });
   }
 }
 
@@ -291,7 +294,7 @@ function buildLayers(msg) {
     // its labels the same way. The band minutes are always the field's own.
     const sq = msg.layout === "squash" ? squashLayout(f, msg.maxMinutes, msg.squash || {}) : null;
     const angles = sq ? sq.spec.angles : msg.angles || null;
-    const bendBy = sq ? sq.R : f, reach = sq ? sq.reach : msg.maxMinutes;
+    const bendBy = sq ? sq.R : geometryField(f), reach = sq ? sq.reach : msg.maxMinutes;
     const frame = sq ? sq.frame : msg.maxMinutes;
     const eps = msg.eps * (frame / msg.maxMinutes);
     const warp = createWarp({ kind: "polar", field: bendBy, maxMinutes: reach, angles });
@@ -321,11 +324,15 @@ function buildLayers(msg) {
     };
     // The band layer goes first; the overlap index (only needed by a tap) is built right after,
     // and a tap that comes in meanwhile waits for it in the worker's queue.
-    const entry = { index: null, result: { message, copy } };
+    const entry = { index: null, unsure: null, result: { message, copy } };
     sheetsByKey.set(msg.key, entry);
     while (sheetsByKey.size > SHEETS_KEEP) sheetsByKey.delete(sheetsByKey.keys().next().value);
     self.postMessage(message, copy());
-    try { entry.index = meshSheetIndex(mesh, warp); } catch (err) {
+    try {
+      entry.index = meshSheetIndex(mesh, warp);
+      // The uncertain patches: drawn, uncoloured, and a tap there says so.
+      if (f.uncertain) entry.unsure = meshSheetIndex(bandMesh(f, msg.box, { uncertainOnly: true }), warp);
+    } catch (err) {
       self.postMessage({ type: "error", job: "sheets-index", key: msg.key, gen: msg.gen ?? -1, message: String(err && err.message || err) });
     }
 }

@@ -5,11 +5,14 @@
 // each pocket folds over its station and the map overlaps itself. Squash gives up "radius =
 // minutes" to keep the map from overlapping:
 //
-//   cutPeaks(field)      places much slower than all the ground around them (a station's
-//                        platforms and tracks in a walking field: the contour interpolation
-//                        gives them the next contour's times) are lowered to the way out around
-//                        them, so they don't push everything behind them outward. A layout
-//                        filter only: colours, labels, taps and the rings keep the true minutes.
+//   cutPeaks(field)      places much slower than all the ground around them are lowered to the
+//                        way out around them, so they don't push everything behind them
+//                        outward. A layout filter only: colours, labels, taps and the rings keep
+//                        the true minutes. The worst of them in a walking field (a station's
+//                        platforms and tracks, which the contour interpolation gives the next
+//                        contour's times) come from the server as uncertain patches with drawn
+//                        minutes already (field.js geometryField): squash bends from those, so
+//                        the cut is left the slow ridges of transit's tables.
 //   squashField(field)   along each ray from the pin, radius = the place's own (cut) minutes
 //                        while they keep rising; where they drop below the slowest place met
 //                        so far (a pocket's shadow), the radius keeps climbing at `minSlope`
@@ -33,8 +36,9 @@
 //   squashLayout(field, maxMinutes, opts)   all of it: R, its reach, the radius to frame on,
 //                        the by-reach bearing table (built on R, the quantity the warp looks it
 //                        up with) and the polar warp spec. Both workers build it from the same
-//                        field, filled-node flags included.
-import { BEYOND, createField, NO_DATA, sampleField } from "./field.js";
+//                        field, filled-node flags and uncertain patches included. Uncertain
+//                        patches count as unknown for the rings, the ground scale and the reach.
+import { BEYOND, createField, geometryField, NO_DATA, sampleField } from "./field.js";
 import { angularSpread } from "./warp.js";
 
 const known = (t) => t >= 0 && t < BEYOND;
@@ -170,7 +174,7 @@ export function squashReach(f, R, maxMinutes, { share = 0.99, cap = 3 } = {}) {
   const r = [];
   for (let k = 0; k < f.minutes.length; k++) {
     const t = f.minutes[k];
-    if (known(t) && t <= maxMinutes && known(R.minutes[k])) r.push(R.minutes[k]);
+    if (known(t) && t <= maxMinutes && known(R.minutes[k]) && !(f.uncertain && f.uncertain[k])) r.push(R.minutes[k]);
   }
   if (!r.length) return maxMinutes;
   r.sort((a, b) => a - b);
@@ -217,13 +221,13 @@ export function bentRings(f, warp, levels, { bearings = 720, step = 25 } = {}) {
 
 // Radius by places reached (`scale: "ground"`, the page's default for squash): radius = minutes
 // inside `inner`; beyond, inner × √(places within t ÷ places within inner), counting the true
-// minutes of known ground that isn't filled in (as the colour bar does). Where places grow as
+// minutes of known ground that isn't filled in or uncertain (as the colour bar does). Where places grow as
 // the square of the minutes (walking at one speed), it is the identity.
 export function groundScale(f, inner = 15) {
   const ts = [];
   for (let k = 0; k < f.minutes.length; k++) {
     const t = f.minutes[k];
-    if (known(t) && !(f.filled && f.filled[k])) ts.push(t);
+    if (known(t) && !(f.filled && f.filled[k]) && !(f.uncertain && f.uncertain[k])) ts.push(t);
   }
   ts.sort((a, b) => a - b);
   const count = (t) => { let lo = 0, hi = ts.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] <= t) lo = m + 1; else hi = m; } return lo; };
@@ -235,7 +239,8 @@ export function groundScale(f, inner = 15) {
 // scale, the median radius at which places two thirds of maxMinutes away are drawn (the outer
 // rings sit far out: zoom out for them). `spread`: directions by reach (warp.js angularSpread).
 export function squashLayout(f, maxMinutes, { minSlope, spread = 0, scale = "minutes" } = {}) {
-  const cut = cutPeaks(f);
+  const unsure = f.uncertain || null;
+  const cut = cutPeaks(geometryField(f));
   let R = squashField(cut, minSlope > 0 ? { minSlope } : {});
   let reach = squashReach(f, R, maxMinutes), frame = reach;
   if (scale === "ground") {
@@ -247,14 +252,17 @@ export function squashLayout(f, maxMinutes, { minSlope, spread = 0, scale = "min
     reach = g(reach);
     const T = Math.round((2 * maxMinutes) / 3), at = [];
     for (let k = 0; k < m.length; k++) {
-      if (Math.abs(f.minutes[k] - T) <= 0.5 && !(f.filled && f.filled[k]) && known(m[k])) at.push(m[k]);
+      if (Math.abs(f.minutes[k] - T) <= 0.5 && !(f.filled && f.filled[k]) && !(unsure && unsure[k]) && known(m[k])) at.push(m[k]);
     }
     at.sort((a, b) => a - b);
     frame = Math.min(reach, at.length ? at[at.length >> 1] : g(T));
   }
+  R.uncertain = unsure;
   const angles = spread > 0 ? angularSpread(R, reach, { spread }) : null;
   const ringMinutes = Float32Array.from(f.minutes);
-  for (let k = 0; k < ringMinutes.length; k++) if (cut.minutes[k] !== f.minutes[k]) ringMinutes[k] = NO_DATA;
+  for (let k = 0; k < ringMinutes.length; k++) {
+    if (cut.minutes[k] !== f.minutes[k] || (unsure && unsure[k])) ringMinutes[k] = NO_DATA;
+  }
   const ringSource = createField({ ...f, minutes: ringMinutes });
   return { R, reach, frame, cut, ringSource, spec: { kind: "polar", field: R, maxMinutes: reach, angles } };
 }

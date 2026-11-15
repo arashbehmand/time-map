@@ -9,7 +9,7 @@
 import { tileCover } from "../../shared/mesh/cover.js";
 import { fitFor, reachBox } from "../../shared/mesh/fit.js";
 import { cameraFromMap, localFrame, WORLD_PX } from "../../shared/mesh/frame.js";
-import { decodeField, knownMinutes, sampleField } from "../../shared/mesh/field.js";
+import { decodeField, geometryField, knownMinutes, sampleField } from "../../shared/mesh/field.js";
 import { directionFour, ringRadius } from "../../shared/mesh/diagnostics.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "../../shared/mesh/labels.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "../../shared/mesh/pipeline.js";
@@ -194,7 +194,7 @@ function setOrigin(id, { frame: reframe = true, clear = false } = {}) {
   if (spec.kind === "polar" && OPT.layout === "squash") {
     // The page's squash (ground scale, by-reach table on R): the gates then check the renderer
     // against squash's own radius, out to its reach.
-    spec = { ...squashLayout(spec.field, spec.maxMinutes ?? OPT.max, { spread: OPT.spread, scale: "ground" }).spec };
+    spec = { ...squashLayout(spec.source || spec.field, spec.maxMinutes ?? OPT.max, { spread: OPT.spread, scale: "ground" }).spec };
   } else if (spec.kind === "polar" && OPT.spread > 0) spec.angles = angularSpread(spec.field, spec.maxMinutes ?? OPT.max, { spread: OPT.spread });
   const warp = createWarp(spec);
   const el = S.map.getContainer();
@@ -630,7 +630,7 @@ async function directionChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spr
           wembley.push({ window: w, fieldMinutes: Math.round(sampleField(field, x, y) * 10) / 10, stationRowMinutes: st ? st.minutes : null, sources: json.sources });
         }
         for (const sp of spreads) {
-          const spec = { kind: "polar", field, maxMinutes: ring };
+          const spec = { kind: "polar", field: geometryField(field), maxMinutes: ring };
           if (sp > 0) spec.angles = angularSpread(field, ring, { spread: sp });
           const d = directionFour(spec);
           const rr = ringRadius(spec, { n: 1000 });     // an identity check of the JS warp, not G3

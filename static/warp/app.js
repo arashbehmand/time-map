@@ -15,7 +15,7 @@ import { createLatest } from "/shared/latest.js";
 import { friendly, geocode, loadPref, postJSON, prefersReducedMotion, savePref } from "/shared/api.js";
 import { bandPolygons } from "/shared/mesh/contours.js";
 import { tileCover } from "/shared/mesh/cover.js";
-import { decodeField, knownMinutes, nodeAt } from "/shared/mesh/field.js";
+import { decodeField, geometryField, knownMinutes, nodeAt } from "/shared/mesh/field.js";
 import { fitFor, reachBox } from "/shared/mesh/fit.js";
 import { cameraFromMap, localFrame } from "/shared/mesh/frame.js";
 import { createField } from "/shared/mesh/field.js";
@@ -224,7 +224,7 @@ function buildBandLegend(lv) {
   if (f) {
     for (let k = 0; k < f.minutes.length; k++) {
       const t = f.minutes[k];
-      if (!(t >= 0 && t <= lv[lv.length - 1]) || (f.filled && f.filled[k])) continue;
+      if (!(t >= 0 && t <= lv[lv.length - 1]) || (f.filled && f.filled[k]) || (f.uncertain && f.uncertain[k])) continue;
       let b = 0;
       while (lv[b] < t) b++;
       ground[b]++;
@@ -247,7 +247,7 @@ function buildBandLegend(lv) {
 function frameView() {
   if (!S.active || !map) return;
   measureBox();
-  const spec = { kind: "polar", field: S.active.field, maxMinutes: S.outer };
+  const spec = { kind: "polar", field: geometryField(S.active.field), maxMinutes: S.outer };
   const fit = fitFor(spec, S.active.frame, box.w, box.h, S.outer);
   map.easeTo({
     center: [S.origin.lon, S.origin.lat], zoom: Math.min(16, fit.zoom),
@@ -259,10 +259,11 @@ function frameView() {
 // ── The bent view: the mesh ──────────────────────────────────────────
 const needsCpuTargets = () => !(S.renderer && S.renderer.mode === "gpu");
 
-// The fold's warp for the active field (the plain time-polar map). Squash's comes back from
-// the field worker with the band layer (layouts.js squashLayout).
+// The fold's warp for the active field (the plain time-polar map), bent by its geometry field:
+// uncertain patches at their drawn minutes (field.js). Squash's comes back from the field
+// worker with the band layer (layouts.js squashLayout).
 function foldSpec(entry) {
-  const spec = { kind: "polar", field: entry.field, maxMinutes: S.outer };
+  const spec = { kind: "polar", field: geometryField(entry.field), maxMinutes: S.outer };
   const spread = V.DIRECTIONS[S.directions];
   if (spread > 0) spec.angles = angularSpread(entry.field, S.outer, { spread });
   return spec;
@@ -271,11 +272,12 @@ const squashOpts = () => ({ minSlope: Number(Q.get("squashslope")) > 0 ? Number(
                              scale: Q.get("ringscale") === "minutes" ? "minutes" : "ground",
                              spread: V.DIRECTIONS[S.directions] });
 
-// What the worker needs (plain arrays; it rebuilds the field and the warp).
-function plainField(f) {
-  return { origin: f.origin, cell: f.cell, nx: f.nx, ny: f.ny, x0: f.x0, y0: f.y0, minutes: f.minutes };
+// What the workers need (plain arrays; they rebuild the field, its geometry field and the
+// warp). Both get the same: the minutes, the filled flags and the uncertain patches.
+function workerField(f) {
+  return { origin: f.origin, cell: f.cell, nx: f.nx, ny: f.ny, x0: f.x0, y0: f.y0, minutes: f.minutes,
+           filled: f.filled, uncertain: f.uncertain || null, drawn: f.uncertain ? f.drawn : null };
 }
-function workerField(f) { return { ...plainField(f), filled: f.filled }; }
 
 // The bent view wanted now: the active field, the outer ring, the directions setting.
 const desiredMeshKey = () => (S.active ? `${S.active.key}|${S.outer}|${S.directions}|${S.layout}` : "");
@@ -321,7 +323,7 @@ function onWorker(e) {
   const msg = e.data;
   if (msg.type === "sheets-result") {
     const w = sheetWaiters.get(msg.id);
-    if (w) { sheetWaiters.delete(msg.id); w(msg.hits || []); }
+    if (w) { sheetWaiters.delete(msg.id); w(Object.assign(msg.hits || [], { uncertain: !!msg.uncertain })); }
     return;
   }
   if (msg.type === "bands-result") { showBands(msg.key, msg.fc); return; }
@@ -794,7 +796,9 @@ async function tapAt(px, py) {
       }
     }
     const note = items.length > 1 ? (m.layout === "squash" ? T.SQUASH_TAP_NOTE : T.OVERLAP_NOTE) : "";
-    showTapList(T.tapHeading(items), items, note);
+    // Over an uncertain patch: drawn, but it has no reliable time to list.
+    if (sheets.uncertain && !items.length) { showTapList(T.UNCERTAIN_TAP, []); return [T.UNCERTAIN_TAP]; }
+    showTapList(T.tapHeading(items), items, sheets.uncertain ? [note, T.UNCERTAIN_TAP].filter(Boolean).join(" ") : note);
     return items;
   }
   if (!S.active) return [];

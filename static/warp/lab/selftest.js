@@ -13,7 +13,7 @@
 //                    ≥ 4:1, a chain of short segments with a kink, and segments at twelve
 //                    angles; every one within ±0.25 px of nominal
 import { makeCamera } from "../../shared/mesh/frame.js";
-import { NO_DATA, sampleField } from "../../shared/mesh/field.js";
+import { NO_DATA, sampleField, touchesUncertain } from "../../shared/mesh/field.js";
 import { STYLE_ID, STYLES } from "../../shared/mesh/schema-streets-v8.js";
 import { jacobiansFor, lineEmphasis, targetsFor } from "../../shared/mesh/warp.js";
 
@@ -148,7 +148,8 @@ function drawnCentres(r, warp, cam, u, pts, want, style) {
 }
 
 // The issue's "1,000 random cells": points that hold a time within the ring (folds and
-// stations included; no data, beyond and filled-in water left out).
+// stations included; no data, beyond, filled-in water and cells touching an uncertain patch
+// left out: those have no reliable time for the radius to match).
 export const G3_SAMPLES = 1000;
 
 function g3Radius(lab, rand, samples = G3_SAMPLES) {
@@ -163,6 +164,7 @@ function g3Radius(lab, rand, samples = G3_SAMPLES) {
     const t = sampleField(f, x, y);
     if (t === NO_DATA || t > maxMin || Math.hypot(x, y) < 50) continue;
     if (f.filled && f.filled[Math.round((y - f.y0) / f.cell) * f.nx + Math.round((x - f.x0) / f.cell)]) continue;
+    if (touchesUncertain(f, x, y)) continue;
     const s = S.warp.screenOfLocal(x, y, cam, 1), g = S.warp.screenOfLocal(x, y, cam, 0);
     const inView = (p) => p.x > 12 && p.y > 12 && p.x < cam.width - 12 && p.y < cam.height - 12;
     if (!inView(s) || !inView(g)) continue;

@@ -11,7 +11,7 @@
 //   real     NOT synthetic: the field the warp page gets from POST /api/travel-time-field
 //            (?field=real&mode=transit|walking&window=wd08&smooth=1), fetched at boot for every
 //            test origin, so the self-test, the benchmark and directionChecks run on it
-import { decodeField, fieldFromFunction, gridFromFunction } from "../../shared/mesh/field.js";
+import { decodeField, fieldFromFunction, geometryField, gridFromFunction } from "../../shared/mesh/field.js";
 import { localFrame, metresPerUnit, WORLD_PX } from "../../shared/mesh/frame.js";
 
 export const FIELD_CELL = 100;          // metres (D7)
@@ -134,7 +134,9 @@ export function gridField(name, origin, network) {
   return gridFromFunction({ origin, cell: GRID_CELL, halfSize: FIELD_HALF }, fn);
 }
 
-// The lab's one entry point: a warp spec for createWarp() / the renderer / the worker.
+// The lab's one entry point: a warp spec for createWarp() / the renderer / the worker. A server
+// field bends by its geometry field (uncertain patches at their drawn minutes), as on the warp
+// page; `source` keeps the field itself (squash reads its true minutes).
 export function makeWarpSpec(fieldName, origin, network, { example, maxMinutes = 45, real = null } = {}) {
   if (GRID_FIELDS.includes(fieldName)) return { kind: "grid", grid: gridField(fieldName, origin, network) };
   let field;
@@ -147,7 +149,7 @@ export function makeWarpSpec(fieldName, origin, network, { example, maxMinutes =
     if (!field) throw new Error(`no real field for ${origin.id}`);
   }
   else throw new Error(`unknown field ${fieldName}`);
-  return { kind: "polar", field, maxMinutes };
+  return { kind: "polar", field: geometryField(field), source: field, maxMinutes };
 }
 
 // Fold diagnostics moved to the shared mesh (the warp page reports them on real fields).

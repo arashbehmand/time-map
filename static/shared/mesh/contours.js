@@ -1,8 +1,8 @@
 // Travel-time bands for the ordinary map (#5, W-02): masked marching squares over a field,
 // as GeoJSON in lon/lat, with every island and hole. Pure.
 //
-//   region(T)   the nodes known to be reached within T minutes (no data, beyond and anything
-//               slower are outside), traced as closed rings; the grid is padded with outside
+//   region(T)   the nodes known to be reached within T minutes (no data, beyond, uncertain
+//               patches and anything slower are outside), traced as closed rings; the grid is padded with outside
 //               nodes, so every ring closes. A crossing between two known nodes is placed by
 //               linear interpolation; next to an unknown node, half way.
 //   saddles     a cell with two inside corners on a diagonal joins them when the mean of its
@@ -20,10 +20,11 @@ const known = (t) => t !== NO_DATA && t >= 0 && t < BEYOND;
 export function regionRings(f, T, { skipFilled = false } = {}) {
   const { nx, ny, x0, y0, cell, minutes } = f;
   const filled = skipFilled && f.filled ? f.filled : null;
+  const unsure = f.uncertain || null;      // never a place anyone was routed to
   const val = (i, j) => {
     if (i < 0 || j < 0 || i >= nx || j >= ny) return Infinity;
     const k = j * nx + i, t = minutes[k];
-    if (!known(t) || (filled && filled[k])) return Infinity;
+    if (!known(t) || (filled && filled[k]) || (unsure && unsure[k])) return Infinity;
     return t;
   };
   const inside = (i, j) => val(i, j) <= T;
@@ -155,10 +156,15 @@ export function bandPolygons(f, frame, levels, opts = {}) {
 }
 
 // The band layer for the bent map (renderer.setBandMesh): the field's own cells inside `box`
-// (local metres [x0, y0, x1, y1]) whose four corners hold a time (not beyond, not filled in),
-// as triangles over the nodes, with each node's minutes. The renderer colours them by band.
-export function bandMesh(f, box = null, { skipFilled = true } = {}) {
-  const { nx, ny, x0, y0, cell, minutes } = f;
+// (local metres [x0, y0, x1, y1]) whose four corners hold a time (not beyond, not filled in,
+// not in an uncertain patch), as triangles over the nodes, with each node's minutes. The
+// renderer colours them by band. `uncertainOnly`: the cells that touch an uncertain patch
+// instead (with the drawn minutes), for a tap there to say so.
+export function bandMesh(f, box = null, { skipFilled = true, uncertainOnly = false } = {}) {
+  const { nx, ny, x0, y0, cell } = f;
+  const unsure = f.uncertain || null;
+  if (uncertainOnly && !unsure) return { pos: new Float32Array(0), minutes: new Float32Array(0), index: new Uint32Array(0) };
+  const minutes = uncertainOnly ? f.drawn || f.minutes : f.minutes;
   const filled = skipFilled && f.filled ? f.filled : null;
   let i0 = 0, j0 = 0, i1 = nx - 1, j1 = ny - 1;
   if (box) {
@@ -168,7 +174,7 @@ export function bandMesh(f, box = null, { skipFilled = true } = {}) {
   // A node the warp places: the warp samples the cell to its lower right (field.js), and a
   // cell with an unknown corner sends the node onto the outer ring as it fades, which would
   // streak the band. So the node and that cell's other three corners must all hold a time.
-  const hasTime = (k) => known(minutes[k]) && !(filled && filled[k]);
+  const hasTime = (k) => known(minutes[k]) && !(filled && filled[k]) && (uncertainOnly || !(unsure && unsure[k]));
   const ok = (k) => {
     const i = k % nx, j = Math.floor(k / nx);
     return i + 1 < nx && j + 1 < ny && hasTime(k) && hasTime(k + 1) && hasTime(k + nx) && hasTime(k + nx + 1);
@@ -187,6 +193,7 @@ export function bandMesh(f, box = null, { skipFilled = true } = {}) {
     for (let i = i0; i < i1; i++) {
       const a = j * nx + i, b = a + 1, c = a + nx + 1, d = a + nx;
       if (!(ok(a) && ok(b) && ok(c) && ok(d))) continue;
+      if (uncertainOnly && !(unsure[a] || unsure[b] || unsure[c] || unsure[d])) continue;
       const va = vert(a), vb = vert(b), vc = vert(c), vd = vert(d);
       index.push(va, vb, vc, va, vc, vd);
     }

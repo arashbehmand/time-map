@@ -4,8 +4,8 @@ The one command that rebuilds the London transit tables.
     python -m transit.build all                 # every stage, in order
     python -m transit.build <stage> [<stage> ...] [options]   # some stages, in one process
 
-Stages: fetch, dates, prep, check, network, points, journeys, tables, walksheds, manifest,
-package. `all` runs them in order and skips a stage whose inputs and settings have not
+Stages: fetch, dates, prep, check, network, points, journeys, tables, walksheds, venues,
+manifest, package. `all` runs them in order and skips a stage whose inputs and settings have not
 changed since it last ran (use --force to redo it). The gate (python -m transit.gate) and
 publishing (publish) are run on purpose, never by `all`.
 
@@ -34,7 +34,7 @@ from transit import settings
 log = logging.getLogger("transit.build")
 
 STAGES = ("fetch", "dates", "prep", "check", "network", "points", "journeys", "tables",
-          "walksheds", "manifest", "package")
+          "walksheds", "venues", "manifest", "package")
 FEEDS = {"gbt": ("gb_transit", "gtfs-rail-and-tfl.zip", None),
          "bods": ("bods", "itm_london_gtfs.zip", [3])}
 
@@ -92,6 +92,7 @@ STAGE_CODE = {
     "network": ["r5.py"], "points": ["points.py", "r5.py"],
     "journeys": ["r5.py", "tfl.py", "calibrate.py", "cases.toml"],
     "tables": ["r5.py", "tables.py", "calibrate.py"], "walksheds": ["r5.py", "tables.py"],
+    "venues": ["venues.py"],
     "manifest": ["manifest.py"], "package": [],
 }
 
@@ -665,6 +666,13 @@ def stage_walksheds(b: Build, args) -> None:
     b.write_json("walksheds.json", info)
 
 
+def stage_venues(b: Build, args) -> None:
+    """Named pubs, bars, cafés, restaurants and parks from the OSM clip (transit/venues.py)."""
+    from transit.venues import run
+
+    run(b.out, b.work, b.osm_clip)
+
+
 def attribution() -> list[str]:
     seen, out = set(), []
     for src in sources().values():
@@ -728,7 +736,7 @@ def stage_manifest(b: Build, args) -> None:
         if p.exists():
             outputs[f"tt_{w}"] = manifest.output_entry(p, shape=list(np.load(p, mmap_mode="r").shape),
                                                        departure=b.window_start(w).isoformat())
-    for name in ("point_ok.npy", "walksheds.npz", "points.csv"):
+    for name in ("point_ok.npy", "walksheds.npz", "points.csv", "venues.csv", "venues.json"):
         if (b.out / name).exists():
             outputs[name] = manifest.output_entry(b.out / name)
     stages = {}
@@ -751,7 +759,7 @@ def stage_manifest(b: Build, args) -> None:
 LICENCE_TEXT = """\
 London transit tables (time-map), build {build}
 
-The travel-time tables, walksheds and points in this archive are derived from
+The travel-time tables, walksheds, points and venues in this archive are derived from
 OpenStreetMap and are made available under the Open Database License 1.0
 (https://opendatacommons.org/licenses/odbl/1-0/). (c) OpenStreetMap contributors.
 
@@ -782,6 +790,8 @@ def licences_cleared() -> bool:
 def stage_package(b: Build, args) -> None:
     files = [b.out / f"tt_{w}.npy" for w in settings.WINDOWS] + \
         [b.out / n for n in ("point_ok.npy", "points.csv", "walksheds.npz", "manifest.json")]
+    # Venues travel with the tables when the build has them (the venues stage).
+    files += [b.out / n for n in ("venues.csv", "venues.json") if (b.out / n).exists()]
     missing = [f.name for f in files if not f.exists()]
     if missing:
         raise SystemExit(f"cannot package: missing {missing}")
@@ -845,7 +855,8 @@ def stage_check_keys(b: Build, args) -> None:
 
 RUNNERS = {"fetch": stage_fetch, "dates": stage_dates, "prep": stage_prep, "check": stage_check,
            "network": stage_network, "points": stage_points, "journeys": stage_journeys,
-           "tables": stage_tables, "walksheds": stage_walksheds, "manifest": stage_manifest,
+           "tables": stage_tables, "walksheds": stage_walksheds, "venues": stage_venues,
+           "manifest": stage_manifest,
            "package": stage_package}
 
 
@@ -879,8 +890,10 @@ def stage_inputs(b: Build, name: str) -> tuple[list[Path], list[Path]]:
                    [b.out / f"tt_{w}.npy" for w in settings.WINDOWS]),
         "walksheds": (prepped + [b.osm_clip, b.out / "points.csv", b.out / "point_ok.npy"],
                       [b.out / "walksheds.npz"]),
-        "manifest": ([b.out / f"tt_{w}.npy" for w in settings.WINDOWS] + [b.out / "walksheds.npz"],
-                     [b.out / "manifest.json"]),
+        "venues": ([b.osm_clip, b.out / "points.csv", b.out / "point_ok.npy"],
+                   [b.out / "venues.csv", b.out / "venues.json"]),
+        "manifest": ([b.out / f"tt_{w}.npy" for w in settings.WINDOWS] +
+                     [b.out / n for n in ("walksheds.npz", "venues.csv")], [b.out / "manifest.json"]),
         "package": ([b.out / "manifest.json"], [b.out / f"transit-london-{b.id}.tar.xz"]),
     }
     return io[name]

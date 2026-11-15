@@ -5,6 +5,8 @@ Station A's walkshed has a small hole (a pond) 250 m east of it, so the field fi
 station B's has one 120 m north of it, inside the 150 m the last steps from a station are
 walked straight. Cell C's walkshed lies 1.6 km north of the stations, so only C's row reaches
 it. `twin` adds a station E 5 m from B, with its own minutes from A.
+
+write_venues adds venue files (venues.csv and venues.json, #19) to any build.
 """
 from __future__ import annotations
 
@@ -120,12 +122,13 @@ NAMES = ["ALPHA", "BRAVO", "CHARLIE", "DELTA", "ECHO", "FOXTROT", "GOLF", "HOTEL
 
 
 def make_random_build(root: Path, n_stations: int = 12, seed: int = 0, *, spread_m: float = 2500,
-                      unreachable: float = 0.05, cleared: bool = True) -> Path:
+                      unreachable: float = 0.05, cleared: bool = True, n_venues: int = 0) -> Path:
     """
     A cleared build of n_stations stations scattered within spread_m of CENTRE, with random
     asymmetric minutes per window (some 255) and a 700 m walkshed each. Every fourth station
     has a twin of the same name 100-300 m away (one place with two platforms); one in seven is
-    masked. Returns the build directory.
+    masked. n_venues venues of random kinds are scattered over 1.4 x spread_m, so some are
+    beyond every walkshed. Returns the build directory.
     """
     rng = np.random.default_rng(seed)
     d = root / f"rand-{seed}"
@@ -176,4 +179,47 @@ def make_random_build(root: Path, n_stations: int = 12, seed: int = 0, *, spread
         "licences_cleared": cleared,
     }
     (d / "manifest.json").write_text(json.dumps(manifest))
+    if n_venues:
+        write_venues(d, random_venues(n_venues, seed, 1.4 * spread_m))
     return d
+
+
+# ── venues ──────────────────────────────────────────────────────────
+VENUE_KINDS = ("pub", "bar", "cafe", "restaurant", "park")
+CLIP_SHA = "c1" * 32
+
+
+def random_venues(n: int, seed: int = 0, spread_m: float = 2500) -> list[tuple]:
+    """n (id, kind, name, lon, lat) around CENTRE, sorted as transit/venues.py writes them."""
+    rng = np.random.default_rng(seed + 1000)
+    m_lat = 1 / 111_195
+    m_lon = m_lat / np.cos(np.radians(CENTRE[1]))
+    out = []
+    for i in range(n):
+        dx, dy = rng.uniform(-spread_m, spread_m, 2)
+        kind = VENUE_KINDS[int(rng.integers(len(VENUE_KINDS)))]
+        out.append((f"node/{i + 1}", kind, f"The {kind.title()} {i + 1}",
+                    CENTRE[0] + dx * m_lon, CENTRE[1] + dy * m_lat))
+    return sorted(out, key=lambda v: (VENUE_KINDS.index(v[1]), int(v[0].split("/")[1])))
+
+
+def write_venues(d: Path, rows: list[tuple], *, listed: bool = False) -> Path:
+    """
+    venues.csv from (id, kind, name, lon, lat) rows, recorded the way a build does it: in
+    venues.json with its sha256 and the OSM clip's, which the manifest's inputs carry too; and,
+    with `listed` (the manifest stage), in the manifest's outputs as well.
+    """
+    path = d / "venues.csv"
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["id", "kind", "name", "lon", "lat"])
+        w.writerows(rows)
+    data = path.read_bytes()
+    entry = {"file": "venues.csv", "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+    manifest = json.loads((d / "manifest.json").read_text())
+    manifest.setdefault("inputs", {})["osm_clip"] = {"file": "london.osm.pbf", "sha256": CLIP_SHA}
+    (d / "venues.json").write_text(json.dumps({"schema": 1, "csv": entry, "osm_clip_sha256": CLIP_SHA}))
+    if listed:
+        manifest["outputs"]["venues.csv"] = entry
+    (d / "manifest.json").write_text(json.dumps(manifest))
+    return path

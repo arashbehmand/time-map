@@ -72,6 +72,9 @@
       </label>
       <p class="hint" id="window-hint" hidden>Public transport times are for a typical hour on that day,
         so trips can take a few minutes more or less.</p>
+      <label class="field" id="venue-field" hidden><span>Where?</span>
+        <select id="venue-select"></select>
+      </label>
       <fieldset class="chips" id="objective">
         <legend id="choice-heading" class="label">What matters most?</legend>
         <label class="chip"><input type="radio" name="objective" value="minimax" checked /><span>Fairest</span></label>
@@ -80,6 +83,10 @@
       <p class="hint" id="objective-hint">Fairest keeps the longest trip as short as possible.</p>
       <p class="hint" id="both-hint" hidden>With public transport we meet at a station, and show both
         the fairest one and the one with the quickest average trip.</p>
+      <p class="hint" id="venue-hint" hidden>We look for that kind of place within a 10-minute walk of
+        public transport, and show both the fairest one and the one with the quickest average trip. If none
+        works for everyone, or the best station we checked makes the longest trip more than 10 minutes
+        shorter, we meet at that station and say so.</p>
       <button id="find-btn" class="btn primary wide" type="button" disabled>Add at least 2 people</button>
     </section>
 

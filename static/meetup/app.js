@@ -7,8 +7,8 @@
 import { createLatest } from "/shared/latest.js";
 import { esc, friendly, geocode, postJSON, savePref } from "/shared/api.js";
 import {
-  ALL_TIES_TEXT, altText, answerNotes, headline, isStation, journeyLink, journeyNote, meaning, mins,
-  noPlaceSentence, placeHeadline, quickestText, stationAltText, TIE_TEXT,
+  ALL_TIES_TEXT, altText, answerNotes, headline, isPlace, isVenue, journeyLink, journeyNote, meaning, mins,
+  noPlaceSentence, OPEN_HOURS_HINT, placeHeadline, quickestText, stationAltText, TIE_TEXT, VENUE_WORD,
 } from "/meetup/words.js";
 import { expired, insideArea } from "/warp/views.js";
 
@@ -18,6 +18,10 @@ const COLORS = ["#c62828", "#00796b", "#6a1b9a", "#1565c0", "#ef6c00", "#2e7d32"
 const MODE_ING = { walking: "walking", cycling: "cycling", driving: "driving", transit: "by public transport" };
 const MODE_LABEL = { walking: "Walking", cycling: "Cycling", driving: "Driving", transit: "Public transport" };
 const DEFAULT_WINDOW = "wd19";     // weekday evening, as the server
+// Where a group with someone on public transport meets: a pub unless they pick otherwise
+// (the server's own default is a station). Only kinds the tables' build has are offered.
+const DEFAULT_VENUE = "pub";
+const VENUE_LABEL = { pub: "A pub", bar: "A bar", cafe: "A café", restaurant: "A restaurant", park: "A park" };
 const LONDON_ONLY = "Public transport times cover London only";
 const MAX_PARTICIPANTS = 8;        // server cap (server/meetup/models.py)
 const MAX_REACH_MINUTES = 60;      // routing limit for "how far each person can get"
@@ -53,6 +57,8 @@ let markerDrags = 0;           // a marker is being dragged: its place isn't fin
 let styleReady = false;        // the map style has loaded once (layers can be added from then on)
 let transit = { available: false };   // GET /api/transit/status
 let windowId = DEFAULT_WINDOW;        // when the group meets (public transport only)
+let venueId = DEFAULT_VENUE;          // where the group meets (public transport only)
+let venueKinds = [];                  // the venue kinds the tables' build has
 let statusRetryMs = 5000;
 
 // ── DOM ─────────────────────────────────────────────────────────
@@ -209,15 +215,18 @@ function transitOk(pt) {
 
 const anyTransit = () => people.some((p) => p.mode === "transit");
 
-// The When control shows while someone is on public transport; the Fairest/Quickest choice
-// hides then, because a station answer shows both.
+// The When and Where controls show while someone is on public transport; the Fairest/Quickest
+// choice hides then, because a station or venue answer shows both.
 function updateTransitControls() {
   const on = anyTransit();
+  const atVenue = venueKinds.length > 0 && venueId !== "station";
   $("window-field").hidden = !on;
+  $("venue-field").hidden = !on || venueKinds.length === 0;
+  $("venue-hint").hidden = !on || !atVenue;
   $("window-hint").hidden = !on;
   $("objective").hidden = on;
   $("objective-hint").hidden = on;
-  $("both-hint").hidden = !on;
+  $("both-hint").hidden = !on || atVenue;
 }
 
 async function loadTransitStatus() {
@@ -244,6 +253,14 @@ async function loadTransitStatus() {
     sel.replaceChildren(...transit.windows.map((w) => new Option(w.label[0].toUpperCase() + w.label.slice(1), w.id)));
     if (!ids.includes(windowId)) windowId = ids.includes(DEFAULT_WINDOW) ? DEFAULT_WINDOW : ids[0];
     sel.value = windowId;
+    // Venue kinds the build has at least one of, then "Just a station".
+    const counts = (transit.venues && transit.venues.kinds) || {};
+    const kinds = Object.keys(VENUE_LABEL).filter((k) => Number(counts[k]) > 0);
+    venueKinds = kinds;
+    const venueSel = $("venue-select");
+    venueSel.replaceChildren(...kinds.map((k) => new Option(VENUE_LABEL[k], k)), new Option("Just a station", "station"));
+    if (!kinds.includes(venueId) && venueId !== "station") venueId = kinds.includes(DEFAULT_VENUE) ? DEFAULT_VENUE : (kinds[0] || "station");
+    venueSel.value = venueId;
   } else if (anyTransit()) {
     for (const p of people) {
       if (p.mode !== "transit") continue;
@@ -259,6 +276,12 @@ async function loadTransitStatus() {
 
 $("window-select").addEventListener("change", (e) => {
   windowId = e.target.value;
+  groupChanged();
+});
+
+$("venue-select").addEventListener("change", (e) => {
+  venueId = e.target.value;
+  updateTransitControls();
   groupChanged();
 });
 
@@ -523,6 +546,7 @@ async function solve() {
   const snap = {
     objective: stations ? "minimax" : objective(),
     window: stations ? windowId : null,
+    venue: stations ? venueId : null,
     people: people.map(({ id, name, lon, lat, mode, color }) => ({ id, name, lon, lat, mode, color })),
   };
   findBtn.disabled = true;
@@ -535,6 +559,7 @@ async function solve() {
       objective: snap.objective,
       search: { top_k: stations ? 5 : 4 },
       ...(snap.window ? { window: snap.window } : {}),
+      ...(snap.venue ? { venue: snap.venue } : {}),
     }, signal));
   } catch (err) {
     updateFind();
@@ -567,7 +592,7 @@ function nameOf(sp) {
 }
 
 function showResults(data, snap) {
-  if (isStation(data.best)) { showStations(data, snap); return; }
+  if (isPlace(data.best)) { showStations(data, snap); return; }
   clearResults();
   lastAnswer = { data, snap, reach: null };
   const best = data.best;
@@ -596,7 +621,7 @@ function showResults(data, snap) {
   fitTo([...snap.people.map((p) => [p.lon, p.lat]), [best.lon, best.lat]], 14);
 }
 
-// ── Answer at a station ─────────────────────────────────────────
+// ── Answer at a station or a venue ──────────────────────────────
 // Fairest is the star; Quickest on average gets its own card and marker when it is another
 // place; close alternatives are numbered. Each person's time comes with a link to plan the
 // journey. No reach areas: they would come from a different service than these times.
@@ -614,7 +639,8 @@ function placeMarker(c, className, text, title) {
 function showStations(data, snap) {
   clearResults();
   lastAnswer = { data, snap, reach: null };
-  resultMarkers.push(placeMarker(data.best, "best-marker", "★", `Meet at ${data.best.name || "this station"}`));
+  const kind = isVenue(data.best) ? VENUE_WORD[data.best.kind] : "station";
+  resultMarkers.push(placeMarker(data.best, "best-marker", "★", `Meet at ${data.best.name || `this ${kind}`}`));
   if (data.quickest) resultMarkers.push(placeMarker(data.quickest, "cand-marker quick-marker", "Q", "Quickest on average"));
   data.top.slice(1).forEach((c, i) => resultMarkers.push(placeMarker(c, "cand-marker", String(i + 2), `Option ${i + 2}`)));
   renderAnswer();
@@ -650,7 +676,8 @@ function renderStations() {
       <p class="hint">${esc(meaning("minimax"))}</p>
       ${answerNotes(data).map((n) => `<p class="hint answer-note">${esc(n)}</p>`).join("")}
       ${tripRows(data.best, snap)}
-      <p class="hint">${esc(journeyNote(data.window_label))}</p>
+      <p class="hint">${esc(journeyNote(data.window_label, data.best))}</p>
+      ${isVenue(data.best) ? `<p class="hint">${esc(OPEN_HOURS_HINT)}</p>` : ""}
     </div>
     ${data.quickest ? `
       <div class="answer-card quick-card">
@@ -670,7 +697,7 @@ function renderStations() {
       </ul>
       ${allTies ? `<p class="hint">${esc(ALL_TIES_TEXT)}</p>`
         : alts.some((c) => c.tie) ? `<p class="hint">${esc(TIE_TEXT)}</p>` : ""}` : ""}
-    ${credits.length ? `<p class="hint credits">Public transport data: ${credits.map(esc).join(" · ")}</p>` : ""}`;
+    ${credits.length ? `<p class="hint credits">Data: ${credits.map(esc).join(" · ")}</p>` : ""}`;
   answerEl.hidden = false;
   for (const btn of answerEl.querySelectorAll(".alternatives .btn")) {
     btn.addEventListener("click", () => map.easeTo({ center: [+btn.dataset.lon, +btn.dataset.lat], zoom: Math.max(map.getZoom(), 14) }));
@@ -678,7 +705,7 @@ function renderStations() {
 }
 
 function renderAnswer() {
-  if (isStation(lastAnswer.data.best)) { renderStations(); return; }
+  if (isPlace(lastAnswer.data.best)) { renderStations(); return; }
   const { data, snap } = lastAnswer;
   const best = data.best;
   const alts = data.top.slice(1, 4);

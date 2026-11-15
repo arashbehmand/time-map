@@ -89,7 +89,8 @@ file downloads without a login). The gate needs a free TfL API key; see `transit
 - **BODS.** The BODS site refused automated fetches (403). DfT's catalogue entry for "Bus Open
   Data - download all timetable data" lists the licence as the Open Government Licence.
 - **OSM.** ODbL 1.0: the tables are a derivative database, so publishing them means
-  publishing them under the ODbL, with the credit.
+  publishing them under the ODbL, with the credit. The meetup's venues (`venues.csv`, #19) come from the
+  same clip on the same terms, and the credit is already in every build's attribution.
 
 ## May the tables be published?
 

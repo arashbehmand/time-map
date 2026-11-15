@@ -143,7 +143,8 @@ python -m transit.build <stage> --build <id>      # id defaults to today's date
 | `journeys` | The go/no-go: three hand-checked journeys, an interchange probe, a walking-speed check |
 | `tables` | The four tables (`--window`, `--limit-origins` for a pilot, `--threads`); resumes a table only if its fingerprint matches, restarts it otherwise or with `--force`; then masks points cut off from the network. A pilot leaves the stage incomplete |
 | `walksheds` | Station and cell walksheds |
-| `manifest`, `package` | `manifest.json` (refuses incomplete tables; records the settings the tables were built with); `transit-london-<id>.tar.xz` with `LICENSE-DATA.txt` |
+| `venues` | Named pubs, bars, cafés, restaurants and parks (0.5 ha or more) from the OSM clip, for the meetup (#19): `venues.csv` and `venues.json` (osmium; no Java). Runs on its own too: `python -m transit.venues --build <id>`, on any build that still has its clip |
+| `manifest`, `package` | `manifest.json` (refuses incomplete tables; records the settings the tables were built with; lists the venue files when there are any); `transit-london-<id>.tar.xz` with `LICENSE-DATA.txt` (and the venue files) |
 
 `all` runs them in order and skips a stage whose inputs, settings and code have not changed.
 `--force` reruns every stage (the dates are still kept without `--redate`).

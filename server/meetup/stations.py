@@ -21,14 +21,23 @@ of the best are marked as ties. No shaded area: the places are discrete.
 
 The same group in any order gets the same answer: people are scored in id order, and ties
 are broken by place order.
+
+Venues (#19): asked for a pub, bar, café, restaurant or park, the solve scores every station
+and every venue of that kind together (TransitData.pool), a venue's time being the best over
+the stations and table cells within a 10-minute walk of it of that point's table time plus the
+walk. The answer is venues only, scored and listed as above, unless no venue works for everyone
+or the fairest venue's longest trip is more than VENUE_SLACK_MIN above the fairest station's:
+then it is the station answer, and a note says why. For road people the shortlist keeps a few
+stations next to the venues, so that comparison costs no second request.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field, replace
+from typing import Any, Callable
 
 import numpy as np
 
@@ -53,6 +62,7 @@ from server.meetup.routing import (
 )
 from server.meetup.solver import NOTE_BAD_REPLY, NOTE_NO_ROUTE, NOTE_UNCHECKED, explain_infeasible
 from server.transit.provider import TransitData, credits, window_label
+from server.transit.venues import PLURAL, VENUE_WALK_MAX_MIN, WORD
 from server.warp.field import WALK_M_PER_MIN
 from transit.tables import band_of, haversine_m
 
@@ -77,19 +87,61 @@ MAX_STATION_WALK_M = 400.0
 # Above this, the answer says that some road trips end a short walk from the station.
 NOTE_STATION_WALK_M = 150.0
 
+# Venues: shown unless the fairest one's longest trip is more than this above the fairest
+# station's (minutes). A venue exactly this much slower is still shown.
+VENUE_SLACK_MIN = 10.0
+# Venues on the road shortlist are at least this far apart (metres), so one street of pubs
+# can't fill it; a third of the places on it are stations, so the station the best venue is
+# compared with (and the one shown when it falls back) is the best of several. A shortlist is
+# never shorter than two places when there are two (plan_stations: Mapbox bills two elements a
+# request whatever its size), so it always holds a station and a venue.
+SHORTLIST_GAP_M = 250.0
+SHORTLIST_STATION_SHARE = 1 / 3
+
 NOTE_NO_TIME_OF_DAY = "Walking, cycling and driving times don't depend on the time of day."
 NOTE_STATION_WALK = ("Some trips by road end a short walk from the station. That walk is "
                      "counted in their times.")
+NOTE_PLACE_WALK = ("Some trips by road end a short walk from the place. That walk is "
+                   "counted in their times.")
 
 
 def note_window(label: str) -> str:
     return f"Public transport times are for {label}."
 
 
-def note_shortlist(k: int) -> str:
+def note_shortlist(k: int, word: str = "station", plural: str = "stations") -> str:
     if k == 1:
-        return "This is the only station we could check by road, so a better station may exist."
-    return f"This is the best of the {k} stations we checked by road, not of every station."
+        return f"This is the only {word} we could check by road, so a better {word} may exist."
+    return f"This is the best of the {k} {plural} we checked by road, not of every {word}."
+
+
+def gap_text(minutes: float) -> str:
+    """A gap over the 10-minute line, never shown as 10: whole minutes when it is whole to a
+    tenth, else rounded up to a tenth ('10.1')."""
+    tenths = math.ceil(round(minutes, 6) * 10) / 10
+    return f"{tenths:.0f}" if tenths == int(tenths) else f"{tenths:.1f}"
+
+
+def note_venue_fallback(kind: str, reason: str, minutes: float = 0.0, station: str = "") -> str:
+    """
+    Why a station is shown when a venue was asked for:
+      not_loaded     the build has no venues of this kind
+      none_in_reach  it has, but none within a 10-minute walk of public transport
+      none_work      some are in reach, but none works for everyone: over someone's time
+                     limit, beyond a road person's reach, no time from the tables, or too far
+                     from a road (and so never on the road shortlist, or dropped from it)
+      slower         the fairest venue's longest trip is more than 10 min over the station's
+    """
+    word, plural = WORD[kind], PLURAL[kind]
+    if reason == "slower":
+        return (f"The fairest {word} makes the longest trip {gap_text(minutes)} min longer than "
+                f"{station or 'the fairest station'}, so this is the station.")
+    if reason == "not_loaded":
+        return f"These travel times come without {plural}, so this is a station."
+    if reason == "none_in_reach":
+        return (f"No {word} is within a {VENUE_WALK_MAX_MIN:.0f}-minute walk of public transport, "
+                f"so this is a station.")
+    return f"No {word} works for all of you, so this is a station."
 
 
 # ── pure parts ──────────────────────────────────────────────────────
@@ -124,6 +176,16 @@ def line_minutes(people: list[Participant], lons: np.ndarray, lats: np.ndarray,
     for i, p in enumerate(people):
         out[i] = haversine_m(p.lon, p.lat, lons, lats) / 1000.0 / speeds[p.mode] * 60.0
     return out
+
+
+def _turns(a: np.ndarray, b: np.ndarray):
+    """The distinct entries of a and b taken in turn (a first), lazily."""
+    seen: set[int] = set()
+    for n in range(max(len(a), len(b))):
+        for x in (a, b):
+            if n < len(x) and int(x[n]) not in seen:
+                seen.add(int(x[n]))
+                yield int(x[n])
 
 
 def interleave(a: np.ndarray, b: np.ndarray, k: int) -> list[int]:
@@ -183,6 +245,41 @@ def pick_places(order: np.ndarray, longest: np.ndarray, lons: np.ndarray, lats: 
     return picked
 
 
+def pool_shortlist(fair: np.ndarray, quick: np.ndarray, is_venue: np.ndarray, lons: np.ndarray,
+                   lats: np.ndarray, k: int, gap_m: float = SHORTLIST_GAP_M) -> list[int]:
+    """
+    The places to ask about by road when stations and venues are scored together: venues by
+    the estimate (fairest and quickest in turn), each at least gap_m from the venues already
+    taken, in all but about one in six of the k slots; stations, the same way, in the rest. A
+    single slot is a station.
+    """
+    n_st = max(1, round(k * SHORTLIST_STATION_SHARE))
+    venues: list[int] = []
+    for i in _turns(fair[is_venue[fair]], quick[is_venue[quick]]):
+        if len(venues) >= k - n_st:
+            break
+        if _apart(lons, lats, i, venues, gap_m):
+            venues.append(i)
+    return interleave(fair[~is_venue[fair]], quick[~is_venue[quick]], k - len(venues)) + venues
+
+
+def choose(longest: np.ndarray, is_venue: np.ndarray,
+           slack: float = VENUE_SLACK_MIN) -> tuple[np.ndarray, str | None, float, float]:
+    """
+    (places to answer from, why a station instead, fairest venue's longest trip, fairest
+    station's): the venues, unless none works for everyone ("none_work") or the fairest
+    one's longest trip is more than `slack` above the fairest station's ("slower").
+    """
+    r = np.round(np.asarray(longest, dtype=np.float64), 6)
+    v = float(r[is_venue].min()) if is_venue.any() else np.inf
+    s = float(r[~is_venue].min()) if (~is_venue).any() else np.inf
+    if not np.isfinite(v):
+        return ~is_venue, "none_work", v, s
+    if np.isfinite(s) and v > s + slack + 1e-9:
+        return ~is_venue, "slower", v, s
+    return is_venue.copy(), None, v, s
+
+
 def tie_line(minutes: float, lines: dict[str, float]) -> float:
     """The tables' error for a trip this long (minutes)."""
     band = band_of(minutes)
@@ -208,9 +305,15 @@ class Group:
     index_of: list[int]          # position in the request, for each person
     transit: list[int]           # people on public transport (positions in `people`)
     road: list[int]              # everyone else
-    cand: np.ndarray             # indexes into data.places
+    cand: np.ndarray             # indexes into `places`
     lons: np.ndarray             # the candidate places' points
     lats: np.ndarray
+    places: list = field(default_factory=list)     # data.places, or the venue pool's
+    minutes: Callable[[np.ndarray], np.ndarray] | None = None   # a table row to `places`
+    is_venue: np.ndarray | None = None              # per candidate
+    venue: str = "station"                          # the kind asked for
+    fallback: str | None = None                     # why stations only, when a venue was asked for
+    pool: Any = None                                # the venue pool (TransitData.pool), if any
 
 
 def prepare(req: SolveRequest, data: TransitData) -> Group:
@@ -218,6 +321,8 @@ def prepare(req: SolveRequest, data: TransitData) -> Group:
     Check the group before anything is planned or sent: everyone on public transport starts
     inside the tables' area and near a street or station they reach, and every road person
     is within their mode's reach of some station. Raises with who is stuck, in request order.
+    Asked for a venue, the places are then every candidate station and the venues of that kind
+    within every road person's reach; with none, the group stays on stations and says why.
     """
     index_of = sorted(range(len(req.participants)), key=lambda i: req.participants[i].id)
     people = [req.participants[i] for i in index_of]
@@ -259,7 +364,27 @@ def prepare(req: SolveRequest, data: TransitData) -> Group:
         raise GroupTooSpread(
             "No station is within reach of everyone: each person can reach some stations, but "
             "none that all of you can. Pick faster ways to travel or move people closer.")
-    return Group(people, index_of, transit, road, cand, lons[cand], lats[cand])
+    g = Group(people, index_of, transit, road, cand, lons[cand], lats[cand], data.places,
+              data.place_minutes, np.zeros(len(cand), dtype=bool), req.venue)
+    if req.venue == "station":
+        return g
+    pool = data.pool(req.venue)
+    if pool is None:
+        return replace(g, fallback="not_loaded")
+    v = np.flatnonzero(pool.is_venue)
+    if not len(v):
+        return replace(g, fallback="none_in_reach")
+    v_lons, v_lats = pool.venue_lons, pool.venue_lats
+    near_v = np.ones(len(v), dtype=bool)
+    for k in road:
+        near_v &= haversine_m(people[k].lon, people[k].lat, v_lons, v_lats) / 1000.0 \
+            <= MODE_RADIUS_KM[people[k].mode]
+    if not near_v.any():
+        return replace(g, fallback="none_work")
+    return replace(g, cand=np.r_[cand, v[near_v]], lons=np.r_[lons[cand], v_lons[near_v]],
+                   lats=np.r_[lats[cand], v_lats[near_v]], places=pool.places, minutes=pool.minutes,
+                   is_venue=np.r_[np.zeros(len(cand), dtype=bool), np.ones(int(near_v.sum()), dtype=bool)],
+                   pool=pool)
 
 
 # ── road people, one request each ───────────────────────────────────
@@ -318,9 +443,17 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
 
     # ── public transport, from the tables ─────────────────────────────
     def table_rows() -> np.ndarray:
-        rows = [data.place_minutes(data.row(people[k].lon, people[k].lat, window))
-                for k in g.transit]
-        return np.array(rows).reshape(len(g.transit), len(data.places))
+        rows = []
+        for k in g.transit:
+            p = people[k]
+            row = data.row(p.lon, p.lat, window)
+            if g.pool is None:
+                rows.append(g.minutes(row))
+            else:
+                # Someone starting near a venue may walk there straight (VenueLinks.walk_from).
+                rows.append(g.pool.minutes(row, g.pool.walk_from(p.lon, p.lat,
+                                                                 data.access_points(p.lon, p.lat))))
+        return np.array(rows).reshape(len(g.transit), len(g.places))
 
     full = await asyncio.to_thread(table_rows)      # every station, before the radius filter
     times = np.full((len(people), n_c), np.inf)
@@ -342,7 +475,7 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
             raise
         # Times to some stations, but none within the road people's reach: no common place.
         raise NoFeasiblePoint("no_common_place", [
-            {"index": w["index"], "reason": "reaches_few", "reach": 0, "of": int(n_c)}
+            {"index": w["index"], "reason": "reaches_few", "reach": 0, "of": int((~g.is_venue).sum())}
             for w in exc.extra["who"]]) from None
 
     cols = np.arange(n_c)                       # the places scored, as indexes into g.cand
@@ -351,6 +484,7 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
     snap_m = np.zeros((len(people), n_c))
     proven: bool | None = None
     notes: list[str] = [note_window(window_label(data.windows[window]))]
+    fallback = g.fallback
 
     # ── everyone else, by road, on a shortlist ────────────────────────
     if g.road:
@@ -367,9 +501,14 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
         est_limits = limits.copy()
         est_limits[g.road] = np.inf
         e_longest, e_mean = scores(est, weights, est_limits)
-        cols = np.array(interleave(rank(e_longest, e_mean, "fairest"),
-                                   rank(e_longest, e_mean, "quickest"), plan.coarse_max),
-                        dtype=np.int64)
+        if g.is_venue.any():
+            cols = np.array(pool_shortlist(rank(e_longest, e_mean, "fairest"),
+                                           rank(e_longest, e_mean, "quickest"), g.is_venue,
+                                           g.lons, g.lats, plan.coarse_max), dtype=np.int64)
+        else:
+            cols = np.array(interleave(rank(e_longest, e_mean, "fairest"),
+                                       rank(e_longest, e_mean, "quickest"), plan.coarse_max),
+                            dtype=np.int64)
         if not len(cols):
             raise NoFeasiblePoint("over_time_limit", [
                 {"index": index_of[k], "reason": "over_time_limit"} for k in
@@ -395,6 +534,17 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
     off_mean = np.where(far, np.inf, mean)
     if not np.isfinite(off_longest).any():
         raise NoFeasiblePoint("off_street")
+    # Venues or the station: the places the answer is made from; the rest are left out.
+    venue_cols = g.is_venue[cols]
+    best_v = best_s = None
+    if venue_cols.any():
+        keep, why, best_v, best_s = choose(off_longest, venue_cols)
+        fallback = fallback or why
+        off_longest = np.where(keep, off_longest, np.inf)
+        off_mean = np.where(keep, off_mean, np.inf)
+    elif g.is_venue.any() and fallback is None:
+        fallback = "none_work"          # no venue on the road shortlist: none estimated to work
+    at_venue = venue_cols.any() and fallback is None
 
     # ── answers ───────────────────────────────────────────────────────
     lons, lats = g.lons[cols], g.lats[cols]
@@ -411,15 +561,24 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
     shown = picks + ([quickest] if quickest is not None else [])
 
     checked = ~unresolved.any(axis=0) & ~far
+    if fallback is not None:
+        station_name = ""
+        if fallback == "slower":
+            station_name = g.places[int(g.cand[cols[best]])].name
+        notes.append(note_venue_fallback(g.venue, fallback,
+                                         (best_v or 0.0) - (best_s or 0.0), station_name))
     if g.road:
+        same = g.is_venue == at_venue                 # the kind of place answered with
         clean = np.zeros(n_c, dtype=bool)
         clean[cols[checked]] = True
-        proven = bool((b_longest[~clean] >= np.round(off_longest[best], 6) - 1e-9).all())
+        proven = bool((b_longest[~clean & same] >= np.round(off_longest[best], 6) - 1e-9).all())
         notes.append(NOTE_NO_TIME_OF_DAY)
-        if int(checked.sum()) < n_c:
-            notes.append(note_shortlist(int(checked.sum())))
+        n_checked = int((checked & (venue_cols == at_venue)).sum())
+        if n_checked < int(same.sum()):
+            notes.append(note_shortlist(n_checked, *((WORD[g.venue], PLURAL[g.venue]) if at_venue
+                                                     else ("station", "stations"))))
         if (snap_m[:, shown] > NOTE_STATION_WALK_M).any():
-            notes.append(NOTE_STATION_WALK)
+            notes.append(NOTE_PLACE_WALK if at_venue else NOTE_STATION_WALK)
     if unresolved.any():
         notes.append(NOTE_UNCHECKED)
     allowance = solve_allowance.get()
@@ -429,19 +588,24 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
         notes.append(NOTE_NO_ROUTE)
 
     def result(j: int, tie: bool = False) -> CandidateResult:
-        place = data.places[int(g.cand[cols[j]])]
+        place = g.places[int(g.cand[cols[j]])]
         return CandidateResult(
             lon=round(place.lon, 7), lat=round(place.lat, 7), name=place.name,
             score=round(float(off_longest[j]), 2),
             max_time_min=round(float(off_longest[j]), 2),
             mean_time_min=round(float(off_mean[j]), 2),
             times={p.id: round(float(times[i, j]), 2) for i, p in enumerate(people)},
-            kind="station", place_id=place.pid, tie=tie)
+            kind=place.kind, place_id=place.pid, tie=tie)
 
     top = [result(picks[0])] + [result(j, tie=t) for j, t in zip(picks[1:], ties)]
     unchecked = unresolved.any(axis=0)
     diagnostics: dict[str, Any] = {
-        "path": "stations",
+        "path": "venues" if at_venue else "stations",
+        "venue": g.venue,
+        "venue_fallback": fallback,
+        "venue_pool": int(g.is_venue.sum()),
+        "best_venue_max_min": best_v if best_v is None or np.isfinite(best_v) else None,
+        "best_station_max_min": best_s if best_s is None or np.isfinite(best_s) else None,
         "build": data.build,
         "window": window,
         "places": int(n_c),
@@ -472,4 +636,6 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
         window=window,
         window_label=window_label(data.windows[window]),
         credits=credits(data.manifest),
+        venue=g.venue,
+        venue_fallback=fallback,
     )

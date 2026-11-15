@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ApiError } from "../../static/shared/api.js";
 import {
-  ALL_TIES_TEXT, altText, answerNotes, headline, isStation, joinNames, journeyLink, journeyNote,
-  noPlaceSentence, placeHeadline,
+  ALL_TIES_TEXT, altText, answerNotes, headline, isPlace, isStation, isVenue, joinNames, journeyLink,
+  journeyNote, noPlaceSentence, OPEN_HOURS_HINT, placeHeadline,
   quickestText, stationAltText, TIE_TEXT,
 } from "../../static/meetup/words.js";
 
@@ -136,4 +136,30 @@ test("no table time within three hours is said as that, not as no route", () => 
     "From where Ben starts, the public transport times have no trip within 3 hours to any station. " +
     "Pick another way for them to travel.");
   assert.equal(noPlaceSentence(noPlace("no_transit_time", []), ["Ana"]), "");
+});
+
+// ── venues (#19) ────────────────────────────────────────────────
+const lamb = { kind: "pub", name: "The Lamb", lon: -0.12, lat: 51.52, max_time_min: 22.6, mean_time_min: 17 };
+
+test("a venue answer names the place and says what kind it is", () => {
+  assert.equal(placeHeadline(lamb), "Meet at The Lamb, a pub (★ on the map). Everyone gets there within 23 min.");
+  assert.equal(placeHeadline({ ...lamb, kind: "cafe", name: "Kaffeine" }),
+    "Meet at Kaffeine, a café (★ on the map). Everyone gets there within 23 min.");
+  assert.match(placeHeadline({ ...lamb, kind: "park", name: " " }), /^Meet at this park \(/);
+  assert.match(placeHeadline({ ...lamb, kind: "restaurant", name: "" }), /^Meet at this restaurant/);
+  assert.equal(stationAltText({ ...lamb, kind: "bar" }), "The Lamb · longest trip 23 min");
+});
+
+test("venues and stations are places; a street point is not", () => {
+  for (const kind of ["pub", "bar", "cafe", "restaurant", "park"]) {
+    assert.ok(isVenue({ kind }) && isPlace({ kind }) && !isStation({ kind }), kind);
+  }
+  assert.ok(isPlace(bank) && !isVenue(bank));
+  assert.ok(!isPlace({ kind: "street" }) && !isPlace(null) && !isVenue({ kind: "toString" }));
+});
+
+test("the journey note says 'the place' for a venue, and the page admits it can't tell opening hours", () => {
+  assert.match(journeyNote("a weekday, 19:00–20:00", lamb), /start point and the place\. /);
+  assert.match(journeyNote(null, bank), /start point and the station\. /);
+  assert.equal(OPEN_HOURS_HINT, "We don't know whether it's open.");
 });

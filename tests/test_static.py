@@ -71,6 +71,14 @@ def test_warp_attribution_is_outside_the_hidden_map():
     assert "attributionControl: false" in (ROOT / "warp/app.js").read_text()
 
 
+def test_warp_hidden_controls_stay_hidden():
+    # The page hides controls with the hidden attribute (the Bend button where bending isn't
+    # offered, the trial layout chips without ?layouts=1). Class rules such as .btn's and
+    # .chips' display would show them anyway, so hidden must win on this page.
+    css = (ROOT / "warp/style.css").read_text()
+    assert re.search(r"(^|\n)\[hidden\]\s*{\s*display:\s*none\s*!important;?\s*}", css)
+
+
 def test_logo_is_plain_svg():
     svg = (ROOT / "icons/mapbox-logo.svg").read_text()
     assert svg.lstrip().startswith("<?xml") and "<svg" in svg

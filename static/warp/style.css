@@ -1,6 +1,10 @@
 html, body { height: 100%; overflow: hidden; }
 body { background: #f0ede9; }
 
+/* The page hides controls with the hidden attribute (the Bend button where bending isn't
+   offered, the trial layout chips). Class rules such as .btn's display would show them. */
+[hidden] { display: none !important; }
+
 /* The normal map with its travel-time bands (MapLibre). It always takes the pan and zoom
    gestures; while the map is bent it is hidden under the mesh, which ignores the pointer. */
 #map-container { position: fixed; inset: 0; z-index: 1; }

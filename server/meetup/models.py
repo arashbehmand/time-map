@@ -8,8 +8,13 @@ MAX_PARTICIPANTS = 8
 
 _STRICT = ConfigDict(extra="forbid", allow_inf_nan=False)
 
-Mode = Literal["walking", "cycling", "driving", "driving-traffic"]
+# "transit" is the London tables (server/transit/provider.py): a group with anyone on it
+# meets at a station (server/meetup/stations.py); every other group keeps the grid solver.
+Mode = Literal["walking", "cycling", "driving", "driving-traffic", "transit"]
 Objective = Literal["minimax", "sum", "hybrid"]
+# The tables' timetable windows: weekday 08:00, 13:00, 19:00 and Saturday 13:00.
+Window = Literal["wd08", "wd13", "wd19", "sa13"]
+DEFAULT_WINDOW = "wd19"
 
 class Participant(BaseModel):
     model_config = _STRICT
@@ -40,6 +45,8 @@ class SolveRequest(BaseModel):
     alpha: float = Field(default=0.65, ge=0, le=1.0,
         description="For hybrid: score = alpha*max + (1-alpha)*weighted_mean")
     search: SearchConfig = Field(default_factory=SearchConfig)
+    window: Optional[Window] = Field(default=None,
+        description="Public transport only: which timetable window (default weekday evening).")
 
     @model_validator(mode="after")
     def check_participants(self) -> "SolveRequest":
@@ -61,6 +68,12 @@ class CandidateResult(BaseModel):
     max_time_min: float
     mean_time_min: float
     times: dict[str, float]
+    # "station" (a named place from the tables) or "street" (a grid point on a named street).
+    kind: Optional[Literal["station", "street"]] = None
+    # Stations: the place's id within the tables' build.
+    place_id: Optional[str] = None
+    # Stations: closer to the best than the tables can tell apart.
+    tie: bool = False
 
 class SolveResponse(BaseModel):
     objective: str
@@ -70,3 +83,10 @@ class SolveResponse(BaseModel):
     diagnostics: dict
     # Plain sentences for the person reading the answer: why it may be less good than usual.
     notes: list[str] = Field(default_factory=list)
+    # Stations: the place with the lowest average trip, when it is a different place.
+    quickest: Optional[CandidateResult] = None
+    # Stations: the timetable window the public transport times are for.
+    window: Optional[str] = None
+    window_label: Optional[str] = None
+    # Stations: the data credits the tables' licences ask for.
+    credits: list[str] = Field(default_factory=list)

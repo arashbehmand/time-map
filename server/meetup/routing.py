@@ -109,7 +109,30 @@ class SolveAllowance:
     sent_elements: int = 0
     retries: int = 0                                          # 5xx and bad replies asked again
     bad_replies: int = 0                                      # malformed replies seen
+    no_route_replies: int = 0                                 # NoRoute/NoSegment replies seen
     _gate: asyncio.Semaphore | None = field(default=None, repr=False)
+
+    # ── one person's share (the station path: at most N requests per person) ──
+    def for_person(self, bucket: str, units: int, requests: int, n_people: int) -> SolveAllowance:
+        """A capped allowance for one person's own requests: `requests` in all (the planned
+        one included), `units` planned elements plus an even share of the solve's spare. It
+        queues on this solve's gate; absorb() adds its counters back."""
+        spare = max(0, self.elements - self.plan_elements) // max(1, n_people)
+        child = SolveAllowance(units + spare, {bucket: requests}, concurrency=self.concurrency,
+                               plan_elements=units, plan_requests={bucket: 1})
+        child._gate = self.gate
+        return child
+
+    def absorb(self, child: SolveAllowance) -> None:
+        self.spent_elements += child.spent_elements
+        self.spent_requests.update(child.spent_requests)
+        self.planned_elements += child.planned_elements
+        self.planned_requests.update(child.planned_requests)
+        self.sent_requests += child.sent_requests
+        self.sent_elements += child.sent_elements
+        self.retries += child.retries
+        self.bad_replies += child.bad_replies
+        self.no_route_replies += child.no_route_replies
 
     @classmethod
     def for_plan(cls, plan: SolvePlan, settings: Settings,
@@ -501,7 +524,14 @@ class MapboxMatrixRouter(Router):
             f"?annotations=duration&sources={sources}&destinations={dests}"
             f"&access_token={self.token}"
         )
-        minutes, snaps = await self._get(url, mode, n_orig, len(padded), gate, recovery)
+        try:
+            minutes, snaps = await self._get(url, mode, n_orig, len(padded), gate, recovery)
+        except _NoRoute:
+            # Counted even when splitting recovers every pair: the answer still says so.
+            allowance = solve_allowance.get()
+            if allowance is not None:
+                allowance.no_route_replies += 1
+            raise
         return minutes[:, :n_dest], snaps[:n_dest]
 
     async def _get(self, url: str, mode: str, n_orig: int, n_padded: int,

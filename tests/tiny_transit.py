@@ -110,3 +110,70 @@ def make_build(root: Path, *, cleared: bool = False, valid_until: date | None = 
 
 def cell_of(lon: float, lat: float) -> int:
     return cell_int(lon, lat, 10)
+
+
+# ── random builds, for the meetup station tests ─────────────────────
+CENTRE = (-0.10, 51.51)
+NAMES = ["ALPHA", "BRAVO", "CHARLIE", "DELTA", "ECHO", "FOXTROT", "GOLF", "HOTEL", "INDIA",
+         "JULIET", "KILO", "LIMA", "MIKE", "NOVEMBER", "OSCAR", "PAPA", "QUEBEC", "ROMEO",
+         "SIERRA", "TANGO", "UNIFORM", "VICTOR", "WHISKEY", "XRAY", "YANKEE", "ZULU"]
+
+
+def make_random_build(root: Path, n_stations: int = 12, seed: int = 0, *, spread_m: float = 2500,
+                      unreachable: float = 0.05, cleared: bool = True) -> Path:
+    """
+    A cleared build of n_stations stations scattered within spread_m of CENTRE, with random
+    asymmetric minutes per window (some 255) and a 700 m walkshed each. Every fourth station
+    has a twin of the same name 100-300 m away (one place with two platforms); one in seven is
+    masked. Returns the build directory.
+    """
+    rng = np.random.default_rng(seed)
+    d = root / f"rand-{seed}"
+    d.mkdir(parents=True, exist_ok=True)
+    m_lat = 1 / 111_195
+    m_lon = m_lat / np.cos(np.radians(CENTRE[1]))
+    pts: list[tuple[str, float, float, bool]] = []
+    k = 0
+    while len(pts) < n_stations:
+        name = NAMES[k % len(NAMES)] + ("" if k < len(NAMES) else f" {k // len(NAMES)}") + " UND"
+        dx, dy = rng.uniform(-spread_m, spread_m, 2)
+        lon, lat = CENTRE[0] + dx * m_lon, CENTRE[1] + dy * m_lat
+        ok = rng.random() > 1 / 7 or not pts
+        pts.append((name, lon, lat, bool(ok)))
+        if k % 4 == 0 and len(pts) < n_stations:
+            off = rng.uniform(100, 300)
+            pts.append((name, lon + off * m_lon, lat, True))
+        k += 1
+    n = len(pts)
+    with open(d / "points.csv", "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["idx", "kind", "id", "name", "lon", "lat", "inside_gl", "snap_m", "ok",
+                    "snap_lon", "snap_lat"])
+        for i, (name, lon, lat, ok) in enumerate(pts):
+            w.writerow([i, "station", f"gbt:S{i}", name, lon, lat, True, 1.0, ok, lon, lat])
+    np.save(d / "point_ok.npy", np.array([p[3] for p in pts], dtype=bool))
+    for win in WINDOWS:
+        t = rng.integers(2, 60, size=(n, n)).astype(np.uint8)
+        t[rng.random((n, n)) < unreachable] = 255
+        np.fill_diagonal(t, 0)
+        np.save(d / f"tt_{win}.npy", t)
+        (d / f"tt_{win}.fingerprint.json").write_text(json.dumps({"complete": True}))
+    Walksheds.build([(i, *walkshed((p[1], p[2]), 700)) for i, p in enumerate(pts)]).save(d / "walksheds.npz")
+    outputs = {}
+    for name in [*(f"tt_{w}" for w in WINDOWS), "point_ok.npy", "walksheds.npz", "points.csv"]:
+        file = f"{name}.npy" if name.startswith("tt_") else name
+        data = (d / file).read_bytes()
+        outputs[name] = {"file": file, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        if name.startswith("tt_"):
+            outputs[name]["shape"] = [n, n]
+    manifest = {
+        "schema": 1, "build": f"rand-{seed}", "timezone": "Europe/London",
+        "service_dates": {"weekday": "2026-12-09", "saturday": "2026-12-12"},
+        "windows": {w: {"day": day, "start": start, "minutes": 60} for w, (day, start) in WINDOWS.items()},
+        "valid_until": (date.today() + timedelta(days=30)).isoformat(),
+        "outputs": outputs,
+        "attribution": ["Powered by TfL Open Data", "(c) OpenStreetMap contributors"],
+        "licences_cleared": cleared,
+    }
+    (d / "manifest.json").write_text(json.dumps(manifest))
+    return d

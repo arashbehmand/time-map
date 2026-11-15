@@ -91,6 +91,8 @@ NOTE_SPREAD = ("Not every trip ends exactly at the star: for some people it ends
                "up to 150 m away.")
 NOTE_BAD_REPLY = ("The map service sent a bad reply, so we asked again. This answer uses only "
                   "replies that came back complete.")
+NOTE_NO_ROUTE = ("The map service couldn't route part of a request, so we asked again in pieces. "
+                 "Places it still couldn't route were left out.")
 
 
 def _group_by_mode(
@@ -227,6 +229,7 @@ def _make_result(idx: int, ev: Evaluation, score: np.ndarray,
         lat=round(float(snap.lat), 7),
         name=snap.name,
         snap_m=round(float(ev.shown_m[idx]), 1),
+        kind="street" if snap.name else None,
         score=round(float(score[idx]), 2),
         max_time_min=round(float(ev.mx[idx]), 2),
         mean_time_min=round(float(ev.mean[idx]), 2),
@@ -278,13 +281,24 @@ def _check_coarse(ev: Evaluation, participants: list[Participant], index_of: lis
     """
     if _unresolved_share(ev) > MAX_UNRESOLVED_SHARE:
         raise UnroutableArea()
-    answered = ~ev.unresolved
-    reach = np.isfinite(ev.times) & answered
+    explain_infeasible(ev.times, ev.unresolved, ev.raw, participants, index_of)
+
+
+def explain_infeasible(times: np.ndarray, unresolved: np.ndarray, raw: np.ndarray,
+                       participants: list[Participant], index_of: list[int]) -> None:
+    """
+    Raise NoFeasiblePoint naming who can't reach what, or return when some candidate is
+    feasible (`raw` finite). times and unresolved are (people, candidates), people in id
+    order; index_of maps them back to their place in the request. A pair never answered
+    says nothing about anyone. Shared by the grid and the station solvers.
+    """
+    answered = ~unresolved
+    reach = np.isfinite(times) & answered
     stuck = [k for k in range(len(participants)) if answered[k].any() and not reach[k].any()]
     if stuck:
         raise NoFeasiblePoint("no_route", [{"index": index_of[k], "reason": "no_route"}
                                            for k in sorted(stuck, key=lambda k: index_of[k])])
-    if np.isfinite(ev.raw).any():
+    if np.isfinite(raw).any():
         return
     common = reach.all(axis=0)
     if not common.any():
@@ -295,7 +309,7 @@ def _check_coarse(ev: Evaluation, participants: list[Participant], index_of: lis
              "of": int(checked[k])}
             for k in sorted(few, key=lambda k: index_of[k])])
     limited = [k for k, p in enumerate(participants) if p.max_minutes is not None]
-    over = [k for k in limited if not (ev.times[k, common] <= participants[k].max_minutes).any()]
+    over = [k for k in limited if not (times[k, common] <= participants[k].max_minutes).any()]
     who = sorted(over or limited, key=lambda k: index_of[k])
     raise NoFeasiblePoint("over_time_limit",
                           [{"index": index_of[k], "reason": "over_time_limit"} for k in who])
@@ -393,6 +407,8 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
     allowance = solve_allowance.get()
     if allowance is not None and allowance.bad_replies:
         notes.append(NOTE_BAD_REPLY)
+    if allowance is not None and allowance.no_route_replies:
+        notes.append(NOTE_NO_ROUTE)
 
     # Near-optimal meeting area: the kept stage's grid cells, and the cells of the points
     # shown for them, so the star is always inside it.
@@ -410,6 +426,7 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
         return int(sum(int(mask_of(ev).sum()) for ev in stages))
 
     diagnostics: dict[str, Any] = {
+        "path": "grid",
         "stage": stage,
         "coarse_resolution": coarse_res,
         "fine_resolution": fine_res,
@@ -425,6 +442,7 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
         "dropped_off_street": int((kept.off_street & np.isfinite(kept.raw)).sum()),
         "retries": allowance.retries if allowance is not None else 0,
         "bad_replies": allowance.bad_replies if allowance is not None else 0,
+        "no_route_replies": allowance.no_route_replies if allowance is not None else 0,
         "matrix_requests": allowance.sent_requests if allowance is not None else 0,
         "matrix_elements": allowance.sent_elements if allowance is not None else 0,
         "elapsed_ms": round((time.perf_counter() - started) * 1000),

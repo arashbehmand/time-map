@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ApiError } from "../../static/shared/api.js";
-import { altText, answerNotes, headline, joinNames, noPlaceSentence } from "../../static/meetup/words.js";
+import {
+  ALL_TIES_TEXT, altText, answerNotes, headline, isStation, joinNames, journeyLink, journeyNote,
+  noPlaceSentence, placeHeadline,
+  quickestText, stationAltText, TIE_TEXT,
+} from "../../static/meetup/words.js";
 
 const best = { name: "Baker Street", max_time_min: 27.2, mean_time_min: 22.6 };
 
@@ -70,4 +74,66 @@ test("anything else falls back to the server's sentence", () => {
   assert.equal(noPlaceSentence(noPlace("no_route", [{ index: 5, reason: "no_route" }]), ["Ana"]), "");
   assert.equal(noPlaceSentence(noPlace("something_new", []), ["Ana"]), "");
   assert.equal(noPlaceSentence(noPlace("off_street", []), ["Ana"]), "");   // the server's own sentence
+});
+
+// ── stations ────────────────────────────────────────────────────
+const bank = { kind: "station", name: "Bank", lon: -0.0886, lat: 51.5133, max_time_min: 24.4, mean_time_min: 18.6 };
+
+test("a station answer says 'at' and names the station", () => {
+  assert.equal(placeHeadline(bank), "Meet at Bank (★ on the map). Everyone gets there within 24 min.");
+  assert.match(placeHeadline({ ...bank, name: "" }), /^Meet at this station/);
+  assert.ok(isStation(bank) && !isStation({ name: "Baker Street" }) && !isStation(null));
+});
+
+test("the quickest place and ties are said in words", () => {
+  assert.equal(quickestText({ ...bank, name: "Moorgate" }),
+    "Quickest on average: Moorgate. The average trip is 19 min; the longest is 24 min.");
+  assert.equal(stationAltText(bank), "Bank · longest trip 24 min");
+  assert.equal(stationAltText({ ...bank, tie: true }), "Bank · longest trip 24 min · about as good");
+  assert.match(TIE_TEXT, /can't tell these apart/);
+});
+
+test("a journey link opens directions in each person's way of travelling", () => {
+  const from = { lon: -0.1, lat: 51.5 };
+  const url = (mode) => new URL(journeyLink({ ...from, mode }, bank));
+  assert.equal(url("transit").origin + url("transit").pathname, "https://www.google.com/maps/dir/");
+  assert.equal(url("transit").searchParams.get("api"), "1");
+  assert.equal(url("transit").searchParams.get("origin"), "51.500000,-0.100000");
+  assert.equal(url("transit").searchParams.get("destination"), "51.513300,-0.088600");
+  for (const [mode, want] of [["transit", "transit"], ["walking", "walking"], ["cycling", "bicycling"],
+                              ["driving", "driving"], ["driving-traffic", "driving"], ["boat", "walking"]]) {
+    assert.equal(url(mode).searchParams.get("travelmode"), want, mode);
+  }
+  assert.ok(!journeyLink({ lon: "1;x", lat: 2, mode: "walking" }, bank).includes(";"));
+});
+
+test("public transport refusals name who, and fall back to the server's sentence", () => {
+  const out = new ApiError(422, "outside_transit_area", "Public transport times cover London only.",
+    { who: [{ index: 2, reason: "outside_transit_area" }] });
+  assert.equal(noPlaceSentence(out, ["Ana", "Ben", "Cy"]),
+    "Public transport times cover London only, and Cy starts outside it. Pick another way for them to travel.");
+  const two = new ApiError(422, "no_transit_access", "x",
+    { who: [{ index: 0, reason: "no_transit_access" }, { index: 1, reason: "no_transit_access" }] });
+  assert.match(noPlaceSentence(two, ["Ana", "Ben"]), /^Ana and Ben start too far from a street or station/);
+  assert.equal(noPlaceSentence(new ApiError(422, "outside_transit_area", "x", {}), ["Ana"]), "");
+});
+
+test("when every alternative is a tie, rows lose the label and one sentence says it", () => {
+  assert.equal(stationAltText({ ...bank, tie: true }, false), "Bank · longest trip 24 min");
+  assert.match(ALL_TIES_TEXT, /all about as good/);
+});
+
+test("the journey link's note says where it goes and that it plans for now", () => {
+  assert.equal(journeyNote("a weekday, 19:00–20:00"),
+    "\"Plan journey\" opens Google Maps with that person's start point and the station. " +
+    "It plans for now, not for a weekday, 19:00–20:00.");
+  assert.match(journeyNote(null), /It plans for now\.$/);
+});
+
+test("no table time within three hours is said as that, not as no route", () => {
+  const err = noPlace("no_transit_time", [{ index: 1, reason: "no_transit_time" }]);
+  assert.equal(noPlaceSentence(err, ["Ana", "Ben"]),
+    "From where Ben starts, the public transport times have no trip within 3 hours to any station. " +
+    "Pick another way for them to travel.");
+  assert.equal(noPlaceSentence(noPlace("no_transit_time", []), ["Ana"]), "");
 });

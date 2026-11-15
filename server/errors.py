@@ -3,8 +3,9 @@ Error responses.
 
 Every error the API returns has the shape {"code": <stable code>, "detail": <fixed sentence>}.
 Nothing from an exception's text, an upstream response or the request body is echoed back.
-One error (no_feasible_meeting_point) adds `reason` and `who`: who is stuck, as positions in
-the request's participant list, so the page can name them.
+no_feasible_meeting_point adds `reason` and `who`: who is stuck, as positions in the request's
+participant list, so the page can name them. From a meetup solve, outside_transit_area and
+no_transit_access add `who` the same way.
 """
 from __future__ import annotations
 
@@ -79,12 +80,17 @@ class NoFeasiblePoint(ApiError):
         "no_common_place": message,
         "off_street": ("No place we checked is close enough to a street or path that everyone "
                        "can use. Try moving people closer together or nearer to streets."),
+        # The tables keep trips up to 3 hours: past that, no time is not "no route".
+        "no_transit_time": ("From where one or more people start, the public transport times "
+                            "have no trip within 3 hours to any station. Pick another way to "
+                            "travel for them."),
     }
 
     def __init__(self, reason: str = "no_common_place", who: list[dict] | None = None):
-        """reason: no_route | over_time_limit | no_common_place | off_street.
+        """reason: no_route | over_time_limit | no_common_place | off_street | no_transit_time.
         who: [{"index": <position in the request>, "reason": "no_route" | "over_time_limit" |
-        "reaches_few", and for reaches_few "reach" and "of": places reached of those checked}]."""
+        "reaches_few" | "no_transit_time", and for reaches_few "reach" and "of": places
+        reached of those checked}]."""
         super().__init__(self.MESSAGES.get(reason, self.message),
                          extra={"reason": reason, "who": list(who or [])})
 

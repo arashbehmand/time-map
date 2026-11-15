@@ -2570,16 +2570,16 @@
  },
  "uncertain_checks": {
   "kind": "uncertain-checks",
-  "at": "2026-11-15T00:05:30.145Z",
-  "note": "Uncertain patches on live fields (server/warp/field.py) and enclosedFade before (the field's own minutes) and after (the geometry field the fold bends by). Counts only: patch locations are not stored.",
+  "at": "2026-11-15T01:14:10.954Z",
+  "note": "Uncertain patches on live fields (server/warp/field.py, single-node slivers included) and enclosedFade before (the field's own minutes) and after (the geometry field the fold bends by). Counts only: patch locations are not stored.",
   "results": [
    {
     "origin": "kings-cross",
     "mode": "walking",
     "cell": 100,
-    "nodes": 5,
-    "noData": 1,
-    "patches": 3,
+    "nodes": 10,
+    "noData": 2,
+    "patches": 8,
     "largestRise": 43.9,
     "radiusErr": 0,
     "fade": [
@@ -2596,7 +2596,7 @@
      {
       "ring": 45,
       "before": 4,
-      "after": 1
+      "after": 0
      },
      {
       "ring": 60,
@@ -2609,9 +2609,9 @@
     "origin": "kings-cross",
     "mode": "cycling",
     "cell": 200,
-    "nodes": 284,
-    "noData": 270,
-    "patches": 131,
+    "nodes": 344,
+    "noData": 275,
+    "patches": 160,
     "largestRise": 36.9,
     "radiusErr": 0,
     "fade": [
@@ -2628,7 +2628,7 @@
      {
       "ring": 45,
       "before": 105,
-      "after": 1
+      "after": 0
      },
      {
       "ring": 60,
@@ -2641,10 +2641,10 @@
     "origin": "kings-cross",
     "mode": "driving",
     "cell": 400,
-    "nodes": 11,
-    "noData": 11,
-    "patches": 5,
-    "largestRise": 0,
+    "nodes": 20,
+    "noData": 18,
+    "patches": 14,
+    "largestRise": 9.6,
     "radiusErr": 0,
     "fade": [
      {
@@ -2673,9 +2673,9 @@
     "origin": "baker-street",
     "mode": "walking",
     "cell": 100,
-    "nodes": 17,
-    "noData": 9,
-    "patches": 9,
+    "nodes": 23,
+    "noData": 10,
+    "patches": 14,
     "largestRise": 28.3,
     "radiusErr": 0,
     "fade": [
@@ -2705,9 +2705,9 @@
     "origin": "baker-street",
     "mode": "cycling",
     "cell": 200,
-    "nodes": 276,
-    "noData": 265,
-    "patches": 128,
+    "nodes": 331,
+    "noData": 271,
+    "patches": 155,
     "largestRise": 38.5,
     "radiusErr": 0,
     "fade": [
@@ -2724,12 +2724,12 @@
      {
       "ring": 45,
       "before": 107,
-      "after": 1
+      "after": 0
      },
      {
       "ring": 60,
       "before": 266,
-      "after": 1
+      "after": 0
      }
     ]
    },
@@ -2737,10 +2737,10 @@
     "origin": "baker-street",
     "mode": "driving",
     "cell": 400,
-    "nodes": 68,
-    "noData": 67,
-    "patches": 31,
-    "largestRise": 11.5,
+    "nodes": 86,
+    "noData": 69,
+    "patches": 38,
+    "largestRise": 14.2,
     "radiusErr": 0,
     "fade": [
      {
@@ -2769,9 +2769,9 @@
     "origin": "wembley-park",
     "mode": "walking",
     "cell": 100,
-    "nodes": 50,
-    "noData": 38,
-    "patches": 32,
+    "nodes": 68,
+    "noData": 42,
+    "patches": 43,
     "largestRise": 42.1,
     "radiusErr": 0,
     "fade": [
@@ -2788,7 +2788,7 @@
      {
       "ring": 45,
       "before": 12,
-      "after": 1
+      "after": 0
      },
      {
       "ring": 60,
@@ -2801,9 +2801,9 @@
     "origin": "wembley-park",
     "mode": "cycling",
     "cell": 200,
-    "nodes": 737,
-    "noData": 717,
-    "patches": 185,
+    "nodes": 793,
+    "noData": 724,
+    "patches": 209,
     "largestRise": 39.3,
     "radiusErr": 0,
     "fade": [
@@ -2833,10 +2833,10 @@
     "origin": "wembley-park",
     "mode": "driving",
     "cell": 400,
-    "nodes": 225,
-    "noData": 208,
-    "patches": 96,
-    "largestRise": 23.6,
+    "nodes": 286,
+    "noData": 220,
+    "patches": 130,
+    "largestRise": 24.2,
     "radiusErr": 0,
     "fade": [
      {
@@ -2852,7 +2852,7 @@
      {
       "ring": 45,
       "before": 15,
-      "after": 2
+      "after": 0
      },
      {
       "ring": 60,
@@ -2897,9 +2897,9 @@
     "origin": "canary-wharf",
     "mode": "cycling",
     "cell": 200,
-    "nodes": 157,
-    "noData": 149,
-    "patches": 75,
+    "nodes": 184,
+    "noData": 155,
+    "patches": 95,
     "largestRise": 45,
     "radiusErr": 0,
     "fade": [
@@ -2929,9 +2929,9 @@
     "origin": "canary-wharf",
     "mode": "driving",
     "cell": 400,
-    "nodes": 318,
-    "noData": 287,
-    "patches": 133,
+    "nodes": 383,
+    "noData": 292,
+    "patches": 161,
     "largestRise": 29.8,
     "radiusErr": 0,
     "fade": [
@@ -2948,7 +2948,7 @@
      {
       "ring": 45,
       "before": 8,
-      "after": 1
+      "after": 0
      },
      {
       "ring": 60,
@@ -2993,10 +2993,10 @@
     "origin": "heathrow",
     "mode": "cycling",
     "cell": 200,
-    "nodes": 1158,
-    "noData": 1139,
-    "patches": 200,
-    "largestRise": 29.7,
+    "nodes": 1251,
+    "noData": 1151,
+    "patches": 227,
+    "largestRise": 29.8,
     "radiusErr": 0,
     "fade": [
      {
@@ -3012,7 +3012,7 @@
      {
       "ring": 45,
       "before": 327,
-      "after": 1
+      "after": 0
      },
      {
       "ring": 60,
@@ -3025,10 +3025,10 @@
     "origin": "heathrow",
     "mode": "driving",
     "cell": 400,
-    "nodes": 593,
-    "noData": 527,
-    "patches": 223,
-    "largestRise": 29.3,
+    "nodes": 699,
+    "noData": 540,
+    "patches": 260,
+    "largestRise": 30.1,
     "radiusErr": 0,
     "fade": [
      {
@@ -3044,7 +3044,7 @@
      {
       "ring": 45,
       "before": 95,
-      "after": 3
+      "after": 2
      },
      {
       "ring": 60,
@@ -3057,9 +3057,9 @@
     "origin": "croydon",
     "mode": "walking",
     "cell": 100,
-    "nodes": 22,
+    "nodes": 30,
     "noData": 18,
-    "patches": 17,
+    "patches": 24,
     "largestRise": 35.6,
     "radiusErr": 0,
     "fade": [
@@ -3089,9 +3089,9 @@
     "origin": "croydon",
     "mode": "cycling",
     "cell": 200,
-    "nodes": 711,
-    "noData": 691,
-    "patches": 224,
+    "nodes": 783,
+    "noData": 701,
+    "patches": 255,
     "largestRise": 30.4,
     "radiusErr": 0,
     "fade": [
@@ -3108,7 +3108,7 @@
      {
       "ring": 45,
       "before": 142,
-      "after": 1
+      "after": 0
      },
      {
       "ring": 60,
@@ -3121,9 +3121,9 @@
     "origin": "croydon",
     "mode": "driving",
     "cell": 400,
-    "nodes": 125,
-    "noData": 107,
-    "patches": 57,
+    "nodes": 159,
+    "noData": 115,
+    "patches": 78,
     "largestRise": 26.4,
     "radiusErr": 0,
     "fade": [

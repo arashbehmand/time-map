@@ -25,9 +25,13 @@ King's Cross where the streets beyond are at 12). On the grid, contour k's regio
 highest, over paths to the grid's edge, of the lowest time along the path. A group of such
 nodes (4-connected) is a patch when its largest rise above its way out is more than walking
 in from its edge explains: depth × WALK_IN_DETOUR ÷ speed + WALK_IN_MARGIN. Enclosed no-data
-holes count too (their rise is at least the last contour minus the way out). A patch keeps
-its minutes (the provider's estimate, for audit); it gets drawn minutes, a smooth fill from
-the ground around it, which only the bent map's geometry uses.
+holes count too (their rise is at least the last contour minus the way out). A single node
+in a hole of just one contour (a sliver: a gap in one outline, behind houses, on a yard or a
+verge) is a patch too when it rises more than walking in from next door explains; a group of
+such nodes is not, because a wider gap in one outline can be real slow ground (an estate, the
+Isle of Dogs by car). A patch keeps its minutes (the provider's estimate, for audit); it gets
+drawn minutes, a smooth fill from the ground around it, which only the bent map's geometry
+uses.
 
 Wire format (encode): uint16 little-endian, base64, tenths of a minute; 0xFFFF no data,
 0xFFFE beyond, bit 15 set on a node whose time was filled in from its neighbours (water,
@@ -66,7 +70,9 @@ WIRE_MAX = 0x7FFD                   # 3,276.5 minutes
 # Uncertain patches (see the module docstring). Walking in from a patch's edge may take a
 # detour of up to WALK_IN_DETOUR times the straight distance, plus WALK_IN_MARGIN minutes of
 # slack (one contour step of interpolation); a patch rises more than that above its way out.
+# A hole through one contour only counts when it is at most SLIVER_MAX_NODES nodes.
 UNCERTAIN_MIN_CONTOURS = 2
+SLIVER_MAX_NODES = 1
 WALK_IN_DETOUR = 2.0
 WALK_IN_MARGIN = 3.0
 
@@ -277,17 +283,22 @@ def uncertain_patches(minutes: np.ndarray, contour_minutes, grid: Grid,
     tt = np.where(nodata, np.inf, t)
     enclosing = np.searchsorted(levels, tt, "left") - np.searchsorted(levels, w, "left")
     rise = np.where(nodata, levels[-1] - w, t - w)
-    cand = (enclosing >= UNCERTAIN_MIN_CONTOURS) & np.isfinite(w) & (rise > 0) & ~np.isposinf(t)
+    held = np.isfinite(w) & (rise > 0) & ~np.isposinf(t)
+    cand = held & (enclosing >= UNCERTAIN_MIN_CONTOURS)
+    slivers = held & (enclosing >= 1) & ~cand
     oj, oi = grid.origin_index()
     if j0 <= oj < j1 and i0 <= oi < i1:
-        cand[oj - j0, oi - i0] = False
+        cand[oj - j0, oi - i0] = slivers[oj - j0, oi - i0] = False
     sub = np.zeros(t.shape, dtype=bool)
     ny, nx = t.shape
     flat_rise = rise.ravel()
-    for comp in _components(cand):
-        allowance = _depth_steps(comp, nx, ny) * grid.cell * WALK_IN_DETOUR / speed_m_per_min + WALK_IN_MARGIN
-        if flat_rise[comp].max() > allowance:
-            sub.flat[comp] = True
+    for comps, small_only in ((_components(cand), False), (_components(slivers), True)):
+        for comp in comps:
+            if small_only and len(comp) > SLIVER_MAX_NODES:
+                continue
+            allowance = _depth_steps(comp, nx, ny) * grid.cell * WALK_IN_DETOUR / speed_m_per_min + WALK_IN_MARGIN
+            if flat_rise[comp].max() > allowance:
+                sub.flat[comp] = True
     out[j0:j1, i0:i1] = sub
     return out
 

@@ -86,7 +86,7 @@ def test_holes_and_islands_survive():
     assert at(-500, 0) < 10                      # west, inside the 10-minute square
     assert at(3000, 0) == pytest.approx(10 + 10 * (3000 - 1000) / (3000 - 1000 + 300), abs=0.6)
     assert np.isnan(at(2600, 0))                 # between the square and the island
-    # A hole in one contour only is slow ground, not an uncertain patch.
+    # A wide hole in one contour only is slow ground, not an uncertain patch.
     assert not F.uncertain_patches(t, [10, 20], grid, F.WALK_M_PER_MIN).any()
 
 
@@ -303,3 +303,24 @@ def test_way_out_is_the_best_path_out():
                   [np.nan, np.nan, np.nan, np.nan, np.nan]])
     w = F.way_out(t)
     assert w[2, 2] == 6.0 and w[1, 1] == 5.0 and np.isposinf(w[0, 0])
+
+
+def test_a_single_dot_in_one_outline_gap_is_a_sliver_and_caught():
+    # A walk at 4 km/h; dots 100 m apart. One dot stands over the 30 line, far above the dots
+    # next to it: a gap in one outline (behind houses, a yard). Two such dots side by side, or
+    # one only a little above its neighbours, are left as they are.
+    grid = F.Grid.covering(100, -3000, -3000, 3000, 3000)
+    X, Y = grid.mesh()
+    t = np.hypot(X, Y) / F.WALK_M_PER_MIN
+    levels = [5, 10, 15, 20, 30, 40, 50, 60]
+    at = lambda x, y: _node(grid, x, y)                      # noqa: E731
+    t[at(1500, 0)] = 31.0                                     # 22.5 around it: 1 line, up 8.5
+    t[at(0, 1800)] = t[at(100, 1800)] = 35.0                  # two dots side by side
+    t[at(-1800, 0)] = 31.5                                    # 27 around it: up only 4.5
+    mask = F.uncertain_patches(t, levels, grid, F.WALK_M_PER_MIN)
+    assert mask[at(1500, 0)]
+    assert not mask[at(0, 1800)] and not mask[at(100, 1800)]
+    assert not mask[at(-1800, 0)]
+    assert mask.sum() == 1
+    drawn, mask = F.fill_patches(t, mask)
+    assert abs(drawn[at(1500, 0)] - 22.5) < 0.5                # drawn at the times around it

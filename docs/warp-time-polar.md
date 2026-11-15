@@ -81,8 +81,8 @@ Minutes on a regular grid in local metres around the pin (W-01's `field.js` shap
 - **Gaps:** water and parkland up to about 300 m from a known node are filled from their
   neighbours and flagged. They are drawn, but excluded from taps and checks.
 - **Uncertain patches:** ground the contours leave out of a hole through two or more
-  consecutive contours, rising above its way out by more than walking in from its edge explains
-  (King's Cross's platforms). Each keeps its own minutes. It also gets drawn minutes, which only
+  consecutive contours, or a single node in a gap of one contour (a sliver), rising above its way
+  out by more than walking in from its edge explains (King's Cross's platforms). Each keeps its own minutes. It also gets drawn minutes, which only
   the bent map's geometry uses. See [Uncertain patches](#uncertain-patches-the-wedge-north-of-kings-cross).
 - **Wire format:** uint16 tenths of a minute, base64 in JSON.
   - 0xFFFF means no data.
@@ -215,6 +215,11 @@ ground, 2026-11-14):
   way out is more than walking in from its edge explains: depth × 2 ÷ speed + 3 minutes. Speed
   is 4 km/h walking, 15 km/h cycling and 24 km/h driving. A park 1.2 km across stays a real
   place; the platforms (one 100 m cell deep, 38 minutes up) don't.
+- **Slivers** (owner's go, 2026-11-15): a single node in a hole of just one contour is a patch too,
+  by the same allowance (6 minutes walking, 4.6 cycling, 5 driving for one node). A group of such
+  nodes is not: tried on all 18 fields, counting a one-contour hole of any size caught groups of
+  up to 129 nodes in driving fields (the Isle of Dogs by car is really slow) and made ring 60 worse
+  in three fields.
 - **Drawn minutes:** a smooth fill from the ground around the patch (neighbour means working
   inward, then Jacobi passes with the rim held). King's Cross's platforms are drawn at 6.1, 8.2
   and 9.6 between 3.8 and 11.7.
@@ -244,40 +249,49 @@ ground, 2026-11-14):
 - **The wedges:** nodes the warp sends onto the outer ring though every way out crosses ground at
   least 10 minutes inside the ring (`diagnostics.enclosedFade`). They are counted before (the
   field's own minutes, as the fold drew them) and after (what it draws now).
-- **The two-contour rule** makes "after" 0 at 15, 30 and 60. At 45 one 10-minute contour step
-  can hide a single-contour spike. At 60, Baker Street cycling keeps one deep patch.
+- **After:** 0 at 15, 30 and 60 in all 18 fields; 3 nodes at 45 (2 in Heathrow driving, 1 in
+  Croydon walking). Before slivers were caught, ring 45 kept 13 and ring 60 kept 1.
 
 | Origin | Mode | Patch nodes (no data) | Patches | Wedges at 15 | 30 | 45 | 60 |
 |---|---|---|---|---|---|---|---|
-| King’s Cross | Walk | 5 (1) | 3 | 0 → 0 | 2 → 0 | 4 → 1 | 1 → 0 |
-| King’s Cross | Cycle | 284 (270) | 131 | 1 → 0 | 27 → 0 | 105 → 1 | 270 → 0 |
-| King’s Cross | Drive | 11 (11) | 5 | 0 → 0 | 0 → 0 | 4 → 0 | 11 → 0 |
-| Baker Street | Walk | 17 (9) | 9 | 0 → 0 | 5 → 0 | 9 → 0 | 9 → 0 |
-| Baker Street | Cycle | 276 (265) | 128 | 0 → 0 | 43 → 0 | 107 → 1 | 266 → 1 |
-| Baker Street | Drive | 68 (67) | 31 | 0 → 0 | 0 → 0 | 1 → 0 | 67 → 0 |
-| Wembley Park | Walk | 50 (38) | 32 | 0 → 0 | 4 → 0 | 12 → 1 | 38 → 0 |
-| Wembley Park | Cycle | 737 (717) | 185 | 0 → 0 | 59 → 0 | 107 → 0 | 717 → 0 |
-| Wembley Park | Drive | 225 (208) | 96 | 0 → 0 | 0 → 0 | 15 → 2 | 208 → 0 |
+| King’s Cross | Walk | 10 (2) | 8 | 0 → 0 | 2 → 0 | 4 → 0 | 1 → 0 |
+| King’s Cross | Cycle | 344 (275) | 160 | 1 → 0 | 27 → 0 | 105 → 0 | 270 → 0 |
+| King’s Cross | Drive | 20 (18) | 14 | 0 → 0 | 0 → 0 | 4 → 0 | 11 → 0 |
+| Baker Street | Walk | 23 (10) | 14 | 0 → 0 | 5 → 0 | 9 → 0 | 9 → 0 |
+| Baker Street | Cycle | 331 (271) | 155 | 0 → 0 | 43 → 0 | 107 → 0 | 266 → 0 |
+| Baker Street | Drive | 86 (69) | 38 | 0 → 0 | 0 → 0 | 1 → 0 | 67 → 0 |
+| Wembley Park | Walk | 68 (42) | 43 | 0 → 0 | 4 → 0 | 12 → 0 | 38 → 0 |
+| Wembley Park | Cycle | 793 (724) | 209 | 0 → 0 | 59 → 0 | 107 → 0 | 717 → 0 |
+| Wembley Park | Drive | 286 (220) | 130 | 0 → 0 | 0 → 0 | 15 → 0 | 208 → 0 |
 | Canary Wharf | Walk | 6 (5) | 5 | 0 → 0 | 0 → 0 | 2 → 0 | 5 → 0 |
-| Canary Wharf | Cycle | 157 (149) | 75 | 0 → 0 | 1 → 0 | 49 → 0 | 149 → 0 |
-| Canary Wharf | Drive | 318 (287) | 133 | 0 → 0 | 0 → 0 | 8 → 1 | 287 → 0 |
+| Canary Wharf | Cycle | 184 (155) | 95 | 0 → 0 | 1 → 0 | 49 → 0 | 149 → 0 |
+| Canary Wharf | Drive | 383 (292) | 161 | 0 → 0 | 0 → 0 | 8 → 0 | 287 → 0 |
 | Heathrow | Walk | 0 (0) | 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 |
-| Heathrow | Cycle | 1158 (1139) | 200 | 0 → 0 | 42 → 0 | 327 → 1 | 1139 → 0 |
-| Heathrow | Drive | 593 (527) | 223 | 0 → 0 | 33 → 0 | 95 → 3 | 527 → 0 |
-| Croydon | Walk | 22 (18) | 17 | 0 → 0 | 2 → 0 | 5 → 1 | 18 → 0 |
-| Croydon | Cycle | 711 (691) | 224 | 0 → 0 | 39 → 0 | 142 → 1 | 691 → 0 |
-| Croydon | Drive | 125 (107) | 57 | 0 → 0 | 1 → 0 | 17 → 0 | 107 → 0 |
+| Heathrow | Cycle | 1251 (1151) | 227 | 0 → 0 | 42 → 0 | 327 → 0 | 1139 → 0 |
+| Heathrow | Drive | 699 (540) | 260 | 0 → 0 | 33 → 0 | 95 → 2 | 527 → 0 |
+| Croydon | Walk | 30 (18) | 24 | 0 → 0 | 2 → 0 | 5 → 1 | 18 → 0 |
+| Croydon | Cycle | 783 (701) | 255 | 0 → 0 | 39 → 0 | 142 → 0 | 691 → 0 |
+| Croydon | Drive | 159 (115) | 78 | 0 → 0 | 1 → 0 | 17 → 0 | 107 → 0 |
 
 Most patches in cycling and driving fields are enclosed no-data holes: `denoise=0` keeps every
 hole Mapbox returns. Before, they faded onto the outer ring from ground well inside it; now they
 are drawn at the times around them. A patch with its own minutes is the kind that could take a
-real place's colour. There are 0–12 such nodes per walking field and 0–66 per cycling or driving
-field. They were not looked at one by one.
+real place's colour. There are 0–26 such nodes per walking field, 29–100 per cycling field and
+2–159 per driving field.
+
+**Is catching slivers safe?** Checked on the 595 slivers with their own minutes that the rule
+adds across the 18 fields, against Mapbox Streets tiles (z14) at each node:
+- 576 sit on parks, woods, fields, water, rail (within 30 m), buildings and the like, or have no
+  road the mode can use within half a cell (walking 23 of 30, cycling 309 of 321, driving all 244).
+- 19 sit on plain land near a usable road. All 7 walking ones and the 4 cycling ones within 10 m
+  of a road were looked at on the map: back gardens and block interiors, an industrial yard, a
+  house plot between a railway and a park, a verge beside the North Circular. None is a street
+  or a public place. The other 8 cycling ones were not looked at.
 
 **The check that would have caught it.**
 - `tests/js/warp-example.test.js` checks the committed example:
-  - no wedge at rings 15, 30 and 60;
-  - at most the one at 45;
+  - no wedge at rings 15, 30, 45 and 60;
+  - the four slivers around King's Cross drawn no further out than the nodes next to them;
   - from 100 to 700 m north of the pin, every point drawn in place within 15 minutes, By reach
     and True compass.
 - `tests/test_ux.py` checks that the platforms are a patch, with minutes kept and drawn
@@ -293,7 +307,8 @@ field. They were not looked at one by one.
 | King's Cross | Walk | Normal | 30 | The pale notch north of the pin, as before |
 | King's Cross | Walk | Fold, by reach | 30 | No wedge. The platforms are a small uncoloured block between the 5 and 12 minute radii, and the tracks run north from it at the times of the ground around them (Maiden Lane 24 min). Taps say the new sentence on the block and about 12 min 600 m north |
 | King's Cross | Walk | Fold, by reach | 15 | No wedge. The tracks north of the block reach the ring at their own times (15+ minutes) |
-| King's Cross | Walk | Fold, by reach | 60 | No wedge. A few small slivers 24–40 minutes out near Maiden Lane and Caledonian Road: single-contour spikes, a node one contour above its neighbours |
+| King's Cross | Walk | Fold, by reach | 60 | No wedge. Before slivers were caught: small blue spikes 24–40 minutes out near Maiden Lane and Caledonian Road. After: those at slivers A and D are gone (small uncoloured spots); one other spike nearby stays (not a single-node sliver; not traced) |
+| King's Cross | Walk | Fold, by reach (after slivers) | 30 | As before: no wedge, the same taps and labels; slivers C and D are small uncoloured spots inside the 20–30 band |
 | King's Cross | Walk | Fold, true compass | 30 | No wedge; the block sits north of the pin |
 | King's Cross | Walk | Squash | 30 | No wedge; the block is drawn small inside the 15 ring |
 | King's Cross | Cycle | Fold, by reach | 30 | No wedge; "London King's Cross" with no minutes; a few small slivers |
@@ -482,10 +497,10 @@ places, each with its minutes.
 
 ## Risks and things not checked
 
-- **Single-contour spikes stay.** A node one contour above all its neighbours is not an uncertain
-  patch: the owner's rule needs two contours. Beyond 30 minutes the contours are 10 minutes
-  apart, so it can still be drawn as a thin sliver toward the ring at 45 or 60 (1–3 per field at
-  45 above). Widening the rule is the owner's call.
+- **Wider one-contour gaps stay.** Two or more nodes side by side in a gap of one contour are not
+  a patch (they can be real slow ground). Ring 45 keeps 3 wedge nodes over the 18 fields, and a
+  few thin spikes made by such groups or by folds remain at 45 and 60.
+- **8 caught cycling slivers were not looked at** (plain land, a road 50–97 m away).
 - **An uncertain patch may be real ground.** A gated estate or a yard behind a long fence, in
   holes of two contours and too slow to walk into from its edge, would be left uncoloured and
   drawn at the times around it. Its minutes stay in the field. The thresholds (detour 2, 3

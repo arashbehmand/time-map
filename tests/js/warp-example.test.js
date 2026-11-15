@@ -9,14 +9,22 @@ import { enclosedFade } from "../../static/shared/mesh/diagnostics.js";
 import { angularSpread, createWarp } from "../../static/shared/mesh/warp.js";
 
 const example = JSON.parse(readFileSync(new URL("../../static/warp/example-field.json", import.meta.url)));
-// Measured after the fix: one single-contour spike (49.7 minutes over a way out at 34) at the
-// 45 ring, which the uncertain-patch rule leaves alone (docs/warp-time-polar.md). Held here.
-const FADE_AT_45 = 1;
-
 test("nothing walled in by ground well inside the ring is sent onto it", () => {
   const g = geometryField(decodeField(example));
-  for (const ring of [15, 30, 60]) assert.equal(enclosedFade(g, ring).count, 0, `ring ${ring}`);
-  assert.ok(enclosedFade(g, 45).count <= FADE_AT_45);
+  for (const ring of [15, 30, 45, 60]) assert.equal(enclosedFade(g, ring).count, 0, `ring ${ring}`);
+});
+
+// The slivers north of King's Cross (single dots in a gap of one outline, 7 to 16 minutes above
+// the dots next to them) are drawn at the times around them, not spiking outward.
+test("the slivers around King's Cross are drawn at the times around them", () => {
+  const f = decodeField(example), g = geometryField(f);
+  const node = (x, y) => Math.round((y - f.y0) / f.cell) * f.nx + Math.round((x - f.x0) / f.cell);
+  for (const [x, y] of [[300, -1900], [-1200, -100], [-400, -900], [600, -800]]) {
+    const k = node(x, y);
+    assert.equal(f.uncertain[k], 1, `${x},${y} is not a patch`);
+    const around = [k - 1, k + 1, k - f.nx, k + f.nx].map((q) => f.minutes[q]);
+    assert.ok(g.minutes[k] <= Math.max(...around) + 0.05, `${x},${y} still sticks out`);
+  }
 });
 
 test("the tracks north of King's Cross are drawn between the station and the streets beyond", () => {

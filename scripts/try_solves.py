@@ -43,12 +43,25 @@ GROUPS = {
         {"id": "canary-wharf", "lon": -0.0235, "lat": 51.5054, "mode": "cycling"},
         {"id": "pimlico", "lon": -0.1334, "lat": 51.4893, "mode": "driving"},
     ],
+    # Public transport (needs TRANSIT_DIR): meets at a station, no Matrix request.
+    "T1": [
+        {"id": "wembley", "lon": -0.2795, "lat": 51.5635, "mode": "transit"},
+        {"id": "bank", "lon": -0.0886, "lat": 51.5133, "mode": "transit"},
+        {"id": "canary-wharf", "lon": -0.0235, "lat": 51.5054, "mode": "transit"},
+    ],
+    # Public transport and one driver: at most two Matrix requests, for the driver.
+    "T2": [
+        {"id": "angel", "lon": -0.1058, "lat": 51.5322, "mode": "transit"},
+        {"id": "vauxhall", "lon": -0.1253, "lat": 51.4861, "mode": "transit"},
+        {"id": "ealing", "lon": -0.3019, "lat": 51.5130, "mode": "driving"},
+    ],
 }
 
-DIAG_KEYS = ("stage", "coarse_resolution", "fine_resolution", "answer_resolution", "coarse_candidates",
+DIAG_KEYS = ("path", "shortlist", "checked_by_road", "places", "lower_bound_proven", "stage",
+             "coarse_resolution", "fine_resolution", "answer_resolution", "coarse_candidates",
              "fine_candidates", "feasible_count", "dropped_no_route", "unchecked_for_budget",
-             "dropped_off_street", "retries", "bad_replies", "matrix_requests", "matrix_elements",
-             "estimated_matrix_elements", "elapsed_ms")
+             "dropped_off_street", "retries", "bad_replies", "no_route_replies", "matrix_requests",
+             "matrix_elements", "estimated_matrix_elements", "elapsed_ms")
 
 
 def solve_once(client: httpx.Client, name: str, objective: str) -> dict:

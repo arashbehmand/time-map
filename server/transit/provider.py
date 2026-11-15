@@ -49,6 +49,10 @@ FILL_PASSES = 3                 # 100 m grid: gaps up to about 300 m from a know
 COVERAGE_BUFFER_M = 1200.0
 COVERAGE_SIMPLIFY_M = 300.0
 GRID_MAX_HALF = 800                 # cells either side of the pin: the whole coverage box fits
+# The tables' error, as the median absolute minutes for the band of a trip's length: the
+# owner's accepted lines (transit/settings.py ACCEPTED, 2026-11-13). The image ships only
+# transit/tables.py, so they are copied here; a build's manifest records its own, which win.
+TABLE_ERROR_MIN = {"le20": 3.0, "20to45": 7.0, "gt45": 7.0}
 
 
 class TransitUnavailable(Exception):
@@ -93,6 +97,20 @@ class Station:
     name: str
     lon: float
     lat: float
+    pid: str = ""               # the point's id in points.csv
+
+
+@dataclass(frozen=True)
+class Place:
+    """Somewhere to meet: one usable station, at the street point R5 measured its times from.
+    Each is scored on its own column, so every time is to the point shown. Platforms with one
+    name (Bank's Underground and DLR) stay separate places; the meetup's spacing rule keeps
+    two of them from being listed together."""
+    pid: str                    # the point's id in points.csv: stable within a build
+    name: str
+    lon: float
+    lat: float
+    idx: int                    # table index
 
 
 class TransitData:
@@ -101,7 +119,7 @@ class TransitData:
     def __init__(self, directory: Path, manifest: dict, lon: np.ndarray, lat: np.ndarray,
                  kind: np.ndarray, names: list[str], ok: np.ndarray, walksheds: Walksheds,
                  development_only: bool, snap_lon: np.ndarray | None = None,
-                 snap_lat: np.ndarray | None = None):
+                 snap_lat: np.ndarray | None = None, ids: list[str] | None = None):
         self.directory = directory
         self.manifest = manifest
         self.build = str(manifest.get("build", ""))
@@ -114,9 +132,11 @@ class TransitData:
         self.snap_lat = lat if snap_lat is None else snap_lat
         self.is_station = kind == "station"
         self.walksheds = walksheds
-        self.stations = [Station(int(i), display_name(names[i]), float(lon[i]), float(lat[i]))
+        self.stations = [Station(int(i), display_name(names[i]), float(lon[i]), float(lat[i]),
+                                 ids[i] if ids else str(i))
                          for i in np.flatnonzero((kind == "station") & ok)]
         self._station_xy = None
+        self._build_places()
         self._tables: dict[str, np.ndarray] = {}
         self._build_egress()
         self._build_raster()
@@ -176,10 +196,11 @@ class TransitData:
             if fp.get("complete") is not True:
                 raise TransitUnavailable("incomplete")
 
-        idx, kind, names, lon, lat, slon, slat = [], [], [], [], [], [], []
+        idx, kind, names, lon, lat, slon, slat, ids = [], [], [], [], [], [], [], []
         with open(d / "points.csv", newline="") as f:
             for row in csv.DictReader(f):
                 idx.append(int(row["idx"]))
+                ids.append(str(row.get("id") or row["idx"]))
                 kind.append(row["kind"])
                 names.append(row["name"])
                 lon.append(float(row["lon"]))
@@ -200,7 +221,7 @@ class TransitData:
         if len(walksheds.points) and (walksheds.points.min() < 0 or walksheds.points.max() >= n):
             raise TransitUnavailable("bad_walksheds")
         return cls(d, manifest, np.asarray(lon), np.asarray(lat), np.asarray(kind), names, ok,
-                   walksheds, development_only, np.asarray(slon), np.asarray(slat))
+                   walksheds, development_only, np.asarray(slon), np.asarray(slat), ids)
 
     def table(self, window: str) -> np.ndarray:
         if window not in self._tables:
@@ -211,6 +232,30 @@ class TransitData:
         return self._tables[window]
 
     # ── precomputed indexes ──────────────────────────────────────────
+    def _build_places(self) -> None:
+        """One place per usable station, at its street point."""
+        self.places = [Place(s.pid, s.name, float(self.snap_lon[s.idx]), float(self.snap_lat[s.idx]),
+                             s.idx) for s in self.stations]
+        self._place_idx = np.array([p.idx for p in self.places], dtype=np.int64)
+
+    def place_minutes(self, row: np.ndarray) -> np.ndarray:
+        """Minutes to every place (aligned with self.places): that station's own column."""
+        return np.asarray(row, dtype=np.float64)[self._place_idx]
+
+    def tie_lines(self) -> dict[str, float]:
+        """The tables' error by band (minutes): the build's accepted median lines when its
+        manifest records them, else TABLE_ERROR_MIN."""
+        lines = (self.manifest.get("settings") or {}).get("accepted_lines") or {}
+        out = dict(TABLE_ERROR_MIN)
+        for band, vals in (lines.get("band_lines") or {}).items():
+            try:
+                v = float(vals[0])
+            except (TypeError, ValueError, IndexError, KeyError):
+                continue
+            if band in out and math.isfinite(v) and v >= 0:
+                out[band] = v
+        return out
+
     def _build_egress(self) -> None:
         """Walkshed entries sorted by cell, so the last walk is one minimum.reduceat."""
         ws = self.walksheds

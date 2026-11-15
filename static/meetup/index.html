@@ -67,12 +67,19 @@
     </section>
 
     <section aria-labelledby="choice-heading">
+      <label class="field" id="window-field" hidden><span>When do you meet?</span>
+        <select id="window-select"></select>
+      </label>
+      <p class="hint" id="window-hint" hidden>Public transport times are for a typical hour on that day,
+        so trips can take a few minutes more or less.</p>
       <fieldset class="chips" id="objective">
         <legend id="choice-heading" class="label">What matters most?</legend>
         <label class="chip"><input type="radio" name="objective" value="minimax" checked /><span>Fairest</span></label>
         <label class="chip"><input type="radio" name="objective" value="sum" /><span>Quickest on average</span></label>
       </fieldset>
       <p class="hint" id="objective-hint">Fairest keeps the longest trip as short as possible.</p>
+      <p class="hint" id="both-hint" hidden>With public transport we meet at a station, and show both
+        the fairest one and the one with the quickest average trip.</p>
       <button id="find-btn" class="btn primary wide" type="button" disabled>Add at least 2 people</button>
     </section>
 

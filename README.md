@@ -264,6 +264,73 @@ again. `diagnostics` counts what was dropped (`dropped_no_route`, `unchecked_for
 `bad_replies`) and sent (`matrix_requests`, `matrix_elements`). `fine_resolution` is the
 finer resolution searched and `answer_resolution` the one the answer came from.
 
+### Meeting at a station (public transport)
+
+A group with anyone on public transport (`mode: "transit"`) meets at a station from the
+London tables instead (`server/meetup/stations.py`, issue #4). It needs a loaded build
+(`TRANSIT_DIR`), served on the same terms as the warp page's fields; without one, the solve
+answers `503 transit_unavailable`. A group with nobody on public transport uses the grid
+above, unchanged. `diagnostics.path` says which (`"stations"` or `"grid"`).
+
+- **Places.** Every usable station, each on its own column of the tables and at its own
+  street point, so every time is to the point shown. Platforms with one name (Bank's
+  Underground and DLR) are separate stations; the 500 m spacing below keeps two of them from
+  being listed together.
+- **When.** `window` is one of the tables' four (`wd08`, `wd13`, `wd19`, `sa13`), default
+  `wd19`, weekday evening. The answer names it, and says that walking, cycling and driving
+  times have no time of day. The page shows a "When do you meet?" select while anyone is on
+  public transport.
+- **Who travels how.** People on public transport are timed from the tables: no Mapbox call,
+  and an all-transit group doesn't wait for a solve slot. Everyone else is timed by Matrix on
+  a shortlist of K stations, ranked first by the table times plus a straight-line estimate at
+  each mode's average speed (taking the fairest and the quickest in turn). A station a road
+  person can't reach within their own `max_minutes` even at 6 / 30 / 120 km/h (walking,
+  cycling, driving) isn't shortlisted. K is at most 24 (9 with `driving-traffic`) and shrinks
+  to fit issue #2's budget. Each road person is asked about alone, one origin and the K
+  stations in one request, and may send at most two requests, retries and NoRoute splitting
+  included; nobody spends anyone else's. The answer says it is the best of the stations
+  actually checked by road (`checked_by_road`). `diagnostics.lower_bound_proven` says whether,
+  at those 6 / 30 / 120 km/h bounds, no station left unchecked could have beaten the answer;
+  the bounds are assumed, not measured, so the page never shows it.
+- **Road trips end near the station.** Mapbox puts each station on its road network. The walk
+  from there to the station (4 km/h) is added to that person's time, and the answer says so
+  when a listed trip ends more than 150 m away. A station more than 400 m from where any road
+  mode can reach is left out for the group (`dropped_off_street`). Stations beyond a road
+  person's `MODE_RADIUS_KM` aren't candidates; a person with no station in reach is named
+  (`422 group_too_spread`, `who`), with their own mode's limit.
+- **When Mapbox can't route.** Any NoRoute reply is said in the notes, even when splitting
+  recovered every pair. With one spare request a 24-station NoRoute is split once: the better
+  half is asked again and the rest is left unchecked and said. Only when no station was
+  answered for everyone does the solve fail (`422 unroutable_area`).
+- **Two answers.** `best` is the fairest place (the smallest longest trip, then the smallest
+  average). `quickest` is the place with the smallest average trip, when it is another place
+  at least 500 m away that saves at least a minute on average. The request's `objective` and
+  `alpha` don't apply on this path: both answers come back, and `objective` reads `minimax`.
+- **Close alternatives.** Up to five places in all, the best and the quickest included, each
+  listed once and at least 500 m from the others; `top` holds the best and the places within
+  max(3 min, 10% of the best longest trip), and `quickest` is not repeated there. A place
+  within the tables' error of the best is a `tie`: the owner's accepted median line (3 / 7 /
+  7 min, from the build's manifest, else `TABLE_ERROR_MIN`; kept until a full gate packages
+  measured per-window error, #13) for the band of the longest public
+  transport trip at the best place. At those lines most listed alternatives are ties, and the
+  page then says so once rather than on every row. There is no shaded meeting area and no
+  Reach button: the places are discrete, and a Mapbox isochrone wouldn't show the journeys
+  these times came from.
+- **Refusals.** Someone on public transport outside the tables' area gets `422
+  outside_transit_area`, and someone near no street or station in them `422
+  no_transit_access`; both list who in `who`. Someone whose table row has no time within 3
+  hours to any station gets `no_feasible_meeting_point` with reason `no_transit_time`, not
+  `no_route`. The page offers public transport only to pins inside the area, and switches a
+  pin added or dragged outside it to walking, saying so.
+- **Links.** Each person's time comes with a "Plan journey" link to Google Maps directions in
+  their way of travelling. It is opened only when clicked, and the page says that the person's
+  start point then goes to Google, which plans for now, not for the window.
+
+The table times are a rough estimate (`docs/transit-spike.md`: unbiased street to street,
+about 5 min fast at a station end), and the tables walk at 4 km/h where Mapbox walks at
+about 5, so in a mixed group a person on public transport can look a few minutes better
+off than they are.
+
 ## API Endpoints
 
 | Method | Path | Description |
@@ -391,6 +458,10 @@ Participant locations are often people's homes.
   then sent to Nominatim. The pages say so next to the search box.
 - Travel-time fields are POSTed too. The server keeps each one in memory for 5 minutes, keyed
   by the pin rounded to about 11 m, and writes nothing to disk.
+- A station answer's "Plan journey" links go to Google Maps directions (the owner's choice,
+  2026-11-15). The page builds them; the server never contacts Google. A link sends that
+  person's start point and the station to Google only when it is clicked, and the answer
+  says so under the times. Links open in a new tab with `rel="noopener noreferrer"`.
 - Shareable links are still planned. When they come, keep the scenario in the URL fragment,
   which is never sent to the server. Round locations unless their owner opts in.
 

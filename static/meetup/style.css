@@ -20,6 +20,8 @@ body { display: flex; flex-direction: row-reverse; height: 100vh; height: 100dvh
 .wide { width: 100%; }
 .hint { font-size: 14px; color: var(--text-2); }
 .hint[hidden] { display: none; }
+/* ui.css gives these display: flex, which would beat the hidden attribute. */
+.field[hidden], .chips[hidden] { display: none; }
 .search-note { font-size: 12px; color: var(--text-2); }
 .note { background: var(--accent-soft); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 14px; }
 .note[hidden] { display: none; }
@@ -57,6 +59,12 @@ body { display: flex; flex-direction: row-reverse; height: 100vh; height: 100dvh
 .bar-row strong { font-weight: 700; }
 .alternatives { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .alternatives .btn { width: 100%; justify-content: flex-start; font-weight: 500; }
+.alternatives details { margin: 4px 0 6px 30px; font-size: 14px; }
+.alternatives summary { cursor: pointer; color: var(--text-2); }
+.alternatives details .bars { margin-top: 6px; }
+.quick-card { border-style: dashed; }
+.quick-card .alt-num, .quick-marker { background: #1565c0; }
+.credits { font-size: 12px; }
 .alt-num {
   display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
   border-radius: 50%; background: #4a4a5a; color: #fff; font-size: 12px; font-weight: 700;

@@ -103,6 +103,25 @@ def test_meetup_shows_reach_failures():
     assert "Reach isn't available right now" in js
 
 
+def test_meetup_offers_public_transport_only_where_the_tables_are():
+    html = (ROOT / "meetup/index.html").read_text()
+    js = (ROOT / "meetup/app.js").read_text()
+    # The When control is there, hidden until someone is on public transport.
+    assert re.search(r'<label class="field" id="window-field" hidden>', html)
+    assert '<select id="window-select">' in html
+    # Public transport is not in the static list: it is added from the tables' status, and
+    # offered to a person only inside the area they cover.
+    assert 'value="transit"' not in html
+    assert 'fetch("/api/transit/status")' in js and "insideArea(transit.coverage" in js
+    # Journey links open in a new tab and send no referrer.
+    assert 'rel="noopener noreferrer"' in js
+    # ui.css gives .field and .chips display: flex, which beats the hidden attribute unless
+    # the page says otherwise: the empty When select must not show where there are no tables.
+    css = (ROOT / "meetup/style.css").read_text()
+    assert ".field[hidden]" in css and ".chips[hidden]" in css and "display: none" in css
+    assert '<fieldset class="chips" id="objective">' in html
+
+
 @pytest.mark.parametrize("page", ["meetup/index.html", "warp/index.html", "portfolio/index.html"])
 def test_page_zoom_is_allowed(page):
     html = (ROOT / page).read_text()

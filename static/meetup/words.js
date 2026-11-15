@@ -30,6 +30,47 @@ export function altText(c, objectiveValue) {
   return where ? `${where} · ${time}` : time;
 }
 
+// ── Stations (a group with someone on public transport) ─────────
+export const isStation = (c) => Boolean(c && c.kind === "station");
+const placeName = (c) => (c && typeof c.name === "string" && c.name.trim() ? c.name.trim() : "this station");
+
+export function placeHeadline(best) {
+  return `Meet at ${placeName(best)} (★ on the map). Everyone gets there within ${mins(best.max_time_min)} min.`;
+}
+
+export function quickestText(q) {
+  return `Quickest on average: ${placeName(q)}. The average trip is ${mins(q.mean_time_min)} min; ` +
+    `the longest is ${mins(q.max_time_min)} min.`;
+}
+
+export const TIE_TEXT = "About as good: the times can't tell these apart.";
+export const ALL_TIES_TEXT = "These are all about as good as the first: the times can't tell them apart.";
+
+// `markTie`: label a tie on its own row (off when every row is a tie and one sentence says so).
+export function stationAltText(c, markTie = true) {
+  return `${placeName(c)} · longest trip ${mins(c.max_time_min)} min${markTie && c.tie ? " · about as good" : ""}`;
+}
+
+// What a "Plan journey" link does, said once under the answer.
+export function journeyNote(windowLabel) {
+  const when = typeof windowLabel === "string" && windowLabel ? `, not for ${windowLabel}` : "";
+  return `"Plan journey" opens Google Maps with that person's start point and the station. ` +
+    `It plans for now${when}.`;
+}
+
+// A journey planner link for one person to one place, in their way of travelling. Opened only
+// when the person clicks it; the start and end points go to Google Maps then.
+const TRAVELMODE = { walking: "walking", cycling: "bicycling", driving: "driving",
+                     "driving-traffic": "driving", transit: "transit" };
+
+export function journeyLink(person, place) {
+  const at = (lat, lon) => `${Number(lat).toFixed(6)},${Number(lon).toFixed(6)}`;
+  return "https://www.google.com/maps/dir/?api=1" +
+    `&origin=${encodeURIComponent(at(person.lat, person.lon))}` +
+    `&destination=${encodeURIComponent(at(place.lat, place.lon))}` +
+    `&travelmode=${TRAVELMODE[person.mode] || "walking"}`;
+}
+
 // Notes the server adds when an answer is less good than usual. Strings only.
 export function answerNotes(data) {
   return Array.isArray(data && data.notes) ? data.notes.filter((n) => typeof n === "string" && n) : [];
@@ -45,7 +86,25 @@ export function joinNames(names) {
 // solved (`names` in the order they were sent). "" when the error doesn't say who or why,
 // so the caller falls back to the server's own sentence.
 export function noPlaceSentence(err, names) {
+  if (err && (err.code === "outside_transit_area" || err.code === "no_transit_access")) {
+    const who = (err.who || []).map((w) => names[w.index]).filter((n) => typeof n === "string" && n);
+    if (!who.length) return "";
+    const one = who.length === 1;
+    if (err.code === "outside_transit_area") {
+      return `Public transport times cover London only, and ${joinNames(who)} ${one ? "starts" : "start"} ` +
+        `outside it. Pick another way for ${one ? "them" : "them all"} to travel.`;
+    }
+    return `${joinNames(who)} ${one ? "starts" : "start"} too far from a street or station in the public ` +
+      `transport times. Move ${one ? "the pin" : "their pins"} onto a street, or pick another way to travel.`;
+  }
   if (!err || err.code !== "no_feasible_meeting_point") return "";
+  if (err.reason === "no_transit_time") {
+    const who = (err.who || []).map((w) => names[w.index]).filter((n) => typeof n === "string" && n);
+    if (!who.length) return "";
+    const one = who.length === 1;
+    return `From where ${joinNames(who)} ${one ? "starts" : "start"}, the public transport times have ` +
+      `no trip within 3 hours to any station. Pick another way for ${one ? "them" : "them all"} to travel.`;
+  }
   const who = (err.who || [])
     .map((w) => names[w.index])
     .filter((n) => typeof n === "string" && n);

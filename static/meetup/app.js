@@ -6,10 +6,19 @@
 // still on its way, and if one was on its way, the newest group is solved instead.
 import { createLatest } from "/shared/latest.js";
 import { esc, friendly, geocode, postJSON, savePref } from "/shared/api.js";
-import { altText, answerNotes, headline, meaning, mins, noPlaceSentence } from "/meetup/words.js";
+import {
+  ALL_TIES_TEXT, altText, answerNotes, headline, isStation, journeyLink, journeyNote, meaning, mins,
+  noPlaceSentence, placeHeadline, quickestText, stationAltText, TIE_TEXT,
+} from "/meetup/words.js";
+import { expired, insideArea } from "/warp/views.js";
 
 const COLORS = ["#c62828", "#00796b", "#6a1b9a", "#1565c0", "#ef6c00", "#2e7d32", "#ad1457", "#4e342e"];
-const MODE_ING = { walking: "walking", cycling: "cycling", driving: "driving" };
+// Public transport is offered only while the London tables are available, and only to people
+// who start inside the area they cover (GET /api/transit/status).
+const MODE_ING = { walking: "walking", cycling: "cycling", driving: "driving", transit: "by public transport" };
+const MODE_LABEL = { walking: "Walking", cycling: "Cycling", driving: "Driving", transit: "Public transport" };
+const DEFAULT_WINDOW = "wd19";     // weekday evening, as the server
+const LONDON_ONLY = "Public transport times cover London only";
 const MAX_PARTICIPANTS = 8;        // server cap (server/meetup/models.py)
 const MAX_REACH_MINUTES = 60;      // routing limit for "how far each person can get"
 // Reach is drawn by Mapbox's travel-time areas, not from the journeys the answer used.
@@ -42,6 +51,9 @@ let tapTimer = null;
 let undoTimer = null;
 let markerDrags = 0;           // a marker is being dragged: its place isn't final yet
 let styleReady = false;        // the map style has loaded once (layers can be added from then on)
+let transit = { available: false };   // GET /api/transit/status
+let windowId = DEFAULT_WINDOW;        // when the group meets (public transport only)
+let statusRetryMs = 5000;
 
 // ── DOM ─────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -153,8 +165,8 @@ function initMap() {
     tapTimer = setTimeout(() => {
       tapTimer = null;
       const name = nameInput.value.trim() || defaultName();
+      setAddStatus("");   // before adding: addPerson may say the person is walking instead
       if (addPerson({ name, lon: lng, lat, mode: modeSelect.value, label: "Picked on the map" })) {
-        setAddStatus("");
         nameInput.value = "";
         showUndo(`Added ${name}.`);
       }
@@ -178,13 +190,73 @@ function addPerson({ name, lon, lat, mode, label }, { quiet = false } = {}) {
     return null;
   }
   const id = nextId++;
-  const p = { id, name, lon, lat, mode, label, color: COLORS[(id - 1) % COLORS.length] };
+  const outside = mode === "transit" && !transitOk({ lon, lat });
+  const p = { id, name, lon, lat, mode: outside ? "walking" : mode, label,
+              color: COLORS[(id - 1) % COLORS.length] };
   people.push(p);
   addMarker(p);
   renderPeople();
   if (!quiet) groupChanged();
+  if (outside) setAddStatus(`${LONDON_ONLY}, so ${name} is walking. Pick another way if they travel differently.`);
   return p;
 }
+
+// ── Public transport ────────────────────────────────────────────
+// May this place start a public transport trip? Inside the tables' area, while they last.
+function transitOk(pt) {
+  return Boolean(transit.available && insideArea(transit.coverage, pt.lon, pt.lat));
+}
+
+const anyTransit = () => people.some((p) => p.mode === "transit");
+
+// The When control shows while someone is on public transport; the Fairest/Quickest choice
+// hides then, because a station answer shows both.
+function updateTransitControls() {
+  const on = anyTransit();
+  $("window-field").hidden = !on;
+  $("window-hint").hidden = !on;
+  $("objective").hidden = on;
+  $("objective-hint").hidden = on;
+  $("both-hint").hidden = !on;
+}
+
+async function loadTransitStatus() {
+  const later = () => { setTimeout(loadTransitStatus, statusRetryMs); statusRetryMs = Math.min(statusRetryMs * 2, 60000); };
+  let status;
+  try {
+    const resp = await fetch("/api/transit/status");
+    if (!resp.ok) { later(); return; }
+    status = await resp.json();
+  } catch { later(); return; }
+  statusRetryMs = 5000;
+  if (status.loading) { setTimeout(loadTransitStatus, 3000); return; }
+  transit = status.available && !expired(status.valid_until) ? status : { available: false };
+  const option = modeSelect.querySelector('option[value="transit"]');
+  if (transit.available && !option) {
+    modeSelect.append(new Option(MODE_LABEL.transit, "transit"));
+  } else if (!transit.available && option) {
+    if (modeSelect.value === "transit") modeSelect.value = "walking";
+    option.remove();
+  }
+  if (transit.available) {
+    const sel = $("window-select");
+    const ids = transit.windows.map((w) => w.id);
+    sel.replaceChildren(...transit.windows.map((w) => new Option(w.label[0].toUpperCase() + w.label.slice(1), w.id)));
+    if (!ids.includes(windowId)) windowId = ids.includes(DEFAULT_WINDOW) ? DEFAULT_WINDOW : ids[0];
+    sel.value = windowId;
+  } else if (anyTransit()) {
+    for (const p of people) if (p.mode === "transit") p.mode = "walking";
+    groupChanged();
+    setAddStatus("Public transport times aren't available right now, so everyone on it is walking.");
+  }
+  renderPeople();
+  updateTransitControls();
+}
+
+$("window-select").addEventListener("change", (e) => {
+  windowId = e.target.value;
+  groupChanged();
+});
 
 function removePerson(id) {
   const index = people.findIndex((p) => p.id === id);
@@ -232,6 +304,7 @@ function groupChanged() {
   clearResults();
   exampleNote.hidden = true;
   updateFind();
+  updateTransitControls();
   if (wasSolving && people.length >= 2) {
     setStatus("The group changed. Finding a place for the new group…", "busy");
     const later = () => {
@@ -255,8 +328,8 @@ function renderPeople() {
       <button type="button" class="remove" aria-label="Remove ${esc(p.name)}">×</button>
       <div class="where">
         <select class="p-mode" aria-label="How ${esc(p.name)} travels">
-          ${Object.keys(MODE_ING).map((m) =>
-            `<option value="${m}"${p.mode === m ? " selected" : ""}>${MODE_ING[m][0].toUpperCase() + MODE_ING[m].slice(1)}</option>`).join("")}
+          ${Object.keys(MODE_LABEL).filter((m) => m !== "transit" || p.mode === "transit" || transitOk(p)).map((m) =>
+            `<option value="${m}"${p.mode === m ? " selected" : ""}>${MODE_LABEL[m]}</option>`).join("")}
         </select>
         <span>from ${esc(p.label)}</span>
       </div>
@@ -317,8 +390,11 @@ function addMarker(p) {
     const { lng, lat } = marker.getLngLat();
     p.lon = lng; p.lat = lat;
     p.label = "Picked on the map";
+    const left = p.mode === "transit" && !transitOk(p);
+    if (left) { p.mode = "walking"; updateMarker(p); }
     renderPeople();
     groupChanged();
+    if (left) setAddStatus(`${LONDON_ONLY}, so ${p.name} is walking now. Pick another way if they travel differently.`);
   });
   markers.set(p.id, marker);
 }
@@ -439,8 +515,10 @@ for (const radio of document.querySelectorAll('input[name="objective"]')) {
 // ── Find ────────────────────────────────────────────────────────
 async function solve() {
   if (people.length < 2) return;
+  const stations = anyTransit();
   const snap = {
-    objective: objective(),
+    objective: stations ? "minimax" : objective(),
+    window: stations ? windowId : null,
     people: people.map(({ id, name, lon, lat, mode, color }) => ({ id, name, lon, lat, mode, color })),
   };
   findBtn.disabled = true;
@@ -451,12 +529,16 @@ async function solve() {
     res = await solves.run(snap, (signal) => postJSON("/api/meetup/solve", {
       participants: snap.people.map((p) => ({ id: String(p.id), lon: p.lon, lat: p.lat, mode: p.mode })),
       objective: snap.objective,
-      search: { top_k: 4 },
+      search: { top_k: stations ? 5 : 4 },
+      ...(snap.window ? { window: snap.window } : {}),
     }, signal));
   } catch (err) {
     updateFind();
     // "No place works" names who is stuck; other errors use the server's own sentence.
     setStatus(noPlaceSentence(err, snap.people.map(nameOf)) || friendly(err), "error");
+    // The tables went away (expired, say) while the page was open: ask again, which takes
+    // public transport off the page and moves anyone on it to walking.
+    if (err && err.code === "transit_unavailable") loadTransitStatus();
     return;
   }
   if (res.stale) return;          // the group changed; groupChanged() has taken over
@@ -481,6 +563,7 @@ function nameOf(sp) {
 }
 
 function showResults(data, snap) {
+  if (isStation(data.best)) { showStations(data, snap); return; }
   clearResults();
   lastAnswer = { data, snap, reach: null };
   const best = data.best;
@@ -509,7 +592,89 @@ function showResults(data, snap) {
   fitTo([...snap.people.map((p) => [p.lon, p.lat]), [best.lon, best.lat]], 14);
 }
 
+// ── Answer at a station ─────────────────────────────────────────
+// Fairest is the star; Quickest on average gets its own card and marker when it is another
+// place; close alternatives are numbered. Each person's time comes with a link to plan the
+// journey. No reach areas: they would come from a different service than these times.
+function placeMarker(c, className, text, title) {
+  const el = document.createElement("div");
+  el.className = className;
+  el.textContent = text;
+  el.setAttribute("aria-hidden", "true");
+  return new maplibregl.Marker({ element: el })
+    .setLngLat([c.lon, c.lat])
+    .setPopup(new maplibregl.Popup({ offset: 20 }).setHTML(`<strong>${esc(title)}</strong><br>${esc(stationAltText(c))}`))
+    .addTo(map);
+}
+
+function showStations(data, snap) {
+  clearResults();
+  lastAnswer = { data, snap, reach: null };
+  resultMarkers.push(placeMarker(data.best, "best-marker", "★", `Meet at ${data.best.name || "this station"}`));
+  if (data.quickest) resultMarkers.push(placeMarker(data.quickest, "cand-marker quick-marker", "Q", "Quickest on average"));
+  data.top.slice(1).forEach((c, i) => resultMarkers.push(placeMarker(c, "cand-marker", String(i + 2), `Option ${i + 2}`)));
+  renderAnswer();
+  // The server lists the quickest place once, apart from the numbered alternatives.
+  const places = [...data.top, ...(data.quickest ? [data.quickest] : [])];
+  fitTo([...snap.people.map((p) => [p.lon, p.lat]), ...places.map((c) => [c.lon, c.lat])], 14);
+}
+
+function tripRows(place, snap) {
+  const times = snap.people.map((p) => ({ p, t: place.times[String(p.id)] }));
+  const longest = Math.max(...times.map((x) => x.t));
+  const width = (t) => (longest > 0 ? Math.max(4, (t / longest) * 100) : 100).toFixed(1);
+  return `
+    <ul class="bars" aria-label="Each person's trip">
+      ${times.map(({ p, t }) => `
+        <li class="bar-row" style="--color:${p.color}">
+          <span><strong>${esc(nameOf(p))}</strong> · ${mins(t)} min ${MODE_ING[p.mode] || p.mode}${t === longest && times.length > 1 ? " (longest)" : ""}
+            · <a href="${esc(journeyLink(p, place))}" target="_blank" rel="noopener noreferrer">Plan journey</a></span>
+          <span class="track" aria-hidden="true"><span class="fill" style="width:${width(t)}%"></span></span>
+        </li>`).join("")}
+    </ul>`;
+}
+
+function renderStations() {
+  const { data, snap } = lastAnswer;
+  const alts = data.top.slice(1);
+  // When every alternative is a tie, one sentence says so instead of a label on each.
+  const allTies = alts.length > 0 && alts.every((c) => c.tie);
+  const credits = Array.isArray(data.credits) ? data.credits.filter((c) => typeof c === "string") : [];
+  answerEl.innerHTML = `
+    <div class="answer-card">
+      <p class="headline">${esc(placeHeadline(data.best))}</p>
+      <p class="hint">${esc(meaning("minimax"))}</p>
+      ${answerNotes(data).map((n) => `<p class="hint answer-note">${esc(n)}</p>`).join("")}
+      ${tripRows(data.best, snap)}
+      <p class="hint">${esc(journeyNote(data.window_label))}</p>
+    </div>
+    ${data.quickest ? `
+      <div class="answer-card quick-card">
+        <p class="headline"><span class="alt-num" aria-hidden="true">Q</span> ${esc(quickestText(data.quickest))}</p>
+        ${tripRows(data.quickest, snap)}
+      </div>` : ""}
+    ${alts.length ? `
+      <h2>Close alternatives</h2>
+      <ul class="alternatives">
+        ${alts.map((c, i) => `
+          <li>
+            <button type="button" class="btn" data-lon="${c.lon}" data-lat="${c.lat}">
+              <span class="alt-num" aria-hidden="true">${i + 2}</span> Option ${i + 2} · ${esc(stationAltText(c, !allTies))}
+            </button>
+            <details><summary>Everyone's trip there</summary>${tripRows(c, snap)}</details>
+          </li>`).join("")}
+      </ul>
+      ${allTies ? `<p class="hint">${esc(ALL_TIES_TEXT)}</p>`
+        : alts.some((c) => c.tie) ? `<p class="hint">${esc(TIE_TEXT)}</p>` : ""}` : ""}
+    ${credits.length ? `<p class="hint credits">Public transport data: ${credits.map(esc).join(" · ")}</p>` : ""}`;
+  answerEl.hidden = false;
+  for (const btn of answerEl.querySelectorAll(".alternatives .btn")) {
+    btn.addEventListener("click", () => map.easeTo({ center: [+btn.dataset.lon, +btn.dataset.lat], zoom: Math.max(map.getZoom(), 14) }));
+  }
+}
+
 function renderAnswer() {
+  if (isStation(lastAnswer.data.best)) { renderStations(); return; }
   const { data, snap } = lastAnswer;
   const best = data.best;
   const alts = data.top.slice(1, 4);
@@ -708,4 +873,5 @@ if (typeof maplibregl === "undefined") {
   renderPeople();
   updateFind();
   loadExample();
+  loadTransitStatus();
 }

@@ -99,3 +99,19 @@ test("hits near each other with different minutes stay separate (squash draws th
   assert.deepEqual(hits.map((h) => Math.round(h.minutes)).sort(), [20, 35]);
   assert.equal(meshSheetIndex({ pos, minutes, index }, warp, { mergeMinutes: Infinity }).query(2, 2, 0.1).length, 1);
 });
+
+test("a tap finds the coloured part of a triangle that crosses the outer ring", () => {
+  // Walking at 4 km/h; outer ring 30 minutes. Two corners at about 25.5 minutes, one at 33,
+  // which the warp places on the ring as it fades. The renderer colours the part under 30
+  // minutes, so a tap there must find the place; past 30 there is nothing to find.
+  const f = fieldFromFunction({ origin: { lon: -0.12, lat: 51.5 }, cell: 100, halfSize: 3000 }, (x, y) => Math.hypot(x, y) / (4000 / 60));
+  const warp = createWarp({ kind: "polar", field: f, maxMinutes: 30 });
+  const pos = Float32Array.from([1700, 0, 1700, 100, 2200, 0]);
+  const minutes = Float32Array.from([1700, Math.hypot(1700, 100), 2200].map((r) => r / (4000 / 60)));
+  const index = Uint32Array.from([0, 1, 2]);
+  const sheets = meshSheetIndex({ pos, minutes, index }, warp, { maxMinutes: 30 });
+  const inside = sheets.query(27, 0.3, 0);
+  assert.equal(inside.length, 1);
+  assert.ok(inside[0].minutes > 25.5 && inside[0].minutes <= 30);
+  assert.equal(sheets.query(29.5, 0.05, 0).length, 0);     // past the ring: not drawn, not found
+});

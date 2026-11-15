@@ -329,7 +329,7 @@ function buildLayers(msg) {
     while (sheetsByKey.size > SHEETS_KEEP) sheetsByKey.delete(sheetsByKey.keys().next().value);
     self.postMessage(message, copy());
     try {
-      entry.index = meshSheetIndex(mesh, warp);
+      entry.index = meshSheetIndex(mesh, warp, { maxMinutes: msg.maxMinutes });   // the bands' outer ring
       // The uncertain patches: drawn, uncoloured, and a tap there says so.
       if (f.uncertain) entry.unsure = meshSheetIndex(bandMesh(f, msg.box, { uncertainOnly: true }), warp);
     } catch (err) {

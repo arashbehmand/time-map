@@ -4,8 +4,9 @@
 // meshSheetIndex(mesh, warp) maps a triangle mesh ({pos, minutes, index}, local metres) into
 // layout units (minutes, the polar target) and buckets its triangles in a 0.5-minute grid. The
 // warp page passes the band layer's own mesh, refined like the map (refine.js), so a tap reads
-// the same triangles the bands are drawn with. A vertex the warp doesn't place (unknown, past
-// the outer ring) drops its triangles. query(lx, ly, r) returns every triangle within r layout
+// the same triangles the bands are drawn with. A vertex the warp doesn't place (unknown) drops
+// its triangles; given the outer ring (maxMinutes), a vertex past it sits on the ring, as drawn.
+// query(lx, ly, r) returns every triangle within r layout
 // units of the point, as source places, merged into sheets: hits whose sources are within
 // `merge` metres of each other and whose minutes differ by at most `mergeMinutes` are one sheet
 // (the one nearest the finger is kept). The minutes check matters where the layout's radius
@@ -19,19 +20,25 @@ const BUCKET = 0.5;
 // Bucket keys as numbers (strings made the index the slowest part of building the bent view).
 const bkey = (bx, by) => (bx + 32768) * 65536 + (by + 32768);
 
-export function meshSheetIndex({ pos, minutes, index }, warp, { merge = 300, mergeMinutes = 2 } = {}) {
+// `maxMinutes` (the outer ring, in the mesh's minutes): with it, a triangle with a corner past the
+// ring is kept, that corner where the warp puts it as it fades (on the ring), and a tap finds only
+// the part under the ring: the part the band layer colours. Without it, such triangles are left out.
+export function meshSheetIndex({ pos, minutes, index }, warp, { merge = 300, mergeMinutes = 2, maxMinutes = Infinity } = {}) {
   const n = pos.length / 2;
-  const tx = new Float64Array(n), ty = new Float64Array(n), ok = new Uint8Array(n);
+  const tx = new Float64Array(n), ty = new Float64Array(n), ok = new Uint8Array(n);   // 1 placed, 2 on the ring
+  const ring = Number.isFinite(maxMinutes) && typeof warp.placement === "function";
   for (let v = 0; v < n; v++) {
     const p = warp.target(pos[2 * v], pos[2 * v + 1]);
-    if (!p) continue;
-    tx[v] = p[0]; ty[v] = p[1]; ok[v] = 1;
+    if (p) { tx[v] = p[0]; ty[v] = p[1]; ok[v] = 1; continue; }
+    if (!ring) continue;
+    const q = warp.placement(pos[2 * v], pos[2 * v + 1]);
+    if (q[2] === 0.5) { tx[v] = q[0]; ty[v] = q[1]; ok[v] = 2; }
   }
   const buckets = new Map();
   const tris = [];
   for (let i = 0; i + 2 < index.length; i += 3) {
     const a = index[i], b = index[i + 1], c = index[i + 2];
-    if (!(ok[a] && ok[b] && ok[c])) continue;
+    if (!(ok[a] && ok[b] && ok[c]) || (ok[a] === 2 && ok[b] === 2 && ok[c] === 2)) continue;
     const id = tris.length / 3;
     tris.push(a, b, c);
     const bx0 = Math.floor(Math.min(tx[a], tx[b], tx[c]) / BUCKET), bx1 = Math.floor(Math.max(tx[a], tx[b], tx[c]) / BUCKET);
@@ -57,10 +64,12 @@ export function meshSheetIndex({ pos, minutes, index }, warp, { merge = 300, mer
         const ia = tri[3 * id], ib = tri[3 * id + 1], ic = tri[3 * id + 2];
         const h = closestBary(lx, ly, tx[ia], ty[ia], tx[ib], ty[ib], tx[ic], ty[ic]);
         if (h.d > r) continue;
+        const t = h.u * minutes[ia] + h.v * minutes[ib] + h.w * minutes[ic];
+        if (t > maxMinutes) continue;                          // past the ring: not coloured
         hits.push({
           x: h.u * pos[2 * ia] + h.v * pos[2 * ib] + h.w * pos[2 * ic],
           y: h.u * pos[2 * ia + 1] + h.v * pos[2 * ib + 1] + h.w * pos[2 * ic + 1],
-          minutes: h.u * minutes[ia] + h.v * minutes[ib] + h.w * minutes[ic],
+          minutes: t,
           distance: h.d,
         });
       }

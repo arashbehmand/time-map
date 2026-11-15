@@ -42,13 +42,19 @@ MEETUP = {
 
 
 def check_warp(ex: dict) -> None:
-    from server.warp.field import decode
+    from server.warp.field import decode, decode_uncertain
     assert ex["mode"] == "walking" and ex["origin"]["label"]
     minutes, _ = decode(ex["minutes_b64"], (ex["ny"], ex["nx"]))
+    patch, drawn = decode_uncertain(ex.get("uncertain"), minutes.shape)
     j, i = round(-ex["y0"] / ex["cell"]), round(-ex["x0"] / ex["cell"])
     assert minutes[j, i] == 0, "the pin is not at 0 minutes"
     # The page opens on it at the walking default (30 minutes): it must reach that far.
     assert np.nanmax(minutes[np.isfinite(minutes)]) >= 30
+    # King's Cross's platforms, 200 and 300 m north of the pin: an uncertain patch, drawn
+    # between the station and the streets beyond (the bent map's wedge of 2026-11).
+    for step in (2, 3):
+        assert patch[j - step, i], f"the node {step * 100} m north of the pin is not an uncertain patch"
+        assert drawn[j - step, i] < 15, "the platforms are drawn far out"
 
 
 def make_warp(client: httpx.Client) -> dict:

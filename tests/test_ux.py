@@ -7,7 +7,7 @@ import numpy as np
 
 from server.app import static_build_id
 from server.meetup.models import SolveResponse
-from server.warp.field import decode
+from server.warp.field import WALK_M_PER_MIN, Grid, decode, decode_uncertain, uncertain_patches
 
 STATIC = pathlib.Path(__file__).resolve().parent.parent / "static"
 
@@ -60,6 +60,26 @@ def test_warp_example_is_drawable():
     known = minutes[np.isfinite(minutes)]
     assert known.size > 100 and 30 <= known.max() <= 60      # the page opens at 30
     assert not filled.any()
+
+
+def test_warp_example_draws_the_platforms_small():
+    """The check that would have caught the bent map's wedge north of King's Cross (2026-11):
+    the platforms 200 and 300 m north of the pin are an uncertain patch, keep the provider's
+    minutes (about 50) and are drawn between the station and the streets beyond."""
+    ex = json.loads((STATIC / "warp/example-field.json").read_text())
+    shape = (ex["ny"], ex["nx"])
+    minutes, _ = decode(ex["minutes_b64"], shape)
+    patch, drawn = decode_uncertain(ex.get("uncertain"), shape)
+    j, i = round(-ex["y0"] / ex["cell"]), round(-ex["x0"] / ex["cell"])
+    for step in (2, 3):
+        assert patch[j - step, i]
+        assert minutes[j - step, i] >= 30                    # kept, for audit
+        assert drawn[j - step, i] < 15
+    # The server's rule, run on the numbers shipped, finds them too.
+    grid = Grid(ex["cell"], ex["x0"], ex["y0"], ex["nx"], ex["ny"])
+    levels = [m / WALK_M_PER_MIN for m in (333, 667, 1000, 1333, 2000, 2667, 3333, 4000)]
+    again = uncertain_patches(minutes, levels, grid, WALK_M_PER_MIN)
+    assert again[j - 2, i] and again[j - 3, i]
 
 
 def test_meetup_example_is_a_valid_answer():

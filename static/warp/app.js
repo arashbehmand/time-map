@@ -429,7 +429,8 @@ function labelsFor(m) {
 }
 
 // ── Bending ──────────────────────────────────────────────────────────
-function bendOffered() { return S.renderer && S.renderer.supported && V.bendOffered(S.mode, location.search); }
+// The bent map needs both workers: the scene, and the band layer with its tap index.
+function bendOffered() { return S.renderer && S.renderer.supported && S.fieldWorker && V.bendOffered(S.mode, location.search); }
 
 function setBent(on) {
   S.bent = !!(on && bendOffered());
@@ -732,6 +733,7 @@ function hideTapList() { show($("tap-list"), false); S.tapMark = null; S.tapSeq+
 // Always answers: [] after SHEETS_WAIT_MS, or when the worker fails.
 const SHEETS_WAIT_MS = 3000;
 function querySheets(key, lx, ly, r) {
+  if (!S.fieldWorker) return Promise.resolve([]);
   const id = ++sheetsSeq;
   return new Promise((resolve) => {
     sheetWaiters.set(id, resolve);
@@ -741,8 +743,17 @@ function querySheets(key, lx, ly, r) {
 }
 
 // A worker that fails to load or dies says so as an event, not a message: nothing it was asked
-// will come back, so the page stops waiting.
-function onWorkerFailure() {
+// will come back, so the page stops waiting. A field worker that fails is let go: the normal
+// map's bands are contoured here from then on, and the bent map, which needs it, is no longer
+// offered.
+function onWorkerFailure(e) {
+  if (e && e.type === "error" && S.fieldWorker && e.target === S.fieldWorker) {
+    try { S.fieldWorker.terminate(); } catch { /* already gone */ }
+    S.fieldWorker = null;
+    if (S.bent) setBent(false);
+    updateBands();
+    updateLegend();
+  }
   for (const [id, w] of sheetWaiters) { sheetWaiters.delete(id); w([]); }
   const p = S.pendingMesh;
   if (p) {

@@ -31,6 +31,17 @@ body { display: flex; flex-direction: row-reverse; height: 100vh; height: 100dvh
 }
 .toast[hidden] { display: none; }
 
+/* ── Share ────────────────────────────────────────────────────────── */
+#share[hidden], #share-url[hidden] { display: none; }
+#share summary { cursor: pointer; font-weight: 600; padding: 9px 0; }
+#share > :not(summary) { margin-top: 8px; }
+#share > p, #share > button { display: block; }
+#share-exact { border: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+#share-exact-list { display: flex; flex-direction: column; gap: 2px; }
+.check { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 14px; overflow-wrap: anywhere; }
+.check input { width: 18px; height: 18px; flex-shrink: 0; }
+#share-url { width: 100%; }
+
 /* ── People ───────────────────────────────────────────────────────── */
 #people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .person {
@@ -63,7 +74,7 @@ body { display: flex; flex-direction: row-reverse; height: 100vh; height: 100dvh
 .alternatives summary { cursor: pointer; color: var(--text-2); }
 .alternatives details .bars { margin-top: 6px; }
 .quick-card { border-style: dashed; }
-.quick-card .alt-num, .quick-marker { background: #1565c0; }
+.quick-card .alt-num, .cand-marker.quick-marker { background: #1565c0; }
 .credits { font-size: 12px; }
 .alt-num {
   display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;

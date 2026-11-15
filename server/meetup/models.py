@@ -89,7 +89,8 @@ class SolveResponse(BaseModel):
     diagnostics: dict
     # Plain sentences for the person reading the answer: why it may be less good than usual.
     notes: list[str] = Field(default_factory=list)
-    # Stations: the place with the lowest average trip, when it is a different place.
+    # Fairest answers (stations, venues and streets): the place with the lowest average trip,
+    # when it is a different place.
     quickest: Optional[CandidateResult] = None
     # Stations: the timetable window the public transport times are for.
     window: Optional[str] = None

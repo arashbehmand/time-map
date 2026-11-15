@@ -9,7 +9,7 @@ import pytest
 from conftest import FixedRouter, bumpy, straight_line
 
 import server.meetup.solver as solver
-from server.errors import NoFeasiblePoint, UnroutableArea
+from server.errors import Busy, NoFeasiblePoint, UnroutableArea
 from server.meetup.candidates import edge_km, haversine_km
 from server.meetup.limits import plan_solve
 from server.meetup.models import SolveRequest
@@ -397,3 +397,109 @@ def test_the_no_place_error_names_nobody_and_echoes_nothing(client):
     assert body["who"] == [{"index": 0, "reason": "no_route"}]
     assert "home-of-zed" not in resp.text and "51.56" not in resp.text and "0.27" not in resp.text
     assert "time limit" not in body["detail"]
+
+
+# ── quickest on average, beside the fairest ─────────────────────────
+# Two friends close together and one far away: the fairest place is between them all, the
+# quickest on average is near the pair.
+LOPSIDED = [person("a", -2, 0), person("b", -2, 0.2), person("c", 2, 0)]
+
+
+def test_a_lopsided_group_also_gets_the_quickest_place():
+    router = FixedRouter(straight_line)
+    resp = run(LOPSIDED, router)
+    q = resp.quickest
+    assert q is not None
+    assert km_between((q.lon, q.lat), best_point(resp)) * 1000 >= solver.MIN_ALT_GAP_M
+    assert q.mean_time_min <= resp.best.mean_time_min - solver.QUICKEST_MIN_GAIN_MIN
+    assert q.max_time_min >= resp.best.max_time_min
+    assert resp.diagnostics["quickest_stage"] in ("coarse", "fine")
+    # From the places already checked: no more routing than the fairest answer alone.
+    assert router.calls == 2
+
+
+def test_no_alternative_repeats_the_quickest_place():
+    resp = run(LOPSIDED, FixedRouter(straight_line), top_k=5)
+    q = resp.quickest
+    for c in resp.top[1:]:
+        assert km_between((c.lon, c.lat), (q.lon, q.lat)) * 1000 >= solver.MIN_ALT_GAP_M
+
+
+def test_a_balanced_group_has_no_separate_quickest_place():
+    side = 2.0
+    people = [person("a", -side / 2, 0), person("b", side / 2, 0), person("c", 0, side * math.sqrt(3) / 2)]
+    resp = run(people, FixedRouter(straight_line))
+    assert resp.quickest is None
+    assert resp.diagnostics["quickest_stage"] is None
+
+
+@pytest.mark.parametrize("objective", ["sum", "hybrid"])
+def test_only_fairest_answers_carry_a_quickest_place(objective):
+    assert run(LOPSIDED, FixedRouter(straight_line), objective).quickest is None
+
+
+def test_the_quickest_place_is_the_same_in_any_order():
+    first = run(LOPSIDED, FixedRouter(bumpy))
+    second = run(list(reversed(LOPSIDED)), FixedRouter(bumpy))
+    assert (second.quickest.lon, second.quickest.lat) == (first.quickest.lon, first.quickest.lat)
+    assert second.quickest.times == first.quickest.times
+
+
+def test_the_quickest_place_is_within_a_minute_of_brute_force():
+    rng = random.Random(11)
+    for _ in range(100):
+        people, _, fn = _random_case(rng)
+        resp = run(people, FixedRouter(fn), "minimax")
+        brute = _brute_force(people, "sum", fn, resp.diagnostics["coarse_resolution"])
+        mean = (resp.quickest or resp.best).mean_time_min
+        assert mean <= brute + 1.0 + 1e-6, (people, fn.__name__)
+
+
+class BusyFineStage(FixedRouter):
+    async def duration_matrix(self, mode, origins, destinations):
+        if self.calls >= 1:
+            self.calls += 1
+            raise Busy()
+        return await super().duration_matrix(mode, origins, destinations)
+
+
+def test_a_failed_fine_stage_still_gives_a_quickest_place_from_the_coarse_one():
+    resp = run(LOPSIDED, BusyFineStage(straight_line))
+    assert solver.NOTE_FINE_SKIPPED in resp.notes
+    assert resp.quickest is not None and resp.diagnostics["quickest_stage"] == "coarse"
+
+
+def test_the_quickest_place_keeps_everyone_within_their_time_limit():
+    people = [*LOPSIDED[:2], person("c", 2, 0, max_minutes=40)]
+    resp = run(people, FixedRouter(straight_line))
+    assert resp.quickest is not None
+    assert resp.quickest.times["c"] <= 40
+
+
+def test_a_place_far_from_a_street_is_never_the_quickest():
+    near_pair = at(-2, 0.1)
+
+    def snap(mode, d):
+        # Everywhere within 800 m of the pair is 400 m from a street.
+        off = km_between(d, near_pair) < 0.8
+        return Snap(d[0], d[1] + (0.4 if off else 0) * KM_LAT, "Lane")
+
+    resp = run(LOPSIDED, FixedRouter(straight_line, snap_fn=snap))
+    assert resp.quickest is not None
+    assert km_between((resp.quickest.lon, resp.quickest.lat), near_pair) >= 0.75
+
+
+def test_trips_ending_away_from_the_quickest_place_are_said():
+    # A walker and a cyclist near each other, a walker far away. Near the pair, the cycling
+    # point is 100 m south of the walking one; the fairest place, between them all, is not.
+    people = [person("a", -2, 0), person("b", -2, 0.2, "cycling"), person("c", 2, 0)]
+    pair = at(-2, 0.1)
+
+    def snap(mode, d):
+        shift = -0.1 if mode == "cycling" and km_between(d, pair) < 1.0 else 0.0
+        return Snap(d[0], d[1] + shift * KM_LAT, "Lane")
+
+    resp = run(people, FixedRouter(straight_line, snap_fn=snap))
+    assert resp.quickest is not None and km_between((resp.quickest.lon, resp.quickest.lat), pair) < 1.0
+    assert solver.NOTE_SPREAD_QUICKEST in resp.notes
+    assert solver.NOTE_SPREAD not in resp.notes

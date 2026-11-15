@@ -4,7 +4,7 @@ import { ApiError } from "../../static/shared/api.js";
 import {
   ALL_TIES_TEXT, altText, answerNotes, headline, isPlace, isStation, isVenue, joinNames, journeyLink,
   journeyNote, noPlaceSentence, OPEN_HOURS_HINT, placeHeadline,
-  quickestText, stationAltText, TIE_TEXT,
+  quickestText, shareChanged, stationAltText, TIE_TEXT,
 } from "../../static/meetup/words.js";
 
 const best = { name: "Baker Street", max_time_min: 27.2, mean_time_min: 22.6 };
@@ -162,4 +162,19 @@ test("the journey note says 'the place' for a venue, and the page admits it can'
   assert.match(journeyNote("a weekday, 19:00–20:00", lamb), /start point and the place\. /);
   assert.match(journeyNote(null, bank), /start point and the station\. /);
   assert.equal(OPEN_HOURS_HINT, "We don't know whether it's open.");
+});
+
+test("a street answer's quickest place says it is from the places checked", () => {
+  const q = { kind: "street", name: "Baker Street", max_time_min: 31.2, mean_time_min: 19.4 };
+  assert.equal(quickestText(q),
+    "Of the places we checked, the quickest on average is on Baker Street. The average trip is 19 min; the longest is 31 min.");
+  assert.match(quickestText({ ...q, name: null, kind: null }), /^Of the places we checked, the quickest on average is at the Q on the map\./);
+  assert.match(quickestText({ ...q, kind: "station", name: "Euston" }), /^Quickest on average: Euston\./);
+});
+
+test("a shared group says what changed before asking for Find", () => {
+  assert.equal(shareChanged([], false, false), "");
+  assert.equal(shareChanged(["Ana"], false, false),
+    "This group changed from the link: public transport isn't available for Ana here, so they walk. Press Find when it looks right.");
+  assert.match(shareChanged(["Ana", "Ben"], true, true), /Ana and Ben here, so they all walk; the time of day .*; the kind of place/);
 });

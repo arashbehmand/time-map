@@ -60,7 +60,13 @@ from server.meetup.routing import (
     gather_or_cancel,
     solve_allowance,
 )
-from server.meetup.solver import NOTE_BAD_REPLY, NOTE_NO_ROUTE, NOTE_UNCHECKED, explain_infeasible
+from server.meetup.solver import (
+    NOTE_BAD_REPLY,
+    NOTE_NO_ROUTE,
+    NOTE_UNCHECKED,
+    QUICKEST_MIN_GAIN_MIN,
+    explain_infeasible,
+)
 from server.transit.provider import TransitData, credits, window_label
 from server.transit.venues import PLURAL, VENUE_WALK_MAX_MIN, WORD
 from server.warp.field import WALK_M_PER_MIN
@@ -79,8 +85,8 @@ ALT_SHARE = 0.10
 MIN_PLACE_GAP_M = 500.0
 # At most this many places, the best and the quickest included.
 MAX_PLACES = 5
-# "Quickest on average" is shown when it is another place this far away, and saves this much.
-QUICKEST_MIN_GAIN_MIN = 1.0
+# "Quickest on average" is shown when it is another place MIN_PLACE_GAP_M away, and saves
+# QUICKEST_MIN_GAIN_MIN (solver.py: the street answers use the same gain).
 # A road trip ends where the map service put the station; the walk from there to the station
 # is added (4 km/h). Past this, the station is out for the group: too far from any road.
 MAX_STATION_WALK_M = 400.0

@@ -74,6 +74,9 @@ MAX_SPREAD_M = 150.0
 NOTE_SPREAD_M = 50.0
 # Alternatives closer than this to a better one are left out (metres).
 MIN_ALT_GAP_M = 150.0
+# "Quickest on average" is shown when it saves at least this much on the average trip
+# (minutes), for streets here and for stations and venues (stations.py).
+QUICKEST_MIN_GAIN_MIN = 1.0
 # More than this share of a stage's candidates left unchecked fails that stage.
 MAX_UNRESOLVED_SHARE = 0.25
 # More than this share of the reachable places too far from a street gets a note.
@@ -89,6 +92,8 @@ NOTE_FEW_STREETS = ("Many places here are far from a street or path, so only par
                     "could be offered.")
 NOTE_SPREAD = ("Not every trip ends exactly at the star: for some people it ends on a street "
                "up to 150 m away.")
+NOTE_SPREAD_QUICKEST = ("Not every trip ends exactly at the Q: for some people it ends on a "
+                        "street up to 150 m away.")
 NOTE_BAD_REPLY = ("The map service sent a bad reply, so we asked again. This answer uses only "
                   "replies that came back complete.")
 NOTE_NO_ROUTE = ("The map service couldn't route part of a request, so we asked again in pieces. "
@@ -329,6 +334,33 @@ def _distinct(ev: Evaluation, ranked: np.ndarray, k: int) -> list[int]:
     return picked
 
 
+def _quickest(stages: list[Evaluation], offered, kept: Evaluation,
+              best: int) -> tuple[Evaluation, int] | None:
+    """Quickest on average among the places offered in either stage, when it is another
+    place at least MIN_ALT_GAP_M from the best and saves at least QUICKEST_MIN_GAIN_MIN on
+    the average trip. Ties: lower longest trip, then the earlier stage, then candidate order."""
+    found: tuple[float, float, int, int] | None = None
+    for s_idx, ev in enumerate(stages):
+        mean = np.where(np.isfinite(offered(ev)), ev.mean, np.inf)
+        valid = np.where(np.isfinite(mean))[0]
+        if not len(valid):
+            continue
+        order = valid[np.lexsort((valid, np.round(ev.mx[valid], 6), np.round(mean[valid], 6)))]
+        i = int(order[0])
+        key = (round(float(mean[i]), 6), round(float(ev.mx[i]), 6), s_idx, i)
+        if found is None or key < found:
+            found = key
+    if found is None:
+        return None
+    ev, i = stages[found[2]], found[3]
+    a, b = ev.shown[i], kept.shown[best]
+    if haversine_km(a.lon, a.lat, b.lon, b.lat) * 1000.0 < MIN_ALT_GAP_M:
+        return None
+    if float(ev.mean[i]) > float(kept.mean[best]) - QUICKEST_MIN_GAIN_MIN:
+        return None
+    return ev, i
+
+
 async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResponse:
     started = time.perf_counter()
     # Score people in id order; index_of maps back to their place in the request.
@@ -396,12 +428,30 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
     top = [_make_result(i, kept, scores, participants) for i in picks]
     best_score = float(scores[ranked[0]])
 
+    # Fairest answers also say which place has the quickest average trip, from the places
+    # already checked (no extra routing). Alternatives at that place are not listed twice.
+    quickest: CandidateResult | None = None
+    quickest_stage: str | None = None
+    quickest_spread_m = 0.0
+    if req.objective == "minimax":
+        q = _quickest(stages, offered, kept, picks[0])
+        if q is not None:
+            q_ev, q_idx = q
+            quickest = _make_result(q_idx, q_ev, offered(q_ev), participants)
+            quickest_stage = "coarse" if q_ev is coarse else "fine"
+            quickest_spread_m = float(q_ev.spread_m[q_idx])
+            top = [top[0]] + [c for c in top[1:]
+                              if haversine_km(c.lon, c.lat, quickest.lon, quickest.lat) * 1000.0
+                              >= MIN_ALT_GAP_M]
+
     reachable = np.isfinite(kept.raw)
     if not waived and reachable.any() and \
             float(kept.off_street[reachable].mean()) > FEW_STREETS_SHARE:
         notes.append(NOTE_FEW_STREETS)
     if float(kept.spread_m[picks[0]]) > NOTE_SPREAD_M:
         notes.append(NOTE_SPREAD)
+    if quickest_spread_m > NOTE_SPREAD_M:
+        notes.append(NOTE_SPREAD_QUICKEST)
     if any(ev.unchecked.any() for ev in stages):
         notes.append(NOTE_UNCHECKED)
     allowance = solve_allowance.get()
@@ -445,6 +495,7 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
         "no_route_replies": allowance.no_route_replies if allowance is not None else 0,
         "matrix_requests": allowance.sent_requests if allowance is not None else 0,
         "matrix_elements": allowance.sent_elements if allowance is not None else 0,
+        "quickest_stage": quickest_stage,
         "elapsed_ms": round((time.perf_counter() - started) * 1000),
     }
     return SolveResponse(
@@ -454,4 +505,5 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
         meeting_area_geojson=meeting_area,
         diagnostics=diagnostics,
         notes=notes,
+        quickest=quickest,
     )

@@ -332,8 +332,7 @@ function showUndo(text) {
 function groupChanged() {
   touched = true;
   openSeq++;                     // a shared link still waiting for the tables is dropped
-  // The group is no longer the link's: a reload shouldn't bring the link's group back.
-  if (history.state && history.state[STATE_KEY]) history.replaceState(null, "", location.href);
+  forgetLink();
   const wasSolving = solves.busy || resolveTimer !== null;
   const hadAnswer = lastAnswer !== null;
   solves.cancel();
@@ -391,6 +390,7 @@ function renderPeople() {
       touched = true;
       renderShareChoices({ keep: true });
       hideShareUrl();               // a link shown for copying has the old name
+      forgetLink();                 // and a reload must not bring the old name back
       if (lastAnswer) renderAnswer();
     });
     const modeEl = li.querySelector(".p-mode");
@@ -946,6 +946,11 @@ async function shareGroup() {
 
 $("share-btn").addEventListener("click", shareGroup);
 
+// The group is no longer the link's: a reload shouldn't bring the link's group back.
+function forgetLink() {
+  if (history.state && history.state[STATE_KEY]) history.replaceState(null, "", location.href);
+}
+
 // Open a group from a link: replace the group, then find a place for it once (`solveNow`;
 // a group restored after a reload waits for Find). If this page can't give someone the public
 // transport the link asks for (or its time of day or kind of place), say what changed and wait
@@ -969,6 +974,7 @@ async function openShared(hash, { solveNow = true } = {}) {
   newAddition();
   clearTimeout(tapTimer); tapTimer = null;          // a map tap about to add someone
   clearTimeout(undoTimer); $("toast").hidden = true;  // Undo is for the old group
+  hideShareUrl();                                     // so is a link shown for copying
   clearTimeout(resolveTimer);
   resolveTimer = null;
   solves.cancel();

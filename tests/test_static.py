@@ -142,7 +142,11 @@ def test_meetup_share_links_keep_the_group_in_the_fragment():
     assert "location.hash" in js and "history.replaceState" in js
     # A link opened in this tab survives a reload in history.state, and an edit forgets it.
     assert "linkAtLoad(location.hash, history.state)" in js
-    assert 'history.replaceState(null, "", location.href)' in js.split("function groupChanged")[1].split("\n}\n")[0]
+    assert "forgetLink();" in js.split("function groupChanged")[1].split("\n}\n")[0]
+    assert 'history.replaceState(null, "", location.href)' in js.split("function forgetLink")[1].split("\n}\n")[0]
+    # A rename is an edit too, and a new link hides a link shown for the old group.
+    assert js.count("forgetLink();") >= 2
+    assert "hideShareUrl();" in js.split("async function openShared")[1].split("\n}\n")[0]
     assert "location.search)" in js and "?g=" not in js
     # Only this page reads a fragment; nothing sends it anywhere.
     for page in ("meetup/words.js", "meetup/share.js", "warp/app.js", "shared/api.js"):

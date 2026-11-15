@@ -110,6 +110,7 @@ static/                          # Frontend assets (vanilla JS modules, no build
 ├── sw.js                        # Service worker (versioned per deploy, network first)
 └── icons/                       # PWA icons
 transit/                         # London public-transport tables (offline build; the app imports only transit/tables.py)
+└── layout/                      # Stations-only London time map (#6, L-01): weighted SMACOF, report, local viewer
 scripts/make_examples.py         # Regenerates the two saved examples
 scripts/try_solves.py            # Runs fixed meetup groups against a server (timings, diagnostics)
 tests/js/                        # node --test: warp maths, mesh renderer, latest-answer helper, meetup sentences
@@ -215,6 +216,14 @@ float-texture extension. `/warp/lab/` (not linked from anywhere) runs the checks
 travel times by default, or on the page's own fields with `?field=real`.
 `scripts/lab_headless.mjs` drives the lab or `/warp/` in a headless Chrome. W-01's results are in
 [docs/warp-renderer-spike.md](docs/warp-renderer-spike.md).
+
+### The London time map (stations, spike)
+
+`transit/layout/` (#6, L-01) lays London's stations out offline so that map distance follows
+travel time, from the transit tables above, by weighted SMACOF with a slider from the real map
+to the pure time map. It writes a report and a local viewer into the git-ignored
+`transit/out/`; the tables are not licensed for publication, so nothing it makes is served.
+See [transit/README.md](transit/README.md#stations-only-layout-6-l-01).
 
 ## How the Meetup Works
 

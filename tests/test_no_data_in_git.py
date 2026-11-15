@@ -43,7 +43,11 @@ def test_no_data_or_large_file_is_tracked():
 @pytest.mark.parametrize("path", ["some/dir/feed.zip", "x/RJTTF999.MCA", "x/tt_wd08.npy",
                                   "x/walksheds.npz", "x/london.osm.pbf", "gtfs/stop_times.txt",
                                   "gtfs/calendar_dates.txt", "x/tfl.sqlite3",
-                                  "x/tfl_1-BAK-_-y05-2116201.xml", "transit/scratch/route.xml"])
+                                  "x/tfl_1-BAK-_-y05-2116201.xml", "transit/scratch/route.xml",
+                                  # the stations-only layout's outputs (#6, L-01)
+                                  "transit/out/2026-11-12/layout/wd13/layout.json",
+                                  "transit/out/2026-11-12/layout/wd13/layout.js",
+                                  "transit/out/2026-11-12/layout/wd13/index.html"])
 def test_data_files_are_ignored_anywhere(path):
     if _git("rev-parse", "--git-dir").returncode:
         pytest.skip("not a git checkout")

@@ -251,3 +251,67 @@ notice of clause 3.3.2 (worded as agreed with RSP, if RSP asks for one) and ever
 `transit/uk2gtfs/` holds the one-off check of UK2GTFS on TfL's Underground TransXChange (the
 issue's question). It runs in Docker and is not part of the build. **It has not been run**
 (needs Docker and about 5 GB of disk).
+
+## Stations-only layout (#6, L-01)
+
+`transit/layout/` places every station so that the distance between two stations on the map
+follows the travel time between them, with a weak spring pulling each station back to its real
+position. Solving it for a sweep of spring strengths gives a slider from the real map to the
+pure time map. It is numpy only (no Java, no scipy) and runs in the app's environment or this
+one:
+
+```bash
+TRANSIT_OUT=<folder holding the build> python -m transit.layout --build 2026-11-12   # --window wd13
+```
+
+It reads `points.csv`, `point_ok.npy`, `tt_<window>.npy`, that table's fingerprint and
+`manifest.json`. It refuses a table that is not the one the manifest lists (sha256, shape), an
+incomplete table, a `points.csv` the table was not built from, and any value from 181 to 254.
+It writes to `transit/out/<build>/layout/<window>/` in this checkout, whatever `TRANSIT_OUT`
+is, and refuses an `--out-dir` inside the repo that git would track.
+
+| File | What it is |
+|---|---|
+| `index.html`, `viewer.js`, `viewer.css`, `layout.js` | The viewer: open `index.html` from disk. Stations coloured by leftover stress, a few names, the Metropolitan line on request, and a slider over the solved layouts |
+| `layout.json` | Nodes, every frame (the real map first, then each λ) in the renderer's local frame (`static/shared/mesh/frame.js`: metres around Charing Cross, x east, y south), node stress, per-frame metrics, the triangles folds are counted on |
+| `report.md`, `report.json` | The verdicts first, then one row per frame |
+| `shepard.svg` | Map distance (÷ s, in minutes) against travel time, real map beside the pure time map |
+| `pairs.npz` | The directed minutes, the times used and the mask, per node |
+
+**How it is computed.**
+
+- **Nodes:** stations that are usable in both `points.csv` and `point_ok.npy`, at their real
+  positions. Stations closer than 50 m merge (single linkage) into one node at their mean
+  position, whose time to another node is the fastest member-to-member time.
+- **Pairs:** no self-pairs; a pair is used only if it has a time both ways (255 is "no time" and
+  never a length). t is the mean of the two directions, floored at 0.5 min; w = t⁻². Only the
+  largest group of nodes joined by used pairs is laid out; the report names the rest.
+- **Scale:** s = median real distance ÷ median t over the used pairs, fixed once per build.
+- **Objective:** Σ w (map distance − s·t)² + λ Σ (distance to the real position)², solved by
+  weighted SMACOF (`smacof.py`). Each step solves the majorizing quadratic, so the objective
+  never rises; a rise stops the solve and is reported. λ = λ̃ × the mean of each node's summed
+  weights; λ̃ runs over 24 values from 30 down to 0.001, then 0, each solve starting from the
+  previous layout. Every layout is aligned to the real map by rotation and shift only.
+- **Restart check:** λ = 0 is solved again from classical MDS and two random starts; the report
+  flags any that ends more than 0.1% lower than the sweep.
+- **Normalised stress σ₁:** √(Σ w (map distance − s·t)² ÷ Σ w (s·t)²) over the used pairs.
+  A station's leftover stress (its dot's colour) is the same ratio over its own pairs.
+- **Trustworthiness and continuity** at k = 10 (Venna & Kaski), time against map distance,
+  whole-minute ties broken by tiny seeded jitter, averaged over 5 seeds. The proposed pass line
+  is 0.9 at λ = 0; the real map's own score is printed beside it.
+- **Folds:** a Delaunay triangulation of the real positions, with thin or long boundary
+  triangles (smallest angle under 10°, or longest edge over 4× the median) peeled off. A fold
+  is a triangle whose orientation flips; crossings between boundary edges are counted too. The
+  report gives the smallest fold-free λ, where the fold-free run from the real map ends, and the
+  smallest λ with at most 1% of the area folded, plus the unpeeled counts.
+- **Wembley Park:** r = map distance ÷ travel time. The check passes when Wembley Park to Baker
+  Street's r is within σ₁ (a relative error) of the median r over all used pairs. Reading "within
+  the build's stress" as σ₁ is this job's choice.
+- **Metropolitan line:** `transit/layout/checks.toml` lists its stations by hand, as runs out
+  from Baker Street and Harrow-on-the-Hill. A station nearer the run's start on the map than the
+  one before it is a backtrack; each is listed with its size and the table's times. Ids missing
+  from a build are listed as absent.
+
+**Licence.** Everything it writes is derived from tables that are not licensed for publication.
+It stays in the git-ignored output folder: never in git, never under `static/`, never on the
+site.

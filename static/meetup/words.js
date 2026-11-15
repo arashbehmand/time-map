@@ -30,13 +30,26 @@ export function altText(c, objectiveValue) {
   return where ? `${where} · ${time}` : time;
 }
 
-// ── Stations (a group with someone on public transport) ─────────
+// ── Stations and venues (a group with someone on public transport) ─
 export const isStation = (c) => Boolean(c && c.kind === "station");
-const placeName = (c) => (c && typeof c.name === "string" && c.name.trim() ? c.name.trim() : "this station");
+// The kinds of place a group can ask to meet at besides a station (#19), as the page says them.
+export const VENUE_WORD = { pub: "pub", bar: "bar", cafe: "café", restaurant: "restaurant", park: "park" };
+export const isVenue = (c) => Boolean(c && Object.hasOwn(VENUE_WORD, c.kind));
+// A named place from the tables or OpenStreetMap, not a point on a street.
+export const isPlace = (c) => isStation(c) || isVenue(c);
+const placeName = (c) => (c && typeof c.name === "string" && c.name.trim() ? c.name.trim()
+  : `this ${isVenue(c) ? VENUE_WORD[c.kind] : "station"}`);
+
+// "a pub", "a café": every venue word takes "a".
+const aKind = (c) => `a ${VENUE_WORD[c.kind]}`;
 
 export function placeHeadline(best) {
-  return `Meet at ${placeName(best)} (★ on the map). Everyone gets there within ${mins(best.max_time_min)} min.`;
+  const where = isVenue(best) && best.name && best.name.trim() ? `${placeName(best)}, ${aKind(best)}` : placeName(best);
+  return `Meet at ${where} (★ on the map). Everyone gets there within ${mins(best.max_time_min)} min.`;
 }
+
+// Said under a venue answer: OpenStreetMap doesn't reliably say when a place is open.
+export const OPEN_HOURS_HINT = "We don't know whether it's open.";
 
 export function quickestText(q) {
   return `Quickest on average: ${placeName(q)}. The average trip is ${mins(q.mean_time_min)} min; ` +
@@ -52,9 +65,9 @@ export function stationAltText(c, markTie = true) {
 }
 
 // What a "Plan journey" link does, said once under the answer.
-export function journeyNote(windowLabel) {
+export function journeyNote(windowLabel, place) {
   const when = typeof windowLabel === "string" && windowLabel ? `, not for ${windowLabel}` : "";
-  return `"Plan journey" opens Google Maps with that person's start point and the station. ` +
+  return `"Plan journey" opens Google Maps with that person's start point and the ${isVenue(place) ? "place" : "station"}. ` +
     `It plans for now${when}.`;
 }
 

@@ -15,6 +15,9 @@ Objective = Literal["minimax", "sum", "hybrid"]
 # The tables' timetable windows: weekday 08:00, 13:00, 19:00 and Saturday 13:00.
 Window = Literal["wd08", "wd13", "wd19", "sa13"]
 DEFAULT_WINDOW = "wd19"
+# Public transport only: where to meet. A station (the default), or a named venue of one kind
+# from OpenStreetMap within a 10-minute walk of a station (server/transit/venues.py, #19).
+Venue = Literal["station", "pub", "bar", "cafe", "restaurant", "park"]
 
 class Participant(BaseModel):
     model_config = _STRICT
@@ -47,6 +50,8 @@ class SolveRequest(BaseModel):
     search: SearchConfig = Field(default_factory=SearchConfig)
     window: Optional[Window] = Field(default=None,
         description="Public transport only: which timetable window (default weekday evening).")
+    venue: Venue = Field(default="station",
+        description="Public transport only: meet at a station, or at a pub, bar, café, restaurant or park.")
 
     @model_validator(mode="after")
     def check_participants(self) -> "SolveRequest":
@@ -68,9 +73,10 @@ class CandidateResult(BaseModel):
     max_time_min: float
     mean_time_min: float
     times: dict[str, float]
-    # "station" (a named place from the tables) or "street" (a grid point on a named street).
-    kind: Optional[Literal["station", "street"]] = None
-    # Stations: the place's id within the tables' build.
+    # "station" (a named place from the tables), a venue kind (a named place from
+    # OpenStreetMap) or "street" (a grid point on a named street).
+    kind: Optional[Literal["station", "street", "pub", "bar", "cafe", "restaurant", "park"]] = None
+    # Stations: the place's id within the tables' build. Venues: the OSM id (node/123).
     place_id: Optional[str] = None
     # Stations: closer to the best than the tables can tell apart.
     tie: bool = False
@@ -90,3 +96,8 @@ class SolveResponse(BaseModel):
     window_label: Optional[str] = None
     # Stations: the data credits the tables' licences ask for.
     credits: list[str] = Field(default_factory=list)
+    # Public transport: the kind of place asked for, and, when the answer is a station instead,
+    # why: "not_loaded", "none_in_reach", "none_work" or "slower"
+    # (server/meetup/stations.py note_venue_fallback).
+    venue: Optional[str] = None
+    venue_fallback: Optional[str] = None

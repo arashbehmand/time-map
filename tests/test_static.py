@@ -109,6 +109,13 @@ def test_meetup_offers_public_transport_only_where_the_tables_are():
     # The When control is there, hidden until someone is on public transport.
     assert re.search(r'<label class="field" id="window-field" hidden>', html)
     assert '<select id="window-select">' in html
+    # So is Where (#19): its kinds come from the tables' status, a pub unless the group picks.
+    assert re.search(r'<label class="field" id="venue-field" hidden>', html)
+    assert '<select id="venue-select"></select>' in html
+    assert 'const DEFAULT_VENUE = "pub";' in js and 'new Option("Just a station", "station")' in js
+    # The station sentence or the venue one, whichever was picked; no select without venues.
+    assert '<p class="hint" id="venue-hint" hidden>' in html and '<p class="hint" id="both-hint" hidden>' in html
+    assert '$("venue-field").hidden = !on || venueKinds.length === 0;' in js
     # Public transport is not in the static list: it is added from the tables' status, and
     # offered to a person only inside the area they cover.
     assert 'value="transit"' not in html

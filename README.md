@@ -90,13 +90,14 @@ server/                          # FastAPI backend
 │   ├── field.py                 # Contours → minutes on a grid, frames, the wire format
 │   ├── models.py                # Request models
 │   ├── mapbox_client.py         # Mapbox Isochrone fetching (minutes or metres), bounded cache
-├── transit/                     # The London tables at runtime: validation, composition, coverage
+├── transit/                     # The London tables at runtime: validation, composition, coverage, venues
 └── meetup/                      # Meetup optimizer module
     ├── routes.py                # POST /api/meetup/solve
     ├── models.py                # Pydantic request/response models
     ├── limits.py                # Pre-flight: radius, candidate and cost caps
     ├── candidates.py            # H3 hex candidate generation
     ├── routing.py               # Mapbox Directions Matrix: batching, strict replies, NoRoute
+    ├── stations.py              # Groups on public transport: stations, or pubs, bars, cafés, restaurants, parks
     └── solver.py                # Scoring, refinement, snapped and named answers
 static/                          # Frontend assets (vanilla JS modules, no build step)
 ├── shared/                      # ui.css, api.js (errors, search), latest.js (latest answer only)
@@ -110,6 +111,7 @@ static/                          # Frontend assets (vanilla JS modules, no build
 ├── sw.js                        # Service worker (versioned per deploy, network first)
 └── icons/                       # PWA icons
 transit/                         # London public-transport tables (offline build; the app imports only transit/tables.py)
+├── venues.py                    # Meetup venues from the OSM clip (#19): python -m transit.venues
 └── layout/                      # Stations-only London time map (#6, L-01): weighted SMACOF, report, local viewer
 scripts/make_examples.py         # Regenerates the two saved examples
 scripts/try_solves.py            # Runs fixed meetup groups against a server (timings, diagnostics)
@@ -334,6 +336,57 @@ above, unchanged. `diagnostics.path` says which (`"stations"` or `"grid"`).
 - **Links.** Each person's time comes with a "Plan journey" link to Google Maps directions in
   their way of travelling. It is opened only when clicked, and the page says that the person's
   start point then goes to Google, which plans for now, not for the window.
+
+### Meeting at a pub, bar, café, restaurant or park (public transport)
+
+A group with someone on public transport can ask to meet at a named venue from
+OpenStreetMap instead of a station (issue #19): `venue` is one of `pub` (`amenity=pub`), `bar`
+(`amenity=bar`), `cafe` (`amenity=cafe`), `restaurant` (`amenity=restaurant`) or `park`
+(`leisure=park`, at least 0.5 ha), or `station`, the default, which is the answer above. The
+page shows a "Where?" select next to "When do you meet?", set to a pub and listing only the
+kinds the build has (`/api/transit/status` → `venues.kinds`); with no venues in the build it
+hides the select and meets at stations. A group with nobody on public transport ignores `venue`.
+
+- **Where the venues come from.** `python -m transit.venues --build <id>` (also the build's
+  `venues` stage) reads the build's own OSM clip with osmium and writes `venues.csv` and
+  `venues.json` next to the tables. Only named venues count, not ones tagged `access=private`
+  or `no`; a venue drawn twice within 50 m is kept once. A pub, bar, café or restaurant
+  drawn as a building is pinned inside it. A park is pinned at the closest station within
+  800 m when that station stands in the park, else at the park's edge nearest it, else inside
+  the park. The server loads `venues.csv` only when `venues.json` records its size and sha256
+  and was made from the same OSM clip as the tables (`osm_clip_sha256` equal to the manifest's
+  `inputs.osm_clip.sha256`), and drops rows with an unknown kind, no name or a point off the
+  globe. Otherwise it logs why and serves stations only, and the tables load either way. A
+  build without venue files is fine.
+- **Times.** A venue's time is the best, over the stations and table cells whose walksheds
+  reach its cell within 10 minutes (about 670 m), of that point's table time plus the walk
+  (#1's formula). When its own cell has no such walk, the nearest ring of cells that has one
+  is used, 2 minutes a ring, counted inside the 10. A venue no point reaches within 10
+  minutes is left out. Someone who starts within 150 m of a venue in a straight line may walk
+  there straight, 1.3 times the straight line at 4 km/h, when the pin and the venue share an
+  access point: the same short reach the warp field walks straight from a station, too short
+  to cross the Thames or a railway yard. Road people are timed by Mapbox as above, and the
+  walk from where Mapbox ends the trip is added. A road person's reach (`MODE_RADIUS_KM`) is
+  checked against stations and venues together, so a venue everyone can reach is never
+  refused for want of a station everyone can reach.
+- **Scoring.** Stations and venues of the kind asked for are scored together. The answer is
+  made from the venues only, by the rules above (fairest, quickest, 500 m apart, five places, the
+  same tie lines). It falls back to the station answer, with a note that says why
+  (`venue_fallback`), when:
+  - the build has no venues of that kind (`"not_loaded"`);
+  - none is within a 10-minute walk of public transport (`"none_in_reach"`);
+  - some are, but none works for everyone (`"none_work"`): over someone's time limit, beyond a
+    road person's reach, too far from a road, or not on the road shortlist;
+  - the fairest venue's longest trip is more than 10 minutes over the fairest station's
+    (`"slower"`; exactly 10 still gives the venue, and the note never shows the gap as 10).
+
+  For road people a third of the places on the Matrix shortlist are stations and the venues
+  on it are at least 250 m apart, so the comparison costs no second request. The station
+  compared with, and shown on a fallback, is then the best of the stations checked by road,
+  and the answer says how many. `diagnostics.path` is `"venues"` or `"stations"`, with
+  `venue_pool`, `best_venue_max_min` and `best_station_max_min`.
+- **What it can't tell.** Opening hours: a venue may be closed, and the page says so. OSM is
+  edited by anyone, so a venue may also be gone; names are cleaned and capped at 80 characters.
 
 The table times are a rough estimate (`docs/transit-spike.md`: unbiased street to street,
 about 5 min fast at a station end), and the tables walk at 4 km/h where Mapbox walks at

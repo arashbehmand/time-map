@@ -32,8 +32,9 @@ import shapely
 from shapely.geometry import mapping
 
 from server.localgrid import Grid, LocalFrame, mercator, metres_per_unit
+from server.transit.venues import VENUE_KINDS, VENUE_WALK_MAX_MIN, WALK_DETOUR, VenueRow, load_venues
 from server.warp.field import WALK_M_PER_MIN
-from transit.tables import Walksheds, compose_row, decode_minutes
+from transit.tables import Walksheds, compose_row, decode_minutes, haversine_m
 
 log = logging.getLogger("time_map.transit")
 
@@ -106,11 +107,78 @@ class Place:
     Each is scored on its own column, so every time is to the point shown. Platforms with one
     name (Bank's Underground and DLR) stay separate places; the meetup's spacing rule keeps
     two of them from being listed together."""
-    pid: str                    # the point's id in points.csv: stable within a build
+    pid: str                    # the point's id in points.csv (a venue: its OSM id)
     name: str
     lon: float
     lat: float
-    idx: int                    # table index
+    idx: int                    # table index (−1 for a venue)
+    kind: str = "station"       # or a venue kind (server/transit/venues.py)
+
+
+@dataclass(frozen=True, eq=False)
+class VenueLinks:
+    """One kind of venue and how each is reached: for venue v, the access points
+    point[starts[v]:starts[v+1]] and the walk from each (minutes, at most VENUE_WALK_MAX_MIN)."""
+    places: list[Place]
+    point: np.ndarray           # int64 table indexes
+    walk: np.ndarray            # float64 minutes
+    starts: np.ndarray          # int64, one per venue
+    lons: np.ndarray            # the venues' points, aligned with places
+    lats: np.ndarray
+
+    def minutes(self, row: np.ndarray) -> np.ndarray:
+        """Minutes to each venue: the best over its access points of the table time plus the walk."""
+        if not len(self.places):
+            return np.zeros(0)
+        return np.minimum.reduceat(np.asarray(row, dtype=np.float64)[self.point] + self.walk, self.starts)
+
+    def walk_from(self, lon: float, lat: float, access: np.ndarray) -> np.ndarray:
+        """
+        Minutes on foot straight to each venue from a pin whose own access points are `access`
+        (table indexes), for a venue within STATION_WALK_M of the pin in a straight line that
+        shares an access point with it: the straight line times WALK_DETOUR at 4 km/h; inf for
+        the rest. Without it, someone starting beside a pub would be timed to a station and
+        back. It is kept to the same short reach the field walks straight from a station
+        (TransitData.field), too short to cross the Thames or a railway yard, and sharing an
+        access point keeps the two in the same part of the street network.
+        """
+        if not len(self.places) or not len(access):
+            return np.full(len(self.places), np.inf)
+        shared = np.logical_or.reduceat(np.isin(self.point, access), self.starts)
+        metres = haversine_m(lon, lat, self.lons, self.lats)
+        walk = metres * WALK_DETOUR / WALK_M_PER_MIN
+        return np.where(shared & (metres <= STATION_WALK_M), walk, np.inf)
+
+
+@dataclass(frozen=True, eq=False)
+class Pool:
+    """Somewhere to meet, of one kind: every station, then the venues of that kind. Scored
+    together so the best station is there to compare the best venue with."""
+    kind: str
+    places: list[Place]
+    is_venue: np.ndarray        # bool, aligned with places
+    _place_idx: np.ndarray
+    _venues: VenueLinks
+
+    @property
+    def venue_lons(self) -> np.ndarray:
+        return self._venues.lons
+
+    @property
+    def venue_lats(self) -> np.ndarray:
+        return self._venues.lats
+
+    def minutes(self, row: np.ndarray, walk: np.ndarray | None = None) -> np.ndarray:
+        """Minutes to every place from a table row; `walk` (from walk_from) is the straight
+        walk to each venue, kept where it is quicker."""
+        r = np.asarray(row, dtype=np.float64)
+        venues = self._venues.minutes(r)
+        if walk is not None:
+            venues = np.minimum(venues, walk)
+        return np.concatenate([r[self._place_idx], venues])
+
+    def walk_from(self, lon: float, lat: float, access: np.ndarray) -> np.ndarray:
+        return self._venues.walk_from(lon, lat, access)
 
 
 class TransitData:
@@ -119,7 +187,8 @@ class TransitData:
     def __init__(self, directory: Path, manifest: dict, lon: np.ndarray, lat: np.ndarray,
                  kind: np.ndarray, names: list[str], ok: np.ndarray, walksheds: Walksheds,
                  development_only: bool, snap_lon: np.ndarray | None = None,
-                 snap_lat: np.ndarray | None = None, ids: list[str] | None = None):
+                 snap_lat: np.ndarray | None = None, ids: list[str] | None = None,
+                 venues: list[VenueRow] | None = None):
         self.directory = directory
         self.manifest = manifest
         self.build = str(manifest.get("build", ""))
@@ -141,6 +210,11 @@ class TransitData:
         self._build_egress()
         self._build_raster()
         self._build_coverage()
+        try:
+            self._build_venues(venues or [])
+        except Exception as exc:  # noqa: BLE001 - venues are optional: never lose the tables to them
+            log.warning("transit: venues left out (%s)", type(exc).__name__)
+            self.venues, self._pools = {}, {}
 
     # ── loading ──────────────────────────────────────────────────────
     @classmethod
@@ -220,8 +294,14 @@ class TransitData:
         walksheds = Walksheds.load(d / "walksheds.npz")
         if len(walksheds.points) and (walksheds.points.min() < 0 or walksheds.points.max() >= n):
             raise TransitUnavailable("bad_walksheds")
+        try:
+            venues, why = load_venues(d, manifest, verify_hashes=verify_hashes)
+        except Exception as exc:  # noqa: BLE001 - bad venue files must never stop the tables
+            venues, why = None, f"venues_unreadable ({type(exc).__name__})"
+        if why:
+            log.warning("transit: venues left out (%s)", why)
         return cls(d, manifest, np.asarray(lon), np.asarray(lat), np.asarray(kind), names, ok,
-                   walksheds, development_only, np.asarray(slon), np.asarray(slat), ids)
+                   walksheds, development_only, np.asarray(slon), np.asarray(slat), ids, venues)
 
     def table(self, window: str) -> np.ndarray:
         if window not in self._tables:
@@ -241,6 +321,54 @@ class TransitData:
     def place_minutes(self, row: np.ndarray) -> np.ndarray:
         """Minutes to every place (aligned with self.places): that station's own column."""
         return np.asarray(row, dtype=np.float64)[self._place_idx]
+
+    def _build_venues(self, rows: list[VenueRow]) -> None:
+        """Each venue's access points: the walksheds that reach its res-10 cell, else the nearest
+        ring of cells (up to MAX_RING, RING_MINUTES a ring) that holds a walk of at most
+        VENUE_WALK_MAX_MIN, ring minutes included, from a usable point. A venue with none is
+        left out."""
+        self.venues, self._pools = {}, {}
+        found: dict[str, tuple[list, list, list, list]] = {k: ([], [], [], []) for k in VENUE_KINDS}
+        for v in rows:
+            pts, walks = [], []
+            for cells, extra in self._rings(v.lon, v.lat):
+                for cell in cells:
+                    p, m = self.walksheds.near(cell)
+                    w = m.astype(np.float64) + extra
+                    keep = self.ok[p] & (w <= VENUE_WALK_MAX_MIN)
+                    pts.append(p[keep].astype(np.int64))
+                    walks.append(w[keep])
+                if any(len(x) for x in pts):
+                    break
+            n = sum(len(x) for x in pts)
+            if not n:
+                continue
+            places, point, walk, sizes = found[v.kind]
+            places.append(Place(v.pid, v.name, v.lon, v.lat, -1, v.kind))
+            point.extend(pts)
+            walk.extend(walks)
+            sizes.append(n)
+        # A kind the file has is kept even when none of its venues is in reach: asked for, the
+        # answer is then "none within a walk", not "not in these travel times".
+        self.venues: dict[str, VenueLinks] = {}
+        for kind in sorted({v.kind for v in rows}, key=VENUE_KINDS.index):
+            places, point, walk, sizes = found[kind]
+            starts = np.r_[0, np.cumsum(sizes)[:-1]].astype(np.int64) if sizes else np.zeros(0, np.int64)
+            self.venues[kind] = VenueLinks(
+                places, np.concatenate(point) if point else np.zeros(0, np.int64),
+                np.concatenate(walk) if walk else np.zeros(0), starts,
+                np.array([p.lon for p in places]), np.array([p.lat for p in places]))
+
+    def pool(self, kind: str) -> Pool | None:
+        """Every station, then the venues of this kind; None when the build has none."""
+        if kind not in self.venues:
+            return None
+        if kind not in self._pools:
+            links = self.venues[kind]
+            self._pools[kind] = Pool(kind, self.places + links.places,
+                                     np.r_[np.zeros(len(self.places), bool), np.ones(len(links.places), bool)],
+                                     self._place_idx, links)
+        return self._pools[kind]
 
     def tie_lines(self) -> dict[str, float]:
         """The tables' error by band (minutes): the build's accepted median lines when its
@@ -327,17 +455,31 @@ class TransitData:
         the pin is at a station."""
         return self.station_near(lon, lat) is not None or bool(self._access(lon, lat))
 
-    def _access(self, lon: float, lat: float) -> list[tuple[int, float]]:
-        """[(res-10 cell, extra walking minutes)] whose walkshed reaches: the pin's own cell,
-        or the nearest ring of cells (up to MAX_RING) that has one."""
+    @staticmethod
+    def _rings(lon: float, lat: float):
+        """The point's res-10 cell, then each ring of cells around it up to MAX_RING, as
+        ([cell ints], extra walking minutes)."""
         cell = h3.latlng_to_cell(lat, lon, H3_RES)
         for k in range(MAX_RING + 1):
             ring = [cell] if k == 0 else list(h3.grid_ring(cell, k))
-            hits = [(h3.str_to_int(c), k * RING_MINUTES) for c in ring
-                    if len(self.walksheds.near(h3.str_to_int(c))[0])]
+            yield [h3.str_to_int(c) for c in ring], k * RING_MINUTES
+
+    def _access(self, lon: float, lat: float) -> list[tuple[int, float]]:
+        """[(res-10 cell, extra walking minutes)] whose walkshed reaches: the pin's own cell,
+        or the nearest ring of cells (up to MAX_RING) that has one."""
+        for cells, extra in self._rings(lon, lat):
+            hits = [(c, extra) for c in cells if len(self.walksheds.near(c)[0])]
             if hits:
                 return hits
         return []
+
+    def access_points(self, lon: float, lat: float) -> np.ndarray:
+        """The table points a journey from this pin can start at (as row() uses them)."""
+        pts = [self.walksheds.near(c)[0] for c, _ in self._access(lon, lat)]
+        own = self.station_near(lon, lat)
+        if own is not None:
+            pts.append(np.array([own]))
+        return np.unique(np.concatenate(pts)).astype(np.int64) if pts else np.zeros(0, np.int64)
 
     def station_near(self, lon: float, lat: float) -> int | None:
         if self._station_xy is None:
@@ -458,6 +600,8 @@ class TransitData:
             "coverage": self.coverage,
             "credits": credits(self.manifest),
             "development_only": self.development_only,
+            "venues": {"kinds": {k: len(v.places) for k, v in self.venues.items()},
+                       "walk_max_min": VENUE_WALK_MAX_MIN},
         }
 
 

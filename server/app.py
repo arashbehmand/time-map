@@ -1,3 +1,4 @@
+import functools
 import hashlib
 import logging
 import os
@@ -26,9 +27,11 @@ from server.meetup.routes import router as meetup_router
 from server.meetup.routing import build_router as build_meetup_router
 from server.middleware import BodyLimit
 from server.settings import DEFAULT_USAGE_DB_PATH, Settings, on_railway
+from server.transit.provider import TransitHolder
 from server.upstream import fail, mapbox_send
 from server.warp.mapbox_client import MapboxClient
 from server.warp.routes import router as warp_router
+from server.warp.travel_field import DEGRADED_TTL_S, TravelFieldService
 
 # ── Logging ──────────────────────────────────────────────────────────
 set_secrets(SECRETS)
@@ -231,6 +234,29 @@ def create_app(
             client=state.http_client, guard=state.guard,
         )
         state.geocoder = Geocoder(state.http_client, state.guard, settings, clock)
+        state.transit = TransitHolder(bool(settings.transit_dir))
+        if settings.transit_dir:
+            # About a second or two (hashes, a raster of cells); the app answers meanwhile and
+            # transit says it is loading.
+            load = functools.partial(state.transit.load, settings.transit_dir,
+                                     allow_uncleared=settings.transit_allow_uncleared,
+                                     on_railway=on_railway())
+            if settings.transit_block_startup:
+                await asyncio.to_thread(load)
+            else:
+                state.transit_task = asyncio.create_task(asyncio.to_thread(load))
+        # The field's own isochrone client: it keeps walking replies only (walk and transit at
+        # one pin share them); the field cache keeps every built field.
+        state.field_isochrones = MapboxClient(
+            state.http_client, state.guard, MAPBOX_ROUTING_TOKEN,
+            BoundedTTLCache(maxsize=16, ttl=300, clock=clock.monotonic), cache_profiles=("walking",),
+        )
+        state.fields = TravelFieldService(
+            state.field_isochrones, state.transit, asyncio.Semaphore(settings.max_concurrent_fields),
+            # Small on purpose: a transit field is a few hundred kB.
+            BoundedTTLCache(maxsize=24, ttl=300, clock=clock.monotonic),
+            BoundedTTLCache(maxsize=24, ttl=DEGRADED_TTL_S, clock=clock.monotonic),
+        )
         usage_task = asyncio.create_task(state.guard.usage_loop())
 
         yield

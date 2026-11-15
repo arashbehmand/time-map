@@ -2,11 +2,15 @@
 // the current tile set into per-pass buffers. With back-end C it also evaluates the warp
 // for every vertex. A newer request makes older work stale: its results are dropped, and
 // fetches it no longer needs are aborted.
+import { bandMesh, bandPolygons } from "./contours.js";
 import { localFrame } from "./frame.js";
-import { createField, createTargetGrid } from "./field.js";
+import { createField, createTargetGrid, geometryField, sampleField } from "./field.js";
 import { censusTile, LINE_VERTS, packScene, spacingForZoom, tessellateTile, vectorTileFeatures } from "./pipeline.js";
 import { TILE_URL } from "./schema-streets-v8.js";
-import { createWarp } from "./warp.js";
+import { meshSheetIndex } from "./hit.js";
+import { bentRings, squashLayout } from "./layouts.js";
+import { makeEdgeTest, MAX_DEPTH, refineFills } from "./refine.js";
+import { createWarp, targetsFor } from "./warp.js";
 
 // The server's tile limit (16 at once, server/settings.py) is per process, shared by every
 // visitor; past it a request waits up to 10 s, then gets 503. Keep well under it.
@@ -115,11 +119,20 @@ async function loadMesh(t, opts, counters) {
   return { key, mesh };
 }
 
+// A polar warp bends by the geometry field (uncertain patches at their drawn minutes).
+const fieldFrom = (f) => geometryField(f.kind === "field" ? f : fieldOf(f));
 function warpFrom(spec) {
   if (!spec) return null;
-  if (spec.kind === "polar") return createWarp({ kind: "polar", field: createField(spec.field), maxMinutes: spec.maxMinutes, angles: spec.angles || null });
+  if (spec.kind === "polar") return createWarp({ kind: "polar", field: fieldFrom(spec.field), maxMinutes: spec.maxMinutes, angles: spec.angles || null });
   if (spec.kind === "grid") return createWarp({ kind: "grid", grid: createTargetGrid(spec.grid) });
   return null;
+}
+
+// The field the mesh is refined against (refine.js): sent with every scene, back-end B too.
+function refineFrom(spec) {
+  if (!spec) return null;
+  return { field: fieldFrom(spec.field), maxMinutes: spec.maxMinutes, eps: spec.eps, maxDepth: spec.maxDepth, far: spec.far,
+           angles: spec.angles || null };
 }
 
 function post(gen, scene, extra) {
@@ -142,7 +155,17 @@ async function buildScene(msg) {
 
   const t0 = now();
   const frame = localFrame(origin);
+  // Squash (layouts.js) bends by its own field: built here from the same field the band-layer
+  // worker gets (filled flags included), so both build the same layout, and refined to the same
+  // half pixel at its wider framing.
+  if (msg.layout === "squash" && msg.refine) {
+    const sq = squashLayout(fieldOf(msg.refine.field), msg.refine.maxMinutes, msg.squash || {});
+    const eps = msg.refine.eps * (sq.frame / msg.refine.maxMinutes), angles = sq.spec.angles;
+    msg = { ...msg, refine: { ...msg.refine, field: sq.R, maxMinutes: sq.reach, eps, far: sq.frame, angles },
+            warp: msg.warp ? { ...msg.warp, field: sq.R, maxMinutes: sq.reach, angles } : null };
+  }
   const warp = warpFrom(msg.warp);
+  const refine = refineFrom(msg.refine);
   const opts = { source, spacingDiv };
   const counters = { requests: 0, attempts: 0, shared: 0, cacheHits: 0, tileBytes: 0, tessMs: 0 };
   const loaded = new Array(tiles.length).fill(null);
@@ -152,7 +175,7 @@ async function buildScene(msg) {
   const pack = (partial) => {
     const meshes = loaded.filter(Boolean);
     const missingTiles = tiles.filter((t, i) => settled[i] && !loaded[i]).map(tileId);
-    const scene = packScene(meshes, frame, { budget, warp });
+    const scene = packScene(meshes, frame, { budget, warp, refine });
     scene.stats = { ...scene.stats, ...counters, cover: tiles.length, loaded: meshes.length,
                     missing: missingTiles.length, missingTiles, partial, totalMs: now() - t0,
                     resident, peakResident, backend: warp ? "cpu" : "gpu" };
@@ -216,9 +239,117 @@ async function census(msg) {
   self.postMessage({ type: "census", gen: msg.gen, tiles: out });
 }
 
+// The warp page's field work, off its main thread (#5, W-02):
+//   bands         the normal map's travel-time bands as GeoJSON (contours.js), for one field
+//                 and one set of ring levels
+//   layers        the bent view's band mesh, refined like the map (refine.js), with its CPU
+//                 targets when the renderer needs them; the overlap index (hit.js) is built
+//                 from the same triangles, so a tap reads what the bands are drawn with. A burst
+//                 of layers requests is coalesced to the newest, and the last few views' results
+//                 and indexes are kept, so a tap on the view still shown finds its index while a
+//                 newer one is prepared, and returning to it costs nothing
+//   sheets-query  what is under a finger, from the index of the view it names
+// Errors come back as {type: "error", job, key, id, gen}.
+const SHEETS_KEEP = 4;
+const sheetsByKey = new Map();
+let queuedLayers = null;
+
+function fieldOf(spec) {
+  const f = createField(spec);
+  if (spec.filled) f.filled = spec.filled;
+  if (spec.uncertain) { f.uncertain = spec.uncertain; f.drawn = spec.drawn || spec.minutes; }
+  return f;
+}
+
+function fieldMessage(msg) {
+  if (msg.type === "bands") {
+    const f = fieldOf(msg.field);
+    const fc = bandPolygons(f, localFrame(f.origin), msg.levels, { skipFilled: true });
+    self.postMessage({ type: "bands-result", id: msg.id, key: msg.key, fc });
+  } else if (msg.type === "layers") {
+    const kept = sheetsByKey.get(msg.key);
+    if (kept && kept.result) {
+      sheetsByKey.delete(msg.key); sheetsByKey.set(msg.key, kept);       // most recent last
+      self.postMessage(kept.result.message, kept.result.copy());
+      return;
+    }
+    // Coalesce: a newer layers request that arrives while this one waits replaces it.
+    const first = !queuedLayers;
+    queuedLayers = msg;
+    if (first) setTimeout(() => { const m = queuedLayers; queuedLayers = null; runGuarded(m, () => buildLayers(m)); }, 0);
+  } else {
+    const kept = sheetsByKey.get(msg.key);
+    const hits = kept && kept.index ? kept.index.query(msg.lx, msg.ly, msg.r) : null;
+    const uncertain = !!(kept && kept.unsure && kept.unsure.query(msg.lx, msg.ly, msg.r).length);
+    self.postMessage({ type: "sheets-result", id: msg.id, key: msg.key, hits, uncertain });
+  }
+}
+
+function buildLayers(msg) {
+    const ms = {}, tick = (k, t0) => { ms[k] = Math.round(now() - t0); return now(); };
+    let t0 = now();
+    const f = fieldOf(msg.field);
+    // Squash (layouts.js) bends by its own field, out to its own reach, with its own by-reach
+    // table, and draws bent rings; its R, reach, frame and table go back to the page, which bends
+    // its labels the same way. The band minutes are always the field's own.
+    const sq = msg.layout === "squash" ? squashLayout(f, msg.maxMinutes, msg.squash || {}) : null;
+    const angles = sq ? sq.spec.angles : msg.angles || null;
+    const bendBy = sq ? sq.R : geometryField(f), reach = sq ? sq.reach : msg.maxMinutes;
+    const frame = sq ? sq.frame : msg.maxMinutes;
+    const eps = msg.eps * (frame / msg.maxMinutes);
+    const warp = createWarp({ kind: "polar", field: bendBy, maxMinutes: reach, angles });
+    t0 = tick("squash", t0);
+    const m = bandMesh(f, msg.box);
+    const n = m.pos.length / 2;
+    const r = refineFills({ pos: m.pos, index: m.index, style: new Float32Array(n), zoom: new Uint8Array(n) },
+      makeEdgeTest(bendBy, reach, eps, angles, { far: sq ? sq.frame : Infinity }), { maxDepth: MAX_DEPTH });
+    t0 = tick("bandMesh", t0);
+    const minutes = new Float32Array(r.pos.length / 2);
+    minutes.set(m.minutes);
+    for (let v = n; v < minutes.length; v++) minutes[v] = sampleField(f, r.pos[2 * v], r.pos[2 * v + 1]);
+    const mesh = { pos: r.pos, minutes, index: r.index };
+    const targets = msg.cpu ? targetsFor(warp, mesh.pos) : null;
+    // The rings through the first place that many minutes away on the true minutes, stepping
+    // over the cut (walled-off) patches.
+    const lines = sq ? bentRings(sq.ringSource, warp, msg.levels) : null;
+    t0 = tick("rings", t0);
+    const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped, reach, frame, lines, ms,
+                      angles: sq ? sq.spec.angles : null };
+    // The index keeps pos and minutes, so the page gets copies.
+    const copy = () => {
+      const out = { pos: mesh.pos.slice(), minutes: mesh.minutes.slice(), index: mesh.index.slice(), targets: targets ? targets.slice() : null,
+                    R: sq ? sq.R.minutes.slice() : null };
+      Object.assign(message, out);
+      return [out.pos.buffer, out.minutes.buffer, out.index.buffer, ...(out.targets ? [out.targets.buffer] : []), ...(out.R ? [out.R.buffer] : [])];
+    };
+    // The band layer goes first; the overlap index (only needed by a tap) is built right after,
+    // and a tap that comes in meanwhile waits for it in the worker's queue.
+    const entry = { index: null, unsure: null, result: { message, copy } };
+    sheetsByKey.set(msg.key, entry);
+    while (sheetsByKey.size > SHEETS_KEEP) sheetsByKey.delete(sheetsByKey.keys().next().value);
+    self.postMessage(message, copy());
+    try {
+      entry.index = meshSheetIndex(mesh, warp, { maxMinutes: msg.maxMinutes });   // the bands' outer ring
+      // The uncertain patches: drawn, uncoloured, and a tap there says so.
+      if (f.uncertain) entry.unsure = meshSheetIndex(bandMesh(f, msg.box, { uncertainOnly: true }), warp);
+    } catch (err) {
+      self.postMessage({ type: "error", job: "sheets-index", key: msg.key, gen: msg.gen ?? -1, message: String(err && err.message || err) });
+    }
+}
+
+function runGuarded(msg, fn) {
+  try { fn(); } catch (err) {
+    self.postMessage({ type: "error", job: msg.type, key: msg.key, id: msg.id, gen: msg.gen ?? -1, message: String(err && err.message || err) });
+  }
+}
+
 self.onmessage = (e) => {
   const msg = e.data;
-  if (msg.type === "scene") buildScene(msg).catch((err) => self.postMessage({ type: "error", gen: msg.gen, message: String(err && err.message || err) }));
+  if (msg.type === "bands" || msg.type === "layers" || msg.type === "sheets-query") {
+    runGuarded(msg, () => fieldMessage(msg));
+    return;
+  }
+  if (msg.type === "scene") buildScene(msg).catch((err) => self.postMessage({ type: "error", job: "scene", gen: msg.gen, message: String(err && err.message || err) }));
   else if (msg.type === "clear") { cache.clear(); resident = 0; peakResident = 0; self.postMessage({ type: "cleared", gen: msg.gen }); }
   else if (msg.type === "census") census(msg).catch((err) => self.postMessage({ type: "error", gen: msg.gen, message: String(err && err.message || err) }));
 };

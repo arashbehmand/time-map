@@ -493,11 +493,26 @@ def test_build_id_must_be_a_date():
         Build("my-build")
 
 
-def test_archive_is_not_licensed_until_the_flag_is_set():
-    from transit.build import LICENCE_PENDING, licences_cleared
+def test_the_licence_flag_decides_the_archive_and_publishing(monkeypatch):
+    from types import SimpleNamespace
 
-    assert licences_cleared() is False
-    assert "NOT LICENSED FOR PUBLICATION" in LICENCE_PENDING
+    from transit import build
+
+    assert build.licences_cleared() is True       # the owner holds the licences (2026-11-13)
+    assert "NOT LICENSED FOR PUBLICATION" in build.LICENCE_PENDING
+    assert "Open Database License" in build.LICENCE_TEXT
+    for flag in ({}, {"publication": {}}, {"publication": {"licences_cleared": False}}):
+        monkeypatch.setattr(build, "sources", lambda flag=flag: flag)
+        assert build.licences_cleared() is False
+        with pytest.raises(SystemExit, match="publish refused"):
+            build.stage_publish(None, SimpleNamespace(confirm=True))
+    # Cleared, but the clause 3.3.2 notice not settled: still no release.
+    monkeypatch.setattr(build, "sources", lambda: {"publication": {"licences_cleared": True}})
+    with pytest.raises(SystemExit, match="rsp_notice"):
+        build.stage_publish(None, SimpleNamespace(confirm=True))
+    monkeypatch.setattr(build, "sources", lambda: {"publication": {"licences_cleared": True, "rsp_notice": "none"}})
+    with pytest.raises(SystemExit, match="--confirm"):
+        build.stage_publish(None, SimpleNamespace(confirm=False))
 
 
 def test_stage_code_hash_changes_with_the_code(tmp_path, monkeypatch):

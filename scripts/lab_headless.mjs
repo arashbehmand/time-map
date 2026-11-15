@@ -12,6 +12,13 @@
 //        [--no-cache]   (turns off the page's HTTP cache; it does not reach the tile worker, so
 //                        for cold tile loads start Chrome with a fresh --user-data-dir instead)
 //
+// It drives the warp page itself the same way when the URL is /warp/ (it waits for __warp
+// instead of __lab; the page exposes it only with ?test=1), for the pan, new-pin and request
+// checks of #5 (W-02), e.g. --url "http://127.0.0.1:8765/warp/?test=1":
+//   __warp.panBy(200, 0)                        one camera pan → {ms to the next drawn frame}
+//   __warp.bend(true)                           bend the map (resolves when the morph is done)
+// --out FILE also writes the result JSON to FILE.
+//
 // --eval is any expression; it is awaited after the lab is ready. Useful ones:
 //   __lab.runSelfTest()                         gates G1–G5
 //   __lab.runBench()                            gates G6–G9 (about two minutes)
@@ -50,16 +57,19 @@ await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceSc
 if (args.throttle) await send("Emulation.setCPUThrottlingRate", { rate: Number(args.throttle) });
 if (args["no-cache"]) { await send("Network.enable"); await send("Network.setCacheDisabled", { cacheDisabled: true }); }
 await send("Page.navigate", { url: args.url });
-for (let i = 0; i < 200 && (await evaluate("!!(window.__lab && window.__lab.ready)")) !== true; i++) await new Promise((r) => setTimeout(r, 100));
-const ready = await evaluate("Promise.race([__lab.ready.then(() => 'ready', (e) => 'boot failed: ' + e.message), new Promise((r) => setTimeout(() => r('not ready after 40 s'), 40000))])");
+const hook = /\/warp\/(\?|#|$)/.test(new URL(args.url).pathname + new URL(args.url).search.slice(0, 1)) ? "__warp" : "__lab";
+for (let i = 0; i < 200 && (await evaluate(`!!(window.${hook} && window.${hook}.ready)`)) !== true; i++) await new Promise((r) => setTimeout(r, 100));
+const ready = await evaluate(`Promise.race([${hook}.ready.then(() => 'ready', (e) => 'boot failed: ' + e.message), new Promise((r) => setTimeout(() => r('not ready after 40 s'), 40000))])`);
 const value = ready === "ready" && args.eval ? await evaluate(args.eval) : null;
 if (args.shot) {
   await new Promise((r) => setTimeout(r, 300));
   const s = await send("Page.captureScreenshot", { format: "png" });
   (await import("node:fs")).writeFileSync(args.shot, Buffer.from(s.result.data, "base64"));
 }
-const u = ready === "ready" ? await evaluate("__lab.S.u") : null;
-console.log(JSON.stringify({ url: args.url, size: `${w}x${h}`, dpr, u, ready, value, logs }, null, 1));
+const u = ready === "ready" ? await evaluate(`${hook}.S.u`) : null;
+const result = JSON.stringify({ url: args.url, size: `${w}x${h}`, dpr, u, ready, value, logs }, null, 1);
+if (args.out) (await import("node:fs")).writeFileSync(args.out, result + "\n");
+console.log(result);
 await send("Page.close").catch(() => {});
 ws.close();
 process.exit(0);

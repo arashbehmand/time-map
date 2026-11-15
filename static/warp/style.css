@@ -1,22 +1,22 @@
 html, body { height: 100%; overflow: hidden; }
 body { background: #f0ede9; }
 
-/* MapLibre renders here: invisible, but it takes the pan and zoom gestures.
-   The canvases above it ignore the pointer. */
-#map-container {
-  position: fixed; inset: 0; opacity: 0; z-index: 1;
-}
-body.no-bend #map-container { opacity: 1; }
-body.no-bend #warp-canvas { display: none; }
+/* The page hides controls with the hidden attribute (the Bend button where bending isn't
+   offered, the trial layout chips). Class rules such as .btn's display would show them. */
+[hidden] { display: none !important; }
 
-/* The bent (or plain) map, drawn by the shader. */
-/* Both canvases cover exactly the map container's box (inset: 0), which is what the
-   script measures, so the bend, the rings and the pin share one coordinate system. */
-#warp-canvas {
+/* The normal map with its travel-time bands (MapLibre). It always takes the pan and zoom
+   gestures; while the map is bent it is hidden under the mesh, which ignores the pointer. */
+#map-container { position: fixed; inset: 0; z-index: 1; }
+
+/* The bent map, drawn by the mesh renderer. Both canvases cover exactly the map container's
+   box (inset: 0), so the mesh, the rings and the pin share one coordinate system. */
+#mesh-canvas {
   position: fixed; inset: 0; width: 100%; height: 100%; z-index: 2;
-  pointer-events: none;
+  pointer-events: none; opacity: 0;
 }
-/* Rings, labels and the pin's shadow. */
+body.no-bend #mesh-canvas { display: none; }
+/* Rings, labels, station dots and the tap ring. */
 #overlay-canvas {
   position: fixed; inset: 0; width: 100%; height: 100%; z-index: 3;
   pointer-events: none;
@@ -66,9 +66,30 @@ body.no-bend #warp-canvas { display: none; }
   display: flex; flex-direction: column; gap: 6px;
 }
 #from { font-weight: 700; }
+#outer-chips, #direction-chips { margin: 0; }
+.note { font-size: 13px; color: var(--text-2); }
+#band-legend { display: flex; height: 10px; border-radius: 3px; overflow: visible; margin: 2px 0 14px; }
+#band-legend span { flex: 1; position: relative; }
+#band-legend span[data-label]::after {
+  content: attr(data-label); position: absolute; right: 0; top: 11px; font-size: 11px;
+  color: var(--text-2); transform: translateX(50%);
+}
+#more-options summary { cursor: pointer; font-size: 13px; }
+#more-options label { margin-right: 6px; font-size: 13px; }
+#more-options[hidden], #direction-chips[hidden], .note[hidden] { display: none; }
+
+#tap-list {
+  position: fixed; z-index: 11; right: 12px; top: 140px; max-width: 360px; max-height: 50vh;
+  overflow: auto; display: flex; flex-direction: column; gap: 6px;
+}
+#tap-list[hidden] { display: none; }
+#tap-list .tap-head { justify-content: space-between; }
+#tap-heading { font-weight: 700; }
+#tap-items { margin: 0; padding-left: 18px; }
+#transit-credits { display: inline; margin-left: 4px; }
+#transit-credits[hidden] { display: none; }
 #sentence { font-size: 16px; }
 #limits { font-size: 13px; color: var(--text-2); }
-#zoom-hint[hidden] { display: none; }
 
 /* Map credits. The MapLibre map is hidden (opacity 0), so its own attribution control
    would be invisible; these sit above every canvas. Required by OpenStreetMap and Mapbox. */
@@ -94,4 +115,5 @@ body.no-bend #warp-canvas { display: none; }
   #legend { left: 8px; right: 8px; bottom: 30px; max-width: none; padding: 10px 12px; gap: 4px; }
   #sentence { font-size: 15px; }
   #location-card, #back-to-pin { top: 112px; }
+  #tap-list { left: 8px; right: 8px; top: 112px; max-width: none; }
 }

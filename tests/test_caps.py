@@ -78,15 +78,15 @@ def test_spread_refusal_is_plain_words(matrix_client):
     {"longitude": LON, "latitude": LAT, "profile": "driving-traffic"},
     {"longitude": LON, "latitude": LAT, "extra": 1},
 ])
-@pytest.mark.parametrize("path", ["/api/isochrones", "/api/warp-params"])
+@pytest.mark.parametrize("path", ["/api/isochrones"])
 def test_oversized_isochrone_requests(mapbox, client, path, body):
     resp = client.post(path, json=body)
     assert resp.status_code == 422, resp.text
     assert mapbox.count() == 0
 
 
-def test_warp_params_rejects_polar_latitude(mapbox, client):
-    resp = client.post("/api/warp-params", json={"longitude": 0, "latitude": 86})
+def test_travel_time_field_rejects_polar_latitude(mapbox, client):
+    resp = client.post("/api/travel-time-field", json={"longitude": 0, "latitude": 86})
     assert resp.status_code == 422
     assert mapbox.count() == 0
 

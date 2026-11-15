@@ -25,8 +25,3 @@ if MAPBOX_TILES_TOKEN == MAPBOX_ROUTING_TOKEN:
 SECRETS: tuple[str, ...] = tuple(
     t for t in {_LEGACY_TOKEN, MAPBOX_TILES_TOKEN, MAPBOX_ROUTING_TOKEN} if t
 )
-
-# Warp algorithm constants
-NUM_ANGULAR_SAMPLES: int = 2048
-DENSIFY_PX: float = 4.0
-SMOOTH_WINDOW: int = 7

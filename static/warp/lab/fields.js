@@ -1,20 +1,23 @@
 // SYNTHETIC travel-time fields and layouts for the renderer lab. Pure (the network comes in
-// as data), so the node tests build the same fields. None of these are real travel times.
+// as data), so the node tests build the same fields. None of these are real travel times,
+// except `real`, which comes from the server.
 //
 //   walk     minutes = distance × detour / walking speed
 //   transit  the toy network in stations.json: walk to a station, ride, walk on
 //   cliff    walking, with a river 1.5 km north that only one bridge crosses
-//   contours the saved King's Cross walking answer (static/warp/example.json), interpolated
+//   contours the warp page's saved King's Cross walking field (static/warp/example-field.json)
 //   identity, shear, pull   target-position grids, to show the London map (#6) can use the
 //            same renderer with a layout that is not travel time
-import { fieldFromFunction, gridFromFunction, NO_DATA, sampleField } from "../../shared/mesh/field.js";
+//   real     NOT synthetic: the field the warp page gets from POST /api/travel-time-field
+//            (?field=real&mode=transit|walking&window=wd08&smooth=1), fetched at boot for every
+//            test origin, so the self-test, the benchmark and directionChecks run on it
+import { decodeField, fieldFromFunction, geometryField, gridFromFunction } from "../../shared/mesh/field.js";
 import { localFrame, metresPerUnit, WORLD_PX } from "../../shared/mesh/frame.js";
-import { createWarp } from "../../shared/mesh/warp.js";
 
 export const FIELD_CELL = 100;          // metres (D7)
 export const FIELD_HALF = 25_000;       // ±25 km
 export const GRID_CELL = 500;
-export const POLAR_FIELDS = ["walk", "transit", "cliff", "contours"];
+export const POLAR_FIELDS = ["walk", "transit", "cliff", "contours", "real"];
 export const GRID_FIELDS = ["identity", "shear", "pull"];
 
 const DEFAULT_PARAMS = { walkMetresPerMinute: 80, detour: 1.3, waitMinutes: 4, dwellMinutes: 0.5,
@@ -107,32 +110,9 @@ export function cliffField(origin, network) {
   });
 }
 
-// example.json: radii in px at ref_zoom per angle bin (y-down, bin i at θ = (i + ½)/N·2π − π),
-// one row per contour. Minutes are interpolated between contours; past the last, no data.
+// The warp page's saved field (static/warp/example-field.json, the server's wire format).
 export function contoursField(example) {
-  const origin = { lon: example.origin.lon, lat: example.origin.lat };
-  const mPerPx = metresPerUnit(origin.lat) / (WORLD_PX * Math.pow(2, example.ref_zoom));
-  const rows = example.source_radii.map((r) => r.map((v) => v * mPerPx));
-  const mins = example.contour_minutes.map(Number);
-  const n = rows[0].length;
-  const radiusAt = (row, theta) => {
-    const f = ((theta + Math.PI) / (2 * Math.PI)) * n - 0.5;
-    const i = Math.floor(f), a = f - i;
-    const i0 = ((i % n) + n) % n, i1 = (i0 + 1) % n;
-    return row[i0] * (1 - a) + row[i1] * a;
-  };
-  return polar(origin, (x, y) => {
-    const r = Math.hypot(x, y);
-    if (r === 0) return 0;
-    const th = Math.atan2(y, x);
-    let r0 = 0, m0 = 0;
-    for (let k = 0; k < rows.length; k++) {
-      const rk = radiusAt(rows[k], th);
-      if (r <= rk) return m0 + ((mins[k] - m0) * (r - r0)) / Math.max(rk - r0, 1e-6);
-      r0 = rk; m0 = mins[k];
-    }
-    return NO_DATA;
-  });
+  return decodeField(example);
 }
 
 // Target-position grids (layout units = local metres, so k = px per metre on screen).
@@ -154,75 +134,23 @@ export function gridField(name, origin, network) {
   return gridFromFunction({ origin, cell: GRID_CELL, halfSize: FIELD_HALF }, fn);
 }
 
-// The lab's one entry point: a warp spec for createWarp() / the renderer / the worker.
-export function makeWarpSpec(fieldName, origin, network, { example, maxMinutes = 45 } = {}) {
+// The lab's one entry point: a warp spec for createWarp() / the renderer / the worker. A server
+// field bends by its geometry field (uncertain patches at their drawn minutes), as on the warp
+// page; `source` keeps the field itself (squash reads its true minutes).
+export function makeWarpSpec(fieldName, origin, network, { example, maxMinutes = 45, real = null } = {}) {
   if (GRID_FIELDS.includes(fieldName)) return { kind: "grid", grid: gridField(fieldName, origin, network) };
   let field;
   if (fieldName === "walk") field = walkField(origin, network);
   else if (fieldName === "transit") field = transitField(origin, network);
   else if (fieldName === "cliff") field = cliffField(origin, network);
-  else if (fieldName === "contours") { field = contoursField(example); maxMinutes = Math.min(maxMinutes, 20); }
+  else if (fieldName === "contours") { field = contoursField(example); maxMinutes = Math.min(maxMinutes, 25); }
+  else if (fieldName === "real") {
+    field = real && real.get(origin.id);
+    if (!field) throw new Error(`no real field for ${origin.id}`);
+  }
   else throw new Error(`unknown field ${fieldName}`);
-  return { kind: "polar", field, maxMinutes };
+  return { kind: "polar", field: geometryField(field), source: field, maxMinutes };
 }
 
-// Renderer diagnostics on a polar field, NOT Direction 4's verdict (that needs real fields):
-//   foldedShare    the share of the area inside the outer ring covered by folded sheets on the
-//                  bent map: the union of the folded cells' images, rasterised, so overlapping
-//                  sheets count once
-//   foldedSheets   the same without the union: total area of folded cells' images (can exceed
-//                  foldedShare, even 1, where sheets stack)
-//   medianStretch  the median over field cells inside the ring (folded ones included) of the
-//                  largest local scale over the smallest, sampled per source cell, unweighted
-export function foldDiagnostics(spec, { step = 2, raster = 600 } = {}) {
-  if (spec.kind !== "polar") return null;
-  const f = spec.field, max = spec.maxMinutes ?? 45;
-  const warp = createWarp(spec);
-  const px = (2 * max) / raster;                        // minutes per raster pixel
-  const covered = new Uint8Array(raster * raster);
-  let sheets = 0;
-  const stretch = [];
-  const fill = (a, b, c) => {
-    // Mark raster pixels whose centre is inside triangle abc (layout units).
-    const x0 = Math.max(0, Math.floor((Math.min(a[0], b[0], c[0]) + max) / px));
-    const x1 = Math.min(raster - 1, Math.ceil((Math.max(a[0], b[0], c[0]) + max) / px));
-    const y0 = Math.max(0, Math.floor((Math.min(a[1], b[1], c[1]) + max) / px));
-    const y1 = Math.min(raster - 1, Math.ceil((Math.max(a[1], b[1], c[1]) + max) / px));
-    const side = (p, q, x, y) => (q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0]);
-    for (let j = y0; j <= y1; j++) {
-      const y = -max + (j + 0.5) * px;
-      for (let i = x0; i <= x1; i++) {
-        const x = -max + (i + 0.5) * px;
-        const d1 = side(a, b, x, y), d2 = side(b, c, x, y), d3 = side(c, a, x, y);
-        if ((d1 >= 0 && d2 >= 0 && d3 >= 0) || (d1 <= 0 && d2 <= 0 && d3 <= 0)) covered[j * raster + i] = 1;
-      }
-    }
-  };
-  const h = f.cell * step;
-  for (let j = 0; j + step < f.ny; j += step) {
-    for (let i = 0; i + step < f.nx; i += step) {
-      const x = f.x0 + i * f.cell, y = f.y0 + j * f.cell;
-      const q = [warp.target(x, y), warp.target(x + h, y), warp.target(x + h, y + h), warp.target(x, y + h)];
-      if (q.some((t) => !t)) continue;
-      const jac = warp.jacobian(x + h / 2, y + h / 2, h / 2);
-      if (jac) stretch.push(jac.stretch);
-      const area2 = (t0, t1, t2) => (t1[0] - t0[0]) * (t2[1] - t0[1]) - (t1[1] - t0[1]) * (t2[0] - t0[0]);
-      const a1 = area2(q[0], q[1], q[2]), a2 = area2(q[0], q[2], q[3]);
-      if (a1 < 0) { fill(q[0], q[1], q[2]); sheets += -a1 / 2; }
-      if (a2 < 0) { fill(q[0], q[2], q[3]); sheets += -a2 / 2; }
-    }
-  }
-  let inRing = 0, foldedIn = 0;
-  for (let j = 0; j < raster; j++) for (let i = 0; i < raster; i++) {
-    const x = -max + (i + 0.5) * px, y = -max + (j + 0.5) * px;
-    if (x * x + y * y > max * max) continue;
-    inRing++;
-    if (covered[j * raster + i]) foldedIn++;
-  }
-  stretch.sort((a, b) => a - b);
-  return {
-    foldedShare: foldedIn / inRing,
-    foldedSheets: sheets / (Math.PI * max * max),
-    medianStretch: stretch.length ? stretch[Math.floor(stretch.length / 2)] : null,
-  };
-}
+// Fold diagnostics moved to the shared mesh (the warp page reports them on real fields).
+export { foldDiagnostics } from "../../shared/mesh/diagnostics.js";

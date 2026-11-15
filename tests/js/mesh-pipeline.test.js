@@ -85,3 +85,16 @@ test("packing puts each tile in local metres and fills the CPU targets", () => {
   assert.equal(tight.stats.overBudget, true);
   assert.ok(tight.stats.dropped.park === 1 && tight.stats.dropped.water === 1);
 });
+
+test("refinement keeps a share of the budget when the tiles alone would fill it", () => {
+  const mesh = tessellateTile(vectorTileFeatures(bytes), { ...TILE, spacingDiv: 64 });
+  const origin = { lon: -0.1571, lat: 51.5226 };
+  const frame = localFrame(origin);
+  const p = tilePlacement(frame, TILE.z, TILE.x, TILE.y, 4096);
+  const cliff = p.ox + 700 * p.scale;            // a jump through the river and the motorway
+  const field = fieldFromFunction({ origin, cell: 100, halfSize: 25000 }, (x, y) => Math.hypot(x, y) / 80 + (x > cliff ? 20 : 0));
+  const full = packScene([mesh], frame).stats.shaded;
+  const scene = packScene([mesh], frame, { budget: full, refine: { field, maxMinutes: 1e3, eps: 0.05 } });
+  assert.ok(scene.stats.refined > 0, "refinement got room");
+  assert.ok(scene.stats.shaded <= full, "inside the budget");
+});

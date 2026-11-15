@@ -8,7 +8,7 @@ import { localFrame } from "../../static/shared/mesh/frame.js";
 import * as F from "../../static/warp/lab/fields.js";
 
 const network = JSON.parse(readFileSync(new URL("../../static/warp/lab/stations.json", import.meta.url)));
-const example = JSON.parse(readFileSync(new URL("../../static/warp/example.json", import.meta.url)));
+const example = JSON.parse(readFileSync(new URL("../../static/warp/example-field.json", import.meta.url)));
 const byId = (id) => network.origins.find((o) => o.id === id);
 
 test("on the toy network, Wembley Park from Baker Street is far quicker than walking", () => {
@@ -39,16 +39,16 @@ test("the cliff field jumps across the river, away from the bridge", () => {
   assert.ok(north - south > 5, `${south} → ${north}`);
 });
 
-test("the contours field comes from the saved King's Cross answer", () => {
+test("the contours field is the warp page's saved King's Cross field", () => {
   const field = F.contoursField(example);
-  assert.ok(Math.abs(sampleField(field, 1, 1)) < 0.1);
+  assert.ok(Math.abs(sampleField(field, 1, 1)) < 0.5);
   assert.ok(sampleField(field, 300, 0) < sampleField(field, 800, 0));
   assert.equal(sampleField(field, 5000, 0), NO_DATA);
 });
 
 test("each test origin gets a warp spec", () => {
   for (const o of network.origins) {
-    for (const name of [...F.POLAR_FIELDS.filter((f) => f !== "contours"), ...F.GRID_FIELDS]) {
+    for (const name of [...F.POLAR_FIELDS.filter((f) => f !== "contours" && f !== "real"), ...F.GRID_FIELDS]) {
       const spec = F.makeWarpSpec(name, o, network);
       assert.equal(spec.kind, F.GRID_FIELDS.includes(name) ? "grid" : "polar");
     }
@@ -62,4 +62,13 @@ test("fold diagnostics count stacked sheets once in the folded share", () => {
   const transit = F.foldDiagnostics(F.makeWarpSpec("transit", byId("baker-street"), network));
   assert.ok(transit.foldedShare > 0 && transit.foldedShare <= 1);
   assert.ok(transit.foldedSheets >= transit.foldedShare, "sheets with overlaps ≥ their union");
+});
+
+test("the real field is the server's, handed in per origin", () => {
+  const o = byId("baker-street");
+  const field = F.walkField(o, network);
+  const spec = F.makeWarpSpec("real", o, network, { real: new Map([["baker-street", field]]) });
+  assert.equal(spec.kind, "polar");
+  assert.equal(spec.field, field);
+  assert.throws(() => F.makeWarpSpec("real", byId("croydon"), network, { real: new Map() }));
 });

@@ -13,7 +13,7 @@
 //                    ≥ 4:1, a chain of short segments with a kink, and segments at twelve
 //                    angles; every one within ±0.25 px of nominal
 import { makeCamera } from "../../shared/mesh/frame.js";
-import { NO_DATA, sampleField } from "../../shared/mesh/field.js";
+import { NO_DATA, sampleField, touchesUncertain } from "../../shared/mesh/field.js";
 import { STYLE_ID, STYLES } from "../../shared/mesh/schema-streets-v8.js";
 import { jacobiansFor, lineEmphasis, targetsFor } from "../../shared/mesh/warp.js";
 
@@ -147,17 +147,24 @@ function drawnCentres(r, warp, cam, u, pts, want, style) {
   return out;
 }
 
-function g3Radius(lab, rand) {
+// The issue's "1,000 random cells": points that hold a time within the ring (folds and
+// stations included; no data, beyond, filled-in water and cells touching an uncertain patch
+// left out: those have no reliable time for the radius to match).
+export const G3_SAMPLES = 1000;
+
+function g3Radius(lab, rand, samples = G3_SAMPLES) {
   const { S } = lab, r = S.renderer;
   if (S.spec.kind !== "polar") return { skipped: "grid layouts have no travel time" };
   if (!r.renderLines) return { skipped: "no pixel read-back for this back-end" };
   const f = S.spec.field, maxMin = S.spec.maxMinutes ?? lab.OPT.max;
   const cam = referenceCamera(lab, REFERENCE_VIEWS[0]);
   const pts = [];
-  for (let tries = 0; pts.length < 2 * 300 && tries < 100000; tries++) {
+  for (let tries = 0; pts.length < 2 * samples && tries < 400000; tries++) {
     const x = f.x0 + rand() * (f.nx - 1) * f.cell, y = f.y0 + rand() * (f.ny - 1) * f.cell;
     const t = sampleField(f, x, y);
     if (t === NO_DATA || t > maxMin || Math.hypot(x, y) < 50) continue;
+    if (f.filled && f.filled[Math.round((y - f.y0) / f.cell) * f.nx + Math.round((x - f.x0) / f.cell)]) continue;
+    if (touchesUncertain(f, x, y)) continue;
     const s = S.warp.screenOfLocal(x, y, cam, 1), g = S.warp.screenOfLocal(x, y, cam, 0);
     const inView = (p) => p.x > 12 && p.y > 12 && p.x < cam.width - 12 && p.y < cam.height - 12;
     if (!inView(s) || !inView(g)) continue;
@@ -397,6 +404,7 @@ function g5Width(lab, rand) {
   }
   cands.sort((a, b) => b.stretch - a.stretch);
   results.stretched = { skipped: cands.length ? "no stretched segment long enough on screen" : "no on-screen segment stretched 4:1" };
+  let stretchedDone = false;
   for (const best of cands.slice(0, 30)) {
     const { g, k } = best;
     const dx = g[4 * k + 2] - g[4 * k], dy = g[4 * k + 3] - g[4 * k + 1];
@@ -414,9 +422,27 @@ function g5Width(lab, rand) {
     const p0 = r.renderLines(live, 1, one, [0, 0, 1, 1], PLAIN);
     const mid = [(scr[0].x + scr[1].x) / 2, (scr[0].y + scr[1].y) / 2];
     const rect = [Math.round((mid[0] - 20) * p0.dpr), Math.round((mid[1] - 20) * p0.dpr), Math.round(40 * p0.dpr), Math.round(40 * p0.dpr)];
-    const got = r.renderLines(live, 1, one, rect, PLAIN);
-    results.stretched = { stretch: round(best.stretch, 1), widthPx: round(widthIn(got.cov, rect, scr.map((q) => [q.x * p0.dpr, q.y * p0.dpr]), p0.dpr)), nominalPx: round(p0.widths[style]) };
-    if (Math.abs(results.stretched.widthPx - results.stretched.nominalPx) > 0.25) fails.push("stretched");
+    if (!stretchedDone) {
+      const got = r.renderLines(live, 1, one, rect, PLAIN);
+      results.stretched = { stretch: round(best.stretch, 1), widthPx: round(widthIn(got.cov, rect, scr.map((q) => [q.x * p0.dpr, q.y * p0.dpr]), p0.dpr)), nominalPx: round(p0.widths[style]) };
+      if (Math.abs(results.stretched.widthPx - results.stretched.nominalPx) > 0.25) fails.push("stretched");
+      stretchedDone = true;
+    }
+    // The scale-aware check compares the drawn coverage near the middle of the span with one
+    // expectation from the span's midpoint, so the span must not cross a fold: there the
+    // drawn pieces fade (FOLD_FADE) and the expectation may not. Spans that do are recorded
+    // and the next candidate is tried.
+    const dets = [];
+    for (let i = 0; i <= 8; i++) {
+      const f = i / 8, jj = warp.screenJacobian(local[0][0] + (local[1][0] - local[0][0]) * f, local[0][1] + (local[1][1] - local[0][1]) * f, live, 1);
+      dets.push(jj ? jj.det : NaN);
+    }
+    const fold = dets.some((d) => !(d > 0)) && dets.some((d) => d > 0);
+    if (fold) {
+      results.scaleAwareSkipped = (results.scaleAwareSkipped || 0) + 1;
+      results.scaleAwareFoldSpan = results.scaleAwareFoldSpan || { detMin: round(Math.min(...dets.filter(Number.isFinite)), 6), detMax: round(Math.max(...dets.filter(Number.isFinite)), 6) };
+      continue;
+    }
     // The scale-aware style on the same segment: what the shader draws must be what
     // lineEmphasis() and the class's bent strength give in JS. Compared as coverage across
     // the line: a capsule of half-width h device px covers 2h, or (h + ½)² under h = ½.
@@ -439,7 +465,7 @@ function g5Width(lab, rand) {
   return { ...results, dpr, failed: fails, pass: fails.length === 0 };
 }
 
-export async function runSelfTest(lab) {
+export async function runSelfTest(lab, { g3n = G3_SAMPLES } = {}) {
   const { S, OPT } = lab;
   const rand = rng(20261113);
   const result = {
@@ -457,7 +483,7 @@ export async function runSelfTest(lab) {
   };
   run("G1_parity", () => g1Parity(lab, rand));
   run("G2_registration", () => g2Registration(lab, rand));
-  run("G3_radius", () => g3Radius(lab, rand));
+  run("G3_radius", () => g3Radius(lab, rand, g3n));
   run("G4_chord", () => g4Chord(lab, rand));
   run("G5_width", () => g5Width(lab, rand));
   S.dirty = true;

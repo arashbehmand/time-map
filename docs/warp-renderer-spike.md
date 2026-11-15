@@ -568,7 +568,7 @@ including the current tiles once packed.
      browser versions.
    - If a phone misses G6 or G7 on real tiles, simplify the geometry first (see
      [Results: real tiles](#results-real-tiles)).
-2. **W-02** takes over:
+2. **W-02** takes over (done in part; see [warp-time-polar.md](warp-time-polar.md)):
    - the real field (#1's composition and the walking near field), including where it jumps
      (the cliff case above). The lab's walk field is straight-line distance and ignores the
      Thames; a real one crosses only at bridges and tunnels;

@@ -1,0 +1,3181 @@
+{
+ "note": "Measured 2026-11-13 on an Apple M2, headless Chrome 157, local server, with live Mapbox routing and tiles tokens. Public transport fields from the T-01 build 2026-11-12 (uncleared, served with TRANSIT_ALLOW_UNCLEARED=1 to this machine only), with the 2 km walking near field (sources 'mapbox+tables'). Self-tests run on real Streets v8 tiles (geom=tiles).",
+ "live_mapbox_isochrones_kings_cross": {
+  "walking_meters_333_667_1000_1333": {
+   "status": 200,
+   "ms": 607,
+   "kb": 3,
+   "features": 4,
+   "pieces_per_contour": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "metric": "distance",
+   "contour_values": [
+    333,
+    667,
+    1000,
+    1333
+   ],
+   "vertices": 115,
+   "holes": 2,
+   "nested": true
+  },
+  "walking_meters_2000_2667_3333_4000": {
+   "status": 200,
+   "ms": 658,
+   "kb": 15,
+   "features": 4,
+   "pieces_per_contour": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "metric": "distance",
+   "contour_values": [
+    2000,
+    2667,
+    3333,
+    4000
+   ],
+   "vertices": 706,
+   "holes": 54,
+   "nested": true
+  },
+  "cycling_minutes_30_40_50_60": {
+   "status": 200,
+   "ms": 821,
+   "kb": 310,
+   "features": 4,
+   "pieces_per_contour": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "metric": "time",
+   "contour_values": [
+    30,
+    40,
+    50,
+    60
+   ],
+   "vertices": 15017,
+   "holes": 1299,
+   "nested": true
+  },
+  "request": "denoise=0, polygons=true; nested means each contour leaves under 1% of the one inside it outside"
+ },
+ "fields_kings_cross": {
+  "walking": {
+   "grid": [
+    90,
+    87
+   ],
+   "cell_m": 100,
+   "json_kb": 20,
+   "gzip_kb": 5,
+   "known_nodes": 3382,
+   "max_minutes": 60.0,
+   "build_cpu_ms": 22,
+   "endpoint_ms_cold": 829
+  },
+  "cycling": {
+   "grid": [
+    162,
+    169
+   ],
+   "cell_m": 200,
+   "json_kb": 71,
+   "gzip_kb": 23,
+   "known_nodes": 15489,
+   "max_minutes": 60.0,
+   "build_cpu_ms": 174,
+   "endpoint_ms_cold": 1120
+  },
+  "driving": {
+   "grid": [
+    207,
+    151
+   ],
+   "cell_m": 400,
+   "json_kb": 81,
+   "gzip_kb": 19,
+   "known_nodes": 12696,
+   "max_minutes": 60.0,
+   "build_cpu_ms": 125,
+   "endpoint_ms_cold": 1453
+  },
+  "build_cpu_ms": "server field maths only, on the live polygons, best of 3; endpoint_ms_cold includes the two Mapbox calls"
+ },
+ "transit_fields_wd08": {
+  "baker-street": {
+   "grid": [
+    640,
+    511
+   ],
+   "json_kb": 895,
+   "gzip_kb": 294,
+   "known": 217111,
+   "filled": 19167,
+   "beyond": 808,
+   "endpoint_ms_cold": 951
+  },
+  "wembley-park": {
+   "grid": [
+    639,
+    511
+   ],
+   "json_kb": 894,
+   "gzip_kb": 295,
+   "known": 216712,
+   "filled": 18997,
+   "beyond": 803,
+   "endpoint_ms_cold": 502
+  },
+  "canary-wharf": {
+   "grid": [
+    641,
+    511
+   ],
+   "json_kb": 896,
+   "gzip_kb": 294,
+   "known": 217371,
+   "filled": 19118,
+   "beyond": 811,
+   "endpoint_ms_cold": 643
+  },
+  "heathrow": {
+   "grid": [
+    641,
+    512
+   ],
+   "json_kb": 898,
+   "gzip_kb": 294,
+   "known": 217400,
+   "filled": 19087,
+   "beyond": 887,
+   "endpoint_ms_cold": 204
+  },
+  "croydon": {
+   "grid": [
+    643,
+    513
+   ],
+   "json_kb": 902,
+   "gzip_kb": 299,
+   "known": 218512,
+   "filled": 19181,
+   "beyond": 812,
+   "endpoint_ms_cold": 450
+  },
+  "note": "the grid spans the whole coverage box; endpoint_ms_cold includes the two walking isochrone calls"
+ },
+ "near_field_seam_wd08": {
+  "measure": "|t(r+50 m) - t(r-50 m)| over 360 bearings, median / p90 minutes",
+  "baker-street": {
+   "1.5km": [
+    0.9,
+    2.07
+   ],
+   "2.0km": [
+    1.03,
+    2.0
+   ],
+   "2.5km": [
+    0.99,
+    1.85
+   ]
+  },
+  "wembley-park": {
+   "1.5km": [
+    1.09,
+    2.79
+   ],
+   "2.0km": [
+    1.03,
+    2.35
+   ],
+   "2.5km": [
+    1.1,
+    2.57
+   ]
+  },
+  "canary-wharf": {
+   "1.5km": [
+    0.89,
+    2.15
+   ],
+   "2.0km": [
+    1.09,
+    2.88
+   ],
+   "2.5km": [
+    1.01,
+    2.06
+   ]
+  },
+  "heathrow": {
+   "1.5km": [
+    1.22,
+    5.58
+   ],
+   "2.0km": [
+    1.13,
+    3.59
+   ],
+   "2.5km": [
+    0.91,
+    2.75
+   ]
+  },
+  "croydon": {
+   "1.5km": [
+    1.04,
+    2.31
+   ],
+   "2.0km": [
+    1.18,
+    2.07
+   ],
+   "2.5km": [
+    1.0,
+    2.36
+   ]
+  }
+ },
+ "direction_checks": {
+  "kind": "direction-checks",
+  "at": "2026-11-13T18:29:49.448Z",
+  "mode": "transit",
+  "ring": 45,
+  "limits": {
+   "folded": 0.1,
+   "stretch": 3
+  },
+  "ms": 9737,
+  "results": [
+   {
+    "origin": "baker-street",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.52,
+    "stackedShare": 0.836,
+    "medianStretch": 5.504,
+    "foldedShare800": 0.164,
+    "medianStretch800": 3.232,
+    "foldedShareOutside2km": 0.485,
+    "medianStretchOutside2km": 5.714,
+    "cellsSkipped": 75306,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.501,
+    "stackedShare": 0.791,
+    "medianStretch": 5.726,
+    "foldedShare800": 0.152,
+    "medianStretch800": 3.364,
+    "foldedShareOutside2km": 0.466,
+    "medianStretchOutside2km": 5.929,
+    "cellsSkipped": 75306,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.579,
+    "stackedShare": 1.001,
+    "medianStretch": 5.999,
+    "foldedShare800": 0.19,
+    "medianStretch800": 3.333,
+    "foldedShareOutside2km": 0.537,
+    "medianStretchOutside2km": 6.226,
+    "cellsSkipped": 75165,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.56,
+    "stackedShare": 0.949,
+    "medianStretch": 6.313,
+    "foldedShare800": 0.175,
+    "medianStretch800": 3.448,
+    "foldedShareOutside2km": 0.518,
+    "medianStretchOutside2km": 6.556,
+    "cellsSkipped": 75165,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.515,
+    "stackedShare": 0.834,
+    "medianStretch": 5.58,
+    "foldedShare800": 0.156,
+    "medianStretch800": 3.206,
+    "foldedShareOutside2km": 0.481,
+    "medianStretchOutside2km": 5.796,
+    "cellsSkipped": 75328,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.496,
+    "stackedShare": 0.786,
+    "medianStretch": 5.785,
+    "foldedShare800": 0.139,
+    "medianStretch800": 3.342,
+    "foldedShareOutside2km": 0.462,
+    "medianStretchOutside2km": 5.974,
+    "cellsSkipped": 75328,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.575,
+    "stackedShare": 1,
+    "medianStretch": 6.103,
+    "foldedShare800": 0.188,
+    "medianStretch800": 3.342,
+    "foldedShareOutside2km": 0.534,
+    "medianStretchOutside2km": 6.328,
+    "cellsSkipped": 75172,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.555,
+    "stackedShare": 0.943,
+    "medianStretch": 6.342,
+    "foldedShare800": 0.168,
+    "medianStretch800": 3.611,
+    "foldedShareOutside2km": 0.514,
+    "medianStretchOutside2km": 6.592,
+    "cellsSkipped": 75172,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.514,
+    "stackedShare": 0.837,
+    "medianStretch": 5.616,
+    "foldedShare800": 0.169,
+    "medianStretch800": 3.162,
+    "foldedShareOutside2km": 0.48,
+    "medianStretchOutside2km": 5.805,
+    "cellsSkipped": 75254,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.494,
+    "stackedShare": 0.789,
+    "medianStretch": 5.808,
+    "foldedShare800": 0.153,
+    "medianStretch800": 3.385,
+    "foldedShareOutside2km": 0.461,
+    "medianStretchOutside2km": 6.001,
+    "cellsSkipped": 75254,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.577,
+    "stackedShare": 1.007,
+    "medianStretch": 6.116,
+    "foldedShare800": 0.211,
+    "medianStretch800": 3.261,
+    "foldedShareOutside2km": 0.536,
+    "medianStretchOutside2km": 6.307,
+    "cellsSkipped": 75104,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.556,
+    "stackedShare": 0.95,
+    "medianStretch": 6.361,
+    "foldedShare800": 0.191,
+    "medianStretch800": 3.576,
+    "foldedShareOutside2km": 0.515,
+    "medianStretchOutside2km": 6.596,
+    "cellsSkipped": 75104,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.511,
+    "stackedShare": 0.824,
+    "medianStretch": 5.62,
+    "foldedShare800": 0.159,
+    "medianStretch800": 3.277,
+    "foldedShareOutside2km": 0.476,
+    "medianStretchOutside2km": 5.802,
+    "cellsSkipped": 75350,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.492,
+    "stackedShare": 0.779,
+    "medianStretch": 5.785,
+    "foldedShare800": 0.143,
+    "medianStretch800": 3.384,
+    "foldedShareOutside2km": 0.458,
+    "medianStretchOutside2km": 5.982,
+    "cellsSkipped": 75350,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.573,
+    "stackedShare": 0.99,
+    "medianStretch": 6.022,
+    "foldedShare800": 0.187,
+    "medianStretch800": 3.524,
+    "foldedShareOutside2km": 0.532,
+    "medianStretchOutside2km": 6.254,
+    "cellsSkipped": 75209,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "baker-street",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.554,
+    "stackedShare": 0.937,
+    "medianStretch": 6.337,
+    "foldedShare800": 0.169,
+    "medianStretch800": 3.64,
+    "foldedShareOutside2km": 0.512,
+    "medianStretchOutside2km": 6.602,
+    "cellsSkipped": 75209,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.435,
+    "stackedShare": 0.735,
+    "medianStretch": 4.579,
+    "foldedShare800": 0.155,
+    "medianStretch800": 3.232,
+    "foldedShareOutside2km": 0.4,
+    "medianStretchOutside2km": 4.827,
+    "cellsSkipped": 77440,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.358,
+    "stackedShare": 0.568,
+    "medianStretch": 5.93,
+    "foldedShare800": 0.112,
+    "medianStretch800": 4.055,
+    "foldedShareOutside2km": 0.322,
+    "medianStretchOutside2km": 6.218,
+    "cellsSkipped": 77440,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.479,
+    "stackedShare": 0.865,
+    "medianStretch": 4.995,
+    "foldedShare800": 0.167,
+    "medianStretch800": 3.351,
+    "foldedShareOutside2km": 0.44,
+    "medianStretchOutside2km": 5.18,
+    "cellsSkipped": 77378,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.399,
+    "stackedShare": 0.669,
+    "medianStretch": 6.391,
+    "foldedShare800": 0.12,
+    "medianStretch800": 4.219,
+    "foldedShareOutside2km": 0.359,
+    "medianStretchOutside2km": 6.748,
+    "cellsSkipped": 77378,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.448,
+    "stackedShare": 0.79,
+    "medianStretch": 4.728,
+    "foldedShare800": 0.174,
+    "medianStretch800": 3.165,
+    "foldedShareOutside2km": 0.414,
+    "medianStretchOutside2km": 4.894,
+    "cellsSkipped": 77116,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.369,
+    "stackedShare": 0.605,
+    "medianStretch": 6.12,
+    "foldedShare800": 0.129,
+    "medianStretch800": 4.105,
+    "foldedShareOutside2km": 0.334,
+    "medianStretchOutside2km": 6.432,
+    "cellsSkipped": 77116,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.494,
+    "stackedShare": 0.932,
+    "medianStretch": 5.091,
+    "foldedShare800": 0.188,
+    "medianStretch800": 3.188,
+    "foldedShareOutside2km": 0.457,
+    "medianStretchOutside2km": 5.252,
+    "cellsSkipped": 77039,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.413,
+    "stackedShare": 0.716,
+    "medianStretch": 6.607,
+    "foldedShare800": 0.14,
+    "medianStretch800": 4.144,
+    "foldedShareOutside2km": 0.373,
+    "medianStretchOutside2km": 6.976,
+    "cellsSkipped": 77039,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.468,
+    "stackedShare": 0.827,
+    "medianStretch": 4.748,
+    "foldedShare800": 0.179,
+    "medianStretch800": 3.131,
+    "foldedShareOutside2km": 0.435,
+    "medianStretchOutside2km": 4.927,
+    "cellsSkipped": 76875,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.398,
+    "stackedShare": 0.651,
+    "medianStretch": 5.97,
+    "foldedShare800": 0.132,
+    "medianStretch800": 4.17,
+    "foldedShareOutside2km": 0.362,
+    "medianStretchOutside2km": 6.319,
+    "cellsSkipped": 76875,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.516,
+    "stackedShare": 0.975,
+    "medianStretch": 5.197,
+    "foldedShare800": 0.199,
+    "medianStretch800": 3.239,
+    "foldedShareOutside2km": 0.48,
+    "medianStretchOutside2km": 5.359,
+    "cellsSkipped": 76797,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.446,
+    "stackedShare": 0.773,
+    "medianStretch": 6.573,
+    "foldedShare800": 0.149,
+    "medianStretch800": 4.365,
+    "foldedShareOutside2km": 0.406,
+    "medianStretchOutside2km": 6.92,
+    "cellsSkipped": 76797,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.443,
+    "stackedShare": 0.771,
+    "medianStretch": 4.636,
+    "foldedShare800": 0.168,
+    "medianStretch800": 3.019,
+    "foldedShareOutside2km": 0.409,
+    "medianStretchOutside2km": 4.83,
+    "cellsSkipped": 77270,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.357,
+    "stackedShare": 0.578,
+    "medianStretch": 6.189,
+    "foldedShare800": 0.116,
+    "medianStretch800": 4.055,
+    "foldedShareOutside2km": 0.325,
+    "medianStretchOutside2km": 6.516,
+    "cellsSkipped": 77270,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.487,
+    "stackedShare": 0.906,
+    "medianStretch": 4.993,
+    "foldedShare800": 0.181,
+    "medianStretch800": 2.954,
+    "foldedShareOutside2km": 0.451,
+    "medianStretchOutside2km": 5.193,
+    "cellsSkipped": 77205,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "wembley-park",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.399,
+    "stackedShare": 0.683,
+    "medianStretch": 6.709,
+    "foldedShare800": 0.126,
+    "medianStretch800": 4.158,
+    "foldedShareOutside2km": 0.363,
+    "medianStretchOutside2km": 7.079,
+    "cellsSkipped": 77205,
+    "cells": 81345,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.572,
+    "stackedShare": 1.008,
+    "medianStretch": 5.678,
+    "foldedShare800": 0.266,
+    "medianStretch800": 3.573,
+    "foldedShareOutside2km": 0.523,
+    "medianStretchOutside2km": 5.815,
+    "cellsSkipped": 75343,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.531,
+    "stackedShare": 0.891,
+    "medianStretch": 6.103,
+    "foldedShare800": 0.237,
+    "medianStretch800": 3.72,
+    "foldedShareOutside2km": 0.489,
+    "medianStretchOutside2km": 6.245,
+    "cellsSkipped": 75343,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.623,
+    "stackedShare": 1.194,
+    "medianStretch": 6.124,
+    "foldedShare800": 0.289,
+    "medianStretch800": 3.606,
+    "foldedShareOutside2km": 0.572,
+    "medianStretchOutside2km": 6.276,
+    "cellsSkipped": 75191,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.582,
+    "stackedShare": 1.056,
+    "medianStretch": 6.62,
+    "foldedShare800": 0.257,
+    "medianStretch800": 3.712,
+    "foldedShareOutside2km": 0.536,
+    "medianStretchOutside2km": 6.86,
+    "cellsSkipped": 75191,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.565,
+    "stackedShare": 0.997,
+    "medianStretch": 5.581,
+    "foldedShare800": 0.256,
+    "medianStretch800": 3.459,
+    "foldedShareOutside2km": 0.517,
+    "medianStretchOutside2km": 5.721,
+    "cellsSkipped": 75580,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.524,
+    "stackedShare": 0.871,
+    "medianStretch": 6.059,
+    "foldedShare800": 0.223,
+    "medianStretch800": 3.885,
+    "foldedShareOutside2km": 0.482,
+    "medianStretchOutside2km": 6.238,
+    "cellsSkipped": 75580,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.615,
+    "stackedShare": 1.182,
+    "medianStretch": 5.962,
+    "foldedShare800": 0.275,
+    "medianStretch800": 3.529,
+    "foldedShareOutside2km": 0.565,
+    "medianStretchOutside2km": 6.1,
+    "cellsSkipped": 75443,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.575,
+    "stackedShare": 1.034,
+    "medianStretch": 6.556,
+    "foldedShare800": 0.239,
+    "medianStretch800": 3.833,
+    "foldedShareOutside2km": 0.529,
+    "medianStretchOutside2km": 6.799,
+    "cellsSkipped": 75443,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.561,
+    "stackedShare": 0.989,
+    "medianStretch": 5.492,
+    "foldedShare800": 0.253,
+    "medianStretch800": 3.466,
+    "foldedShareOutside2km": 0.511,
+    "medianStretchOutside2km": 5.628,
+    "cellsSkipped": 75612,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.52,
+    "stackedShare": 0.865,
+    "medianStretch": 6.016,
+    "foldedShare800": 0.222,
+    "medianStretch800": 3.735,
+    "foldedShareOutside2km": 0.477,
+    "medianStretchOutside2km": 6.177,
+    "cellsSkipped": 75612,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.614,
+    "stackedShare": 1.178,
+    "medianStretch": 5.933,
+    "foldedShare800": 0.275,
+    "medianStretch800": 3.378,
+    "foldedShareOutside2km": 0.562,
+    "medianStretchOutside2km": 6.079,
+    "cellsSkipped": 75478,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.575,
+    "stackedShare": 1.031,
+    "medianStretch": 6.542,
+    "foldedShare800": 0.239,
+    "medianStretch800": 3.671,
+    "foldedShareOutside2km": 0.527,
+    "medianStretchOutside2km": 6.749,
+    "cellsSkipped": 75478,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.557,
+    "stackedShare": 0.978,
+    "medianStretch": 5.477,
+    "foldedShare800": 0.259,
+    "medianStretch800": 3.507,
+    "foldedShareOutside2km": 0.508,
+    "medianStretchOutside2km": 5.613,
+    "cellsSkipped": 75717,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.516,
+    "stackedShare": 0.856,
+    "medianStretch": 5.995,
+    "foldedShare800": 0.226,
+    "medianStretch800": 3.785,
+    "foldedShareOutside2km": 0.474,
+    "medianStretchOutside2km": 6.145,
+    "cellsSkipped": 75717,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.61,
+    "stackedShare": 1.159,
+    "medianStretch": 5.921,
+    "foldedShare800": 0.277,
+    "medianStretch800": 3.612,
+    "foldedShareOutside2km": 0.559,
+    "medianStretchOutside2km": 6.058,
+    "cellsSkipped": 75589,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.57,
+    "stackedShare": 1.015,
+    "medianStretch": 6.525,
+    "foldedShare800": 0.242,
+    "medianStretch800": 3.801,
+    "foldedShareOutside2km": 0.524,
+    "medianStretchOutside2km": 6.734,
+    "cellsSkipped": 75589,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.364,
+    "stackedShare": 0.62,
+    "medianStretch": 5.316,
+    "foldedShare800": 0.184,
+    "medianStretch800": 3.617,
+    "foldedShareOutside2km": 0.295,
+    "medianStretchOutside2km": 5.411,
+    "cellsSkipped": 79899,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.283,
+    "stackedShare": 0.413,
+    "medianStretch": 7.33,
+    "foldedShare800": 0.122,
+    "medianStretch800": 3.951,
+    "foldedShareOutside2km": 0.193,
+    "medianStretchOutside2km": 7.602,
+    "cellsSkipped": 79899,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.393,
+    "stackedShare": 0.718,
+    "medianStretch": 5.737,
+    "foldedShare800": 0.198,
+    "medianStretch800": 3.445,
+    "foldedShareOutside2km": 0.318,
+    "medianStretchOutside2km": 5.864,
+    "cellsSkipped": 79851,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.306,
+    "stackedShare": 0.471,
+    "medianStretch": 7.899,
+    "foldedShare800": 0.13,
+    "medianStretch800": 4.195,
+    "foldedShareOutside2km": 0.208,
+    "medianStretchOutside2km": 8.327,
+    "cellsSkipped": 79851,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.359,
+    "stackedShare": 0.627,
+    "medianStretch": 5.405,
+    "foldedShare800": 0.183,
+    "medianStretch800": 3.349,
+    "foldedShareOutside2km": 0.288,
+    "medianStretchOutside2km": 5.522,
+    "cellsSkipped": 79901,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.281,
+    "stackedShare": 0.412,
+    "medianStretch": 7.33,
+    "foldedShare800": 0.121,
+    "medianStretch800": 4.147,
+    "foldedShareOutside2km": 0.189,
+    "medianStretchOutside2km": 7.567,
+    "cellsSkipped": 79901,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.389,
+    "stackedShare": 0.731,
+    "medianStretch": 5.684,
+    "foldedShare800": 0.213,
+    "medianStretch800": 3.347,
+    "foldedShareOutside2km": 0.313,
+    "medianStretchOutside2km": 5.801,
+    "cellsSkipped": 79846,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.304,
+    "stackedShare": 0.473,
+    "medianStretch": 7.752,
+    "foldedShare800": 0.136,
+    "medianStretch800": 4.363,
+    "foldedShareOutside2km": 0.205,
+    "medianStretchOutside2km": 8.247,
+    "cellsSkipped": 79846,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.373,
+    "stackedShare": 0.67,
+    "medianStretch": 5.341,
+    "foldedShare800": 0.188,
+    "medianStretch800": 4.178,
+    "foldedShareOutside2km": 0.305,
+    "medianStretchOutside2km": 5.489,
+    "cellsSkipped": 79748,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.297,
+    "stackedShare": 0.453,
+    "medianStretch": 6.877,
+    "foldedShare800": 0.126,
+    "medianStretch800": 4.147,
+    "foldedShareOutside2km": 0.21,
+    "medianStretchOutside2km": 7.222,
+    "cellsSkipped": 79748,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.404,
+    "stackedShare": 0.781,
+    "medianStretch": 5.663,
+    "foldedShare800": 0.205,
+    "medianStretch800": 4.211,
+    "foldedShareOutside2km": 0.33,
+    "medianStretchOutside2km": 5.787,
+    "cellsSkipped": 79686,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.322,
+    "stackedShare": 0.521,
+    "medianStretch": 7.5,
+    "foldedShare800": 0.133,
+    "medianStretch800": 4.351,
+    "foldedShareOutside2km": 0.228,
+    "medianStretchOutside2km": 7.895,
+    "cellsSkipped": 79686,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.355,
+    "stackedShare": 0.606,
+    "medianStretch": 5.218,
+    "foldedShare800": 0.176,
+    "medianStretch800": 3.752,
+    "foldedShareOutside2km": 0.288,
+    "medianStretchOutside2km": 5.31,
+    "cellsSkipped": 79953,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.277,
+    "stackedShare": 0.4,
+    "medianStretch": 7.087,
+    "foldedShare800": 0.118,
+    "medianStretch800": 3.951,
+    "foldedShareOutside2km": 0.19,
+    "medianStretchOutside2km": 7.496,
+    "cellsSkipped": 79953,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.387,
+    "stackedShare": 0.706,
+    "medianStretch": 5.561,
+    "foldedShare800": 0.193,
+    "medianStretch800": 3.577,
+    "foldedShareOutside2km": 0.313,
+    "medianStretchOutside2km": 5.707,
+    "cellsSkipped": 79893,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "heathrow",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.303,
+    "stackedShare": 0.46,
+    "medianStretch": 7.687,
+    "foldedShare800": 0.131,
+    "medianStretch800": 4.195,
+    "foldedShareOutside2km": 0.207,
+    "medianStretchOutside2km": 8.044,
+    "cellsSkipped": 79893,
+    "cells": 81600,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.439,
+    "stackedShare": 0.805,
+    "medianStretch": 6.32,
+    "foldedShare800": 0.214,
+    "medianStretch800": 3.753,
+    "foldedShareOutside2km": 0.401,
+    "medianStretchOutside2km": 6.652,
+    "cellsSkipped": 77603,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd08",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.396,
+    "stackedShare": 0.654,
+    "medianStretch": 6.633,
+    "foldedShare800": 0.176,
+    "medianStretch800": 3.467,
+    "foldedShareOutside2km": 0.361,
+    "medianStretchOutside2km": 6.946,
+    "cellsSkipped": 77603,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.493,
+    "stackedShare": 0.95,
+    "medianStretch": 6.706,
+    "foldedShare800": 0.237,
+    "medianStretch800": 3.993,
+    "foldedShareOutside2km": 0.448,
+    "medianStretchOutside2km": 7.066,
+    "cellsSkipped": 77483,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd08",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.449,
+    "stackedShare": 0.774,
+    "medianStretch": 7.165,
+    "foldedShare800": 0.195,
+    "medianStretch800": 3.855,
+    "foldedShareOutside2km": 0.407,
+    "medianStretchOutside2km": 7.587,
+    "cellsSkipped": 77483,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.447,
+    "stackedShare": 0.827,
+    "medianStretch": 6.251,
+    "foldedShare800": 0.212,
+    "medianStretch800": 3.522,
+    "foldedShareOutside2km": 0.413,
+    "medianStretchOutside2km": 6.608,
+    "cellsSkipped": 77626,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.406,
+    "stackedShare": 0.683,
+    "medianStretch": 6.367,
+    "foldedShare800": 0.178,
+    "medianStretch800": 3.749,
+    "foldedShareOutside2km": 0.374,
+    "medianStretchOutside2km": 6.639,
+    "cellsSkipped": 77626,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.501,
+    "stackedShare": 0.987,
+    "medianStretch": 6.682,
+    "foldedShare800": 0.234,
+    "medianStretch800": 3.735,
+    "foldedShareOutside2km": 0.461,
+    "medianStretchOutside2km": 7.114,
+    "cellsSkipped": 77503,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.458,
+    "stackedShare": 0.812,
+    "medianStretch": 6.912,
+    "foldedShare800": 0.198,
+    "medianStretch800": 4.033,
+    "foldedShareOutside2km": 0.419,
+    "medianStretchOutside2km": 7.285,
+    "cellsSkipped": 77503,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.454,
+    "stackedShare": 0.844,
+    "medianStretch": 6.328,
+    "foldedShare800": 0.209,
+    "medianStretch800": 3.647,
+    "foldedShareOutside2km": 0.422,
+    "medianStretchOutside2km": 6.683,
+    "cellsSkipped": 77455,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd19",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.417,
+    "stackedShare": 0.702,
+    "medianStretch": 6.34,
+    "foldedShare800": 0.176,
+    "medianStretch800": 3.38,
+    "foldedShareOutside2km": 0.385,
+    "medianStretchOutside2km": 6.633,
+    "cellsSkipped": 77455,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.509,
+    "stackedShare": 1.001,
+    "medianStretch": 6.702,
+    "foldedShare800": 0.23,
+    "medianStretch800": 3.563,
+    "foldedShareOutside2km": 0.47,
+    "medianStretchOutside2km": 7.093,
+    "cellsSkipped": 77350,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "wd19",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.47,
+    "stackedShare": 0.835,
+    "medianStretch": 6.839,
+    "foldedShare800": 0.194,
+    "medianStretch800": 3.411,
+    "foldedShareOutside2km": 0.432,
+    "medianStretchOutside2km": 7.265,
+    "cellsSkipped": 77350,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.426,
+    "stackedShare": 0.808,
+    "medianStretch": 6.465,
+    "foldedShare800": 0.182,
+    "medianStretch800": 3.239,
+    "foldedShareOutside2km": 0.392,
+    "medianStretchOutside2km": 6.831,
+    "cellsSkipped": 77870,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "sa13",
+    "smooth": true,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.382,
+    "stackedShare": 0.648,
+    "medianStretch": 6.301,
+    "foldedShare800": 0.152,
+    "medianStretch800": 3.15,
+    "foldedShareOutside2km": 0.349,
+    "medianStretchOutside2km": 6.631,
+    "cellsSkipped": 77870,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0.5,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.48,
+    "stackedShare": 0.965,
+    "medianStretch": 6.775,
+    "foldedShare800": 0.2,
+    "medianStretch800": 3.231,
+    "foldedShareOutside2km": 0.44,
+    "medianStretchOutside2km": 7.12,
+    "cellsSkipped": 77751,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 7.105427357601002e-15,
+    "radiusSamples": 1000
+   },
+   {
+    "origin": "croydon",
+    "window": "sa13",
+    "smooth": false,
+    "spread": 0,
+    "sources": "mapbox+tables",
+    "notes": [],
+    "foldedShare": 0.433,
+    "stackedShare": 0.774,
+    "medianStretch": 6.823,
+    "foldedShare800": 0.168,
+    "medianStretch800": 3.143,
+    "foldedShareOutside2km": 0.394,
+    "medianStretchOutside2km": 7.201,
+    "cellsSkipped": 77751,
+    "cells": 82176,
+    "passFolded": false,
+    "passStretch": false,
+    "radiusMaxErrMinutes": 1.4210854715202004e-14,
+    "radiusSamples": 1000
+   }
+  ],
+  "seams": [
+   {
+    "origin": "baker-street",
+    "window": "wd08",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.0352924368187448,
+    "p90": 2.016572789367004
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd13",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.0500001907348633,
+    "p90": 2.053810587449412
+   },
+   {
+    "origin": "baker-street",
+    "window": "wd19",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.07438863393811,
+    "p90": 2.0278381889535417
+   },
+   {
+    "origin": "baker-street",
+    "window": "sa13",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.0500001907348633,
+    "p90": 2.0278381889535417
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd08",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.027949593526106,
+    "p90": 2.353777687088364
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd13",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.1226337380346685,
+    "p90": 2.3898611482517857
+   },
+   {
+    "origin": "wembley-park",
+    "window": "wd19",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.0902995234440027,
+    "p90": 2.398278173944693
+   },
+   {
+    "origin": "wembley-park",
+    "window": "sa13",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.0450149866971508,
+    "p90": 2.3898611482517893
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd08",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.0880547588168739,
+    "p90": 2.9009685011158126
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd13",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.1103818569159962,
+    "p90": 3.012635545232392
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "wd19",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.0947992291380508,
+    "p90": 3.012635545232392
+   },
+   {
+    "origin": "canary-wharf",
+    "window": "sa13",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.1370024881577017,
+    "p90": 3.009172619810734
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd08",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.1371208013408705,
+    "p90": 3.6122265985975233
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd13",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.1756819681127268,
+    "p90": 3.6122265985975233
+   },
+   {
+    "origin": "heathrow",
+    "window": "wd19",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.1621000469419016,
+    "p90": 3.7245862718147826
+   },
+   {
+    "origin": "heathrow",
+    "window": "sa13",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.1621000469419016,
+    "p90": 3.7215523285731713
+   },
+   {
+    "origin": "croydon",
+    "window": "wd08",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.1850072718784368,
+    "p90": 2.1057146773712674
+   },
+   {
+    "origin": "croydon",
+    "window": "wd13",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.0375000151467582,
+    "p90": 2.0679151130067197
+   },
+   {
+    "origin": "croydon",
+    "window": "wd19",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.1363142353401692,
+    "p90": 2.1400295856321527
+   },
+   {
+    "origin": "croydon",
+    "window": "sa13",
+    "sources": "mapbox+tables",
+    "measures": "near-field seam",
+    "bearings": 360,
+    "median": 1.1667269608129445,
+    "p90": 2.1178227346139025
+   }
+  ],
+  "wembley": [
+   {
+    "window": "wd08",
+    "fieldMinutes": 20.9,
+    "stationRowMinutes": 20,
+    "sources": "mapbox+tables"
+   },
+   {
+    "window": "wd13",
+    "fieldMinutes": 19.9,
+    "stationRowMinutes": 19,
+    "sources": "mapbox+tables"
+   },
+   {
+    "window": "wd19",
+    "fieldMinutes": 19.9,
+    "stationRowMinutes": 19,
+    "sources": "mapbox+tables"
+   },
+   {
+    "window": "sa13",
+    "fieldMinutes": 19.9,
+    "stationRowMinutes": 19,
+    "sources": "mapbox+tables"
+   }
+  ],
+  "summary": {
+   "byReachPassesEverywhere": false,
+   "compassPassesEverywhere": false
+  }
+ },
+ "selftest_backend_b_real_tiles_transit_wd08": {
+  "baker-street": {
+   "origin": "baker-street",
+   "G1maxPx": 0.0006,
+   "G2": true,
+   "G3maxPx": 0.062,
+   "G3drawn": 1000,
+   "G4phone": 1,
+   "G4desktop": 1,
+   "G4pass": true,
+   "G5pass": true,
+   "G5skipped": 26,
+   "refined": 53047,
+   "skipped": 0,
+   "shaded": 4665805,
+   "dropped": {
+    "secondary": 64,
+    "park": 4814
+   },
+   "tiles": 30,
+   "missing": 0
+  },
+  "wembley-park": {
+   "origin": "wembley-park",
+   "G1maxPx": 0.0016,
+   "G2": true,
+   "G3maxPx": 0.06,
+   "G3drawn": 1000,
+   "G4phone": 1,
+   "G4desktop": 1,
+   "G4pass": true,
+   "G5pass": true,
+   "G5skipped": 21,
+   "refined": 63512,
+   "skipped": 0,
+   "shaded": 3061773,
+   "dropped": {},
+   "tiles": 44,
+   "missing": 0
+  },
+  "canary-wharf": {
+   "origin": "canary-wharf",
+   "G1maxPx": 0.0016,
+   "G2": true,
+   "G3maxPx": 0.06,
+   "G3drawn": 1000,
+   "G4phone": 1,
+   "G4desktop": 1,
+   "G4pass": true,
+   "G5pass": true,
+   "G5skipped": 16,
+   "refined": 70720,
+   "skipped": 0,
+   "shaded": 4680750,
+   "dropped": {
+    "secondary": 41,
+    "park": 4460
+   },
+   "tiles": 39,
+   "missing": 0
+  },
+  "heathrow": {
+   "origin": "heathrow",
+   "G1maxPx": 0.003,
+   "G2": true,
+   "G3maxPx": 0.06,
+   "G3drawn": 1000,
+   "G4phone": 1,
+   "G4desktop": 0.9973,
+   "G4pass": true,
+   "G5pass": true,
+   "G5skipped": 7,
+   "refined": 51867,
+   "skipped": 0,
+   "shaded": 1639591,
+   "dropped": {},
+   "tiles": 23,
+   "missing": 0
+  },
+  "croydon": {
+   "origin": "croydon",
+   "G1maxPx": 0.002,
+   "G2": true,
+   "G3maxPx": 0.061,
+   "G3drawn": 1000,
+   "G4phone": 1,
+   "G4desktop": 1,
+   "G4pass": true,
+   "G5pass": true,
+   "G5skipped": 7,
+   "refined": 101996,
+   "skipped": 0,
+   "shaded": 3697898,
+   "dropped": {},
+   "tiles": 47,
+   "missing": 0
+  }
+ },
+ "selftest_backend_c_real_tiles_baker_street": {
+  "backend": "c",
+  "G1maxPx": 0.0001,
+  "G3maxPx": 0.062,
+  "G4phone": 1,
+  "G4desktop": 1,
+  "G5pass": true
+ },
+ "tfl_journeys_wd08": {
+  "note": "field value at the destination station (bilinear at the station's position) from a pin at the start station; 'no endings' is the walkshed composition alone, before the table-point and station endings",
+  "baker-street_to_wembley-park": {
+   "tfl": 13.0,
+   "tfl_source": "Journey Planner 940GZZLUBST to 940GZZLUWYP, six departures 08:00-08:50, median",
+   "table_row": 20,
+   "field": 20.9,
+   "no_endings": 22.7
+  },
+  "paddington_to_heathrow-t2-3": {
+   "tfl": 20.0,
+   "tfl_source": "T-01 gonogo.md (910GPADTON to 910GHTRWAPT)",
+   "table_row": 24,
+   "field": 25.1,
+   "no_endings": 28.7
+  },
+  "london-bridge_to_east-croydon": {
+   "tfl": 16.0,
+   "tfl_source": "T-01 gonogo.md (910GLNDNBDC to 910GECROYDN)",
+   "table_row": 18,
+   "field": 19.1,
+   "no_endings": 20.0
+  },
+  "tfl_minutes_wembley": [
+   13,
+   14,
+   14,
+   13,
+   13,
+   13
+  ],
+  "accepted_line_minutes": 8,
+  "issue_line_minutes": 3
+ },
+ "warp_page_real_tiles": {
+  "walking_kings_cross": {
+   "pans_normal": {
+    "n": 50,
+    "p50_ms": 14,
+    "p95_ms": 21,
+    "api_requests": 0
+   },
+   "pans_bent": {
+    "n": 50,
+    "p50_ms": 16,
+    "p95_ms": 22,
+    "api_requests": 0,
+    "maplibre_streets_tiles_while_bent": 0
+   },
+   "new_pin_normal_bands": {
+    "n": 8,
+    "p50_ms": 583,
+    "max_ms": 658,
+    "includes": "two live isochrone calls, the server build, decode, worker contouring"
+   },
+   "first_bend_ms": 2542,
+   "first_bend_includes": "scene (19 tiles, cold) and band layer, then the 300 ms fade and 1.8 s morph",
+   "new_pin_while_bent": {
+    "n": 6,
+    "p50_ms": 838,
+    "max_ms": 911,
+    "includes": "field, scene and band layer; swapped in place, already bent"
+   }
+  },
+  "transit_baker_street_polar_1": {
+   "first_bend_ms_cold_tiles": 6667,
+   "first_bend_ms": 4206,
+   "scene_ms": 2062,
+   "layers_ms": 903,
+   "scene": {
+    "tiles": 30,
+    "tile_bytes": 3760645,
+    "shaded": 4769247,
+    "refined": 86810,
+    "pack_ms": 664,
+    "tess_ms": 451
+   },
+   "band_layer_refined_vertices": 224215,
+   "taps_on_folds": [
+    9,
+    17,
+    5,
+    0,
+    10
+   ]
+  }
+ },
+ "squash_trial": {
+  "note": "code at 3c4a2f6 + e54f1ad; transit, weekday 08-09, by reach (spread 0.5), T = 45; shares of the places within T minutes (true minutes, filled ground left out), drawn where each layout puts them (static/shared/mesh/diagnostics.js layoutChecks). Not Direction 4's metric.",
+  "layout_checks": [
+   {
+    "origin": "baker-street",
+    "fold": {
+     "T": 45,
+     "cells": 6039,
+     "overlap": 0.564,
+     "stretch": 5.557,
+     "omitted": 0,
+     "outside": 0,
+     "slowInside": 0,
+     "direction4_folded": 0.52,
+     "direction4_stretch": 5.504
+    },
+    "squash": {
+     "T": 45,
+     "cells": 6039,
+     "overlap": 0.014,
+     "stretch": 3.657,
+     "omitted": 0.01,
+     "outside": 0.364,
+     "slowInside": 0.01,
+     "reach": 252.526,
+     "frame": 74.582,
+     "build_ms": 175
+    }
+   },
+   {
+    "origin": "wembley-park",
+    "fold": {
+     "T": 45,
+     "cells": 3905,
+     "overlap": 0.485,
+     "stretch": 4.608,
+     "omitted": 0,
+     "outside": 0,
+     "slowInside": 0,
+     "direction4_folded": 0.435,
+     "direction4_stretch": 4.579
+    },
+    "squash": {
+     "T": 45,
+     "cells": 3905,
+     "overlap": 0.013,
+     "stretch": 3.821,
+     "omitted": 0.01,
+     "outside": 0.201,
+     "slowInside": 0.01,
+     "reach": 208.839,
+     "frame": 73.378,
+     "build_ms": 160
+    }
+   },
+   {
+    "origin": "canary-wharf",
+    "fold": {
+     "T": 45,
+     "cells": 6257,
+     "overlap": 0.641,
+     "stretch": 5.734,
+     "omitted": 0,
+     "outside": 0,
+     "slowInside": 0,
+     "direction4_folded": 0.572,
+     "direction4_stretch": 5.678
+    },
+    "squash": {
+     "T": 45,
+     "cells": 6257,
+     "overlap": 0.014,
+     "stretch": 3.532,
+     "omitted": 0.009,
+     "outside": 0.293,
+     "slowInside": 0.009,
+     "reach": 278.614,
+     "frame": 103.259,
+     "build_ms": 138
+    }
+   },
+   {
+    "origin": "heathrow",
+    "fold": {
+     "T": 45,
+     "cells": 1701,
+     "overlap": 0.606,
+     "stretch": 5.295,
+     "omitted": 0,
+     "outside": 0,
+     "slowInside": 0,
+     "direction4_folded": 0.364,
+     "direction4_stretch": 5.316
+    },
+    "squash": {
+     "T": 45,
+     "cells": 1701,
+     "overlap": 0.007,
+     "stretch": 4.69,
+     "omitted": 0.009,
+     "outside": 0.733,
+     "slowInside": 0.06,
+     "reach": 697.617,
+     "frame": 240.462,
+     "build_ms": 163
+    }
+   },
+   {
+    "origin": "croydon",
+    "fold": {
+     "T": 45,
+     "cells": 4573,
+     "overlap": 0.495,
+     "stretch": 6.314,
+     "omitted": 0,
+     "outside": 0,
+     "slowInside": 0,
+     "direction4_folded": 0.439,
+     "direction4_stretch": 6.32
+    },
+    "squash": {
+     "T": 45,
+     "cells": 4573,
+     "overlap": 0.022,
+     "stretch": 3.996,
+     "omitted": 0.011,
+     "outside": 0.572,
+     "slowInside": 0.007,
+     "reach": 333.829,
+     "frame": 95.198,
+     "build_ms": 182
+    }
+   }
+  ],
+  "lab_gates_real_tiles_backend_b": {
+   "baker-street": {
+    "origin": "baker-street",
+    "G1maxPx": 0.0004,
+    "G2": true,
+    "G3maxPx": 0.061,
+    "G3drawn": 1000,
+    "G4phone": 1,
+    "G4desktop": 0.9993,
+    "G4pass": true,
+    "G5pass": true,
+    "G5failed": [],
+    "refined": 16232,
+    "skipped": 0,
+    "shaded": 4525432
+   },
+   "wembley-park": {
+    "origin": "wembley-park",
+    "G1maxPx": 0.0008,
+    "G2": true,
+    "G3maxPx": 0.061,
+    "G3drawn": 1000,
+    "G4phone": 1,
+    "G4desktop": 1,
+    "G4pass": true,
+    "G5pass": true,
+    "G5failed": [],
+    "refined": 47721,
+    "skipped": 0,
+    "shaded": 3231487
+   },
+   "canary-wharf": {
+    "origin": "canary-wharf",
+    "G1maxPx": 0.0008,
+    "G2": true,
+    "G3maxPx": 0.061,
+    "G3drawn": 1000,
+    "G4phone": 1,
+    "G4desktop": 0.9997,
+    "G4pass": true,
+    "G5pass": true,
+    "G5failed": [],
+    "refined": 30220,
+    "skipped": 0,
+    "shaded": 3699299
+   },
+   "heathrow": {
+    "origin": "heathrow",
+    "G1maxPx": 0.0036,
+    "G2": true,
+    "G3maxPx": 0.06,
+    "G3drawn": 1000,
+    "G4phone": 1,
+    "G4desktop": 0.9993,
+    "G4pass": true,
+    "G5pass": true,
+    "G5failed": [],
+    "refined": 54153,
+    "skipped": 0,
+    "shaded": 3509219
+   },
+   "croydon": {
+    "origin": "croydon",
+    "G1maxPx": 0.0013,
+    "G2": true,
+    "G3maxPx": 0.059,
+    "G3drawn": 1000,
+    "G4phone": 1,
+    "G4desktop": 1,
+    "G4pass": true,
+    "G5pass": true,
+    "G5failed": [],
+    "refined": 35554,
+    "skipped": 0,
+    "shaded": 4071337
+   }
+  },
+  "timing_baker_street_warm_ms": {
+   "switch_to_squash": 1410,
+   "new_pin_while_bent_squash": [
+    1419,
+    1472
+   ],
+   "switch_to_fold": [
+    688,
+    743
+   ]
+  }
+ },
+ "uncertain_checks": {
+  "kind": "uncertain-checks",
+  "at": "2026-11-15T01:14:10.954Z",
+  "note": "Uncertain patches on live fields (server/warp/field.py, single-node slivers included) and enclosedFade before (the field's own minutes) and after (the geometry field the fold bends by). Counts only: patch locations are not stored.",
+  "results": [
+   {
+    "origin": "kings-cross",
+    "mode": "walking",
+    "cell": 100,
+    "nodes": 10,
+    "noData": 2,
+    "patches": 8,
+    "largestRise": 43.9,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 2,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 4,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 1,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "kings-cross",
+    "mode": "cycling",
+    "cell": 200,
+    "nodes": 344,
+    "noData": 275,
+    "patches": 160,
+    "largestRise": 36.9,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 1,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 27,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 105,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 270,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "kings-cross",
+    "mode": "driving",
+    "cell": 400,
+    "nodes": 20,
+    "noData": 18,
+    "patches": 14,
+    "largestRise": 9.6,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 4,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 11,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "baker-street",
+    "mode": "walking",
+    "cell": 100,
+    "nodes": 23,
+    "noData": 10,
+    "patches": 14,
+    "largestRise": 28.3,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 5,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 9,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 9,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "baker-street",
+    "mode": "cycling",
+    "cell": 200,
+    "nodes": 331,
+    "noData": 271,
+    "patches": 155,
+    "largestRise": 38.5,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 43,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 107,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 266,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "baker-street",
+    "mode": "driving",
+    "cell": 400,
+    "nodes": 86,
+    "noData": 69,
+    "patches": 38,
+    "largestRise": 14.2,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 1,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 67,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "wembley-park",
+    "mode": "walking",
+    "cell": 100,
+    "nodes": 68,
+    "noData": 42,
+    "patches": 43,
+    "largestRise": 42.1,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 4,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 12,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 38,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "wembley-park",
+    "mode": "cycling",
+    "cell": 200,
+    "nodes": 793,
+    "noData": 724,
+    "patches": 209,
+    "largestRise": 39.3,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 59,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 107,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 717,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "wembley-park",
+    "mode": "driving",
+    "cell": 400,
+    "nodes": 286,
+    "noData": 220,
+    "patches": 130,
+    "largestRise": 24.2,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 15,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 208,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "canary-wharf",
+    "mode": "walking",
+    "cell": 100,
+    "nodes": 6,
+    "noData": 5,
+    "patches": 5,
+    "largestRise": 17.8,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 2,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 5,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "canary-wharf",
+    "mode": "cycling",
+    "cell": 200,
+    "nodes": 184,
+    "noData": 155,
+    "patches": 95,
+    "largestRise": 45,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 1,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 49,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 149,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "canary-wharf",
+    "mode": "driving",
+    "cell": 400,
+    "nodes": 383,
+    "noData": 292,
+    "patches": 161,
+    "largestRise": 29.8,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 8,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 287,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "heathrow",
+    "mode": "walking",
+    "cell": 100,
+    "nodes": 0,
+    "noData": 0,
+    "patches": 0,
+    "largestRise": 0,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 0,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "heathrow",
+    "mode": "cycling",
+    "cell": 200,
+    "nodes": 1251,
+    "noData": 1151,
+    "patches": 227,
+    "largestRise": 29.8,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 42,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 327,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 1139,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "heathrow",
+    "mode": "driving",
+    "cell": 400,
+    "nodes": 699,
+    "noData": 540,
+    "patches": 260,
+    "largestRise": 30.1,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 33,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 95,
+      "after": 2
+     },
+     {
+      "ring": 60,
+      "before": 527,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "croydon",
+    "mode": "walking",
+    "cell": 100,
+    "nodes": 30,
+    "noData": 18,
+    "patches": 24,
+    "largestRise": 35.6,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 2,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 5,
+      "after": 1
+     },
+     {
+      "ring": 60,
+      "before": 18,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "croydon",
+    "mode": "cycling",
+    "cell": 200,
+    "nodes": 783,
+    "noData": 701,
+    "patches": 255,
+    "largestRise": 30.4,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 39,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 142,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 691,
+      "after": 0
+     }
+    ]
+   },
+   {
+    "origin": "croydon",
+    "mode": "driving",
+    "cell": 400,
+    "nodes": 159,
+    "noData": 115,
+    "patches": 78,
+    "largestRise": 26.4,
+    "radiusErr": 0,
+    "fade": [
+     {
+      "ring": 15,
+      "before": 0,
+      "after": 0
+     },
+     {
+      "ring": 30,
+      "before": 1,
+      "after": 0
+     },
+     {
+      "ring": 45,
+      "before": 17,
+      "after": 0
+     },
+     {
+      "ring": 60,
+      "before": 107,
+      "after": 0
+     }
+    ]
+   }
+  ]
+ },
+ "selftest_backend_b_real_tiles_walking_kings_cross_patches": {
+  "at": "2026-11-15T00:14:23.181Z",
+  "field": "contours",
+  "geom": "tiles",
+  "backend": "b",
+  "gates": {
+   "G1_parity": {
+    "pass": true,
+    "maxPx": 0.0005
+   },
+   "G2_registration": {
+    "pass": true,
+    "maxPx": 0
+   },
+   "G3_radius": {
+    "pass": true,
+    "radiusMaxPx": 0.028,
+    "samples": 1000
+   },
+   "G4_chord": {
+    "pass": true
+   },
+   "G5_width": {
+    "pass": true
+   }
+  }
+ }
+}

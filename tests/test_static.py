@@ -71,6 +71,14 @@ def test_warp_attribution_is_outside_the_hidden_map():
     assert "attributionControl: false" in (ROOT / "warp/app.js").read_text()
 
 
+def test_warp_hidden_controls_stay_hidden():
+    # The page hides controls with the hidden attribute (the Bend button where bending isn't
+    # offered, the trial layout chips without ?layouts=1). Class rules such as .btn's and
+    # .chips' display would show them anyway, so hidden must win on this page.
+    css = (ROOT / "warp/style.css").read_text()
+    assert re.search(r"(^|\n)\[hidden\]\s*{\s*display:\s*none\s*!important;?\s*}", css)
+
+
 def test_logo_is_plain_svg():
     svg = (ROOT / "icons/mapbox-logo.svg").read_text()
     assert svg.lstrip().startswith("<?xml") and "<svg" in svg
@@ -107,9 +115,12 @@ def test_warp_has_choices_not_parameters():
     assert 'id="times"' not in html and 'type="range"' not in html
     assert 'id="loading"' not in html
     js = (ROOT / "warp/app.js").read_text()
-    assert "getExtension" not in js           # never relies on float-texture filtering
-    assert "texelFetch" in js
+    assert "getExtension" not in js
     assert "alert(" not in js
+    # The page bends through the shared mesh renderer, which reads its float textures with
+    # texelFetch and never asks for float-texture filtering.
+    assert '"/shared/mesh/renderer.js"' in js
+    assert "texelFetch" in (ROOT / "shared/mesh/warp.js").read_text()
 
 
 # Words a first-time visitor shouldn't have to know.
@@ -131,7 +142,7 @@ def test_no_jargon_in_page_text(page):
         assert not JARGON.search(chunk), JARGON.search(chunk).group(0)
 
 
-@pytest.mark.parametrize("page", ["meetup/app.js", "meetup/words.js", "warp/app.js", "warp/warpmath.js",
+@pytest.mark.parametrize("page", ["meetup/app.js", "meetup/words.js", "warp/app.js", "warp/words.js", "warp/views.js",
                                   "shared/api.js"])
 def test_no_jargon_in_ui_strings(page):
     js = (ROOT / page).read_text()

@@ -6,35 +6,28 @@ Run this against a server that has a real Mapbox routing token and the Mapbox ro
     uvicorn server.app:app --port 8000          # in one terminal, with .env set
     python scripts/make_examples.py http://localhost:8000
 
-It makes one Isochrone request and one solve (a few hundred Matrix elements), then writes
-static/warp/example.json and static/meetup/example.json. Re-run it whenever the warp maths
-or the response shapes change. --out-dir writes somewhere else (for trying things out).
+It makes two Isochrone requests (the walking field) and one solve (a few hundred Matrix
+elements), then writes static/warp/example-field.json and static/meetup/example.json. Re-run
+it whenever the field or the response shapes change. --out-dir writes somewhere else.
+
 """
 from __future__ import annotations
 
 import argparse
 import json
-import math
 import sys
 from pathlib import Path
 
 import httpx
+import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from server.meetup.models import SolveResponse  # noqa: E402
 
-LUT_SIZE = 2048
-
-# The warp example: King's Cross, walking. Must match RING_TIMES and REF_ZOOM in
-# static/warp/warpmath.js.
-WARP = {
-    "origin": {"lon": -0.1233, "lat": 51.5308, "label": "King's Cross"},
-    "profile": "walking",
-    "ref_zoom": 14,
-    "travel_times": [5, 10, 15, 20],
-}
+# The warp example: King's Cross, walking.
+WARP = {"origin": {"lon": -0.1233, "lat": 51.5308, "label": "King's Cross"}, "mode": "walking"}
 
 # The meetup example: three friends at well-known places (not anybody's home), spread
 # around the centre so the fairest place sits visibly between them.
@@ -49,30 +42,27 @@ MEETUP = {
 
 
 def check_warp(ex: dict) -> None:
-    minutes = ex["contour_minutes"]
-    assert 1 <= len(minutes) <= 4 and all(isinstance(m, int) and 1 <= m <= 60 for m in minutes), minutes
-    rows = ex["source_radii"]
-    assert len(rows) == len(minutes)
-    for row in rows:
-        assert len(row) == LUT_SIZE and all(math.isfinite(v) and v >= 0 for v in row)
+    from server.warp.field import decode, decode_uncertain
+    assert ex["mode"] == "walking" and ex["origin"]["label"]
+    minutes, _ = decode(ex["minutes_b64"], (ex["ny"], ex["nx"]))
+    patch, drawn = decode_uncertain(ex.get("uncertain"), minutes.shape)
+    j, i = round(-ex["y0"] / ex["cell"]), round(-ex["x0"] / ex["cell"])
+    assert minutes[j, i] == 0, "the pin is not at 0 minutes"
+    # The page opens on it at the walking default (30 minutes): it must reach that far.
+    assert np.nanmax(minutes[np.isfinite(minutes)]) >= 30
+    # King's Cross's platforms, 200 and 300 m north of the pin: an uncertain patch, drawn
+    # between the station and the streets beyond (the bent map's wedge of 2026-11).
+    for step in (2, 3):
+        assert patch[j - step, i], f"the node {step * 100} m north of the pin is not an uncertain patch"
+        assert drawn[j - step, i] < 15, "the platforms are drawn far out"
 
 
 def make_warp(client: httpx.Client) -> dict:
     o = WARP["origin"]
-    resp = client.post("/api/warp-params", json={
-        "longitude": o["lon"], "latitude": o["lat"], "zoom": WARP["ref_zoom"],
-        "width": 1024, "height": 1024, "profile": WARP["profile"],
-        "travel_times": WARP["travel_times"],
-    })
+    resp = client.post("/api/travel-time-field", json={"longitude": o["lon"], "latitude": o["lat"], "mode": WARP["mode"]})
     resp.raise_for_status()
-    body = resp.json()
-    ex = {
-        "origin": o,
-        "profile": WARP["profile"],
-        "ref_zoom": WARP["ref_zoom"],
-        "contour_minutes": [int(m) for m in body["contour_minutes"]],
-        "source_radii": [[round(v, 1) for v in row] for row in body["source_radii"]],
-    }
+    ex = resp.json()
+    ex["origin"] = {**ex["origin"], "label": o["label"]}
     check_warp(ex)
     return ex
 
@@ -94,20 +84,23 @@ def make_meetup(client: httpx.Client) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("base_url")
+    parser.add_argument("base_url", nargs="?")
     parser.add_argument("--out-dir", type=Path, default=ROOT / "static")
     parser.add_argument("--only", choices=["warp", "meetup"], help="make just one of the two")
     args = parser.parse_args()
 
     made = {}
-    with httpx.Client(base_url=args.base_url, timeout=120) as client:
-        if args.only in (None, "warp"):
-            made["warp"] = make_warp(client)
-        if args.only in (None, "meetup"):
-            made["meetup"] = make_meetup(client)
+    if not args.base_url:
+        parser.error("give a server URL")
+    else:
+        with httpx.Client(base_url=args.base_url, timeout=120) as client:
+            if args.only in (None, "warp"):
+                made["warp"] = make_warp(client)
+            if args.only in (None, "meetup"):
+                made["meetup"] = make_meetup(client)
 
     for sub, data in made.items():
-        path = args.out_dir / sub / "example.json"
+        path = args.out_dir / sub / ("example-field.json" if sub == "warp" else "example.json")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, separators=(",", ":")) + "\n")
         print(f"wrote {path} ({path.stat().st_size // 1024} KB)")

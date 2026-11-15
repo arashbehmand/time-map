@@ -56,7 +56,8 @@ DEFAULT_IN_FLIGHT = {"matrix": 3, "isochrone": 6, "tiles": 16, "glyphs": 8, "geo
 DEFAULT_PER_IP = {
     "solve": 6,
     "isochrones": 20,
-    "warp_params": 30,
+    "travel_time_field": 20,
+    "transit_status": 60,
     "geocode": 10,
     "tiles": 400,
     "glyphs": 300,
@@ -89,6 +90,13 @@ class Settings:
     geocoder_user_agent: str = "time-map/1.0 (+https://github.com/arashbehmand/time-map)"
     geocode_spacing_s: float = 1.1
     geocode_max_waiting: int = 5
+    # London transit tables (server/transit/provider.py): a build directory of transit/out.
+    # Served only if its manifest has licences_cleared; TRANSIT_ALLOW_UNCLEARED=1 serves an
+    # uncleared build for local development, and is refused on Railway.
+    transit_dir: str = ""
+    transit_allow_uncleared: bool = False
+    transit_block_startup: bool = False   # tests: load before the app answers
+    max_concurrent_fields: int = 2
 
     def daily(self, api: str) -> int:
         if api in self.daily_budget:
@@ -127,4 +135,6 @@ class Settings:
             client_daily_share=_float("CLIENT_DAILY_SHARE", 0.25),
             geocoder_user_agent=os.environ.get("GEOCODER_USER_AGENT", "").strip()
             or cls.geocoder_user_agent,
+            transit_dir=os.environ.get("TRANSIT_DIR", "").strip(),
+            transit_allow_uncleared=os.environ.get("TRANSIT_ALLOW_UNCLEARED", "").strip() == "1",
         )

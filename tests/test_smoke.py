@@ -13,10 +13,14 @@ def test_isochrones(client):
     assert [f["properties"]["contour"] for f in resp.json()["features"]] == [10, 20]
 
 
-def test_warp_params(client):
-    resp = client.post("/api/warp-params", json={"longitude": -0.12, "latitude": 51.5})
+def test_travel_time_field(client):
+    resp = client.post("/api/travel-time-field", json={"longitude": -0.12, "latitude": 51.5})
     assert resp.status_code == 200, resp.text
-    assert resp.json()["k"] == 4
+    assert resp.json()["mode"] == "walking"
+
+
+def test_warp_params_is_gone(client):
+    assert client.post("/api/warp-params", json={"longitude": -0.12, "latitude": 51.5}).status_code == 404
 
 
 def test_solve_euclidean(client):

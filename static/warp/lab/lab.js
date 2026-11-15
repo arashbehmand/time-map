@@ -3,15 +3,23 @@
 // Query switches: origin, field, backend=b|c|a, geom=synthetic|tiles (tiles spends the tile
 // budget), spacing, max, caps=no-vtf|no-r32f|no-webgl2, folds=1, census=1, selftest=1, bench=1,
 // spread=0..1 (directions by reach, default 0.5), style=plain, network=0, budget.
+// field=real takes the warp page's own field from the server (mode=transit|walking|cycling|
+// driving, window=wd08|wd13|wd19|sa13, smooth=0|1), for every test origin; with it,
+// __lab.directionChecks() reports Direction 4 of #5 (W-02) on real fields; __lab.uncertainChecks()
+// the uncertain patches the server found and the bent map's wedges (enclosedFade), by mode.
 import { tileCover } from "../../shared/mesh/cover.js";
-import { cameraFromMap, WORLD_PX } from "../../shared/mesh/frame.js";
-import { sampleField } from "../../shared/mesh/field.js";
+import { fitFor, reachBox } from "../../shared/mesh/fit.js";
+import { cameraFromMap, localFrame, WORLD_PX } from "../../shared/mesh/frame.js";
+import { decodeField, geometryField, knownMinutes, sampleField } from "../../shared/mesh/field.js";
+import { directionFour, enclosedFade, ringRadius } from "../../shared/mesh/diagnostics.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "../../shared/mesh/labels.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "../../shared/mesh/pipeline.js";
+import { MAX_DEPTH } from "../../shared/mesh/refine.js";
+import { squashLayout } from "../../shared/mesh/layouts.js";
 import { createMeshRenderer } from "../../shared/mesh/renderer.js";
 import { maplibreStyle } from "../../shared/mesh/schema-streets-v8.js";
 import { angularSpread, createWarp, dotScale, targetsFor } from "../../shared/mesh/warp.js";
-import { FIELD_HALF, GRID_FIELDS, makeWarpSpec, POLAR_FIELDS } from "./fields.js";
+import { GRID_FIELDS, makeWarpSpec, POLAR_FIELDS } from "./fields.js";
 
 const Q = new URLSearchParams(location.search);
 const OPT = {
@@ -33,11 +41,17 @@ const OPT = {
   // direction the share of the circle it holds of the area reachable on each ring; the
   // default, 0.5, goes halfway.
   spread: Q.has("spread") ? Math.min(1, Math.max(0, Number(Q.get("spread")) || 0)) : 0.5,
+  layout: Q.get("layout") === "squash" ? "squash" : "fold",   // squash: the warp page's trial layout
   budget: Number(Q.get("budget")) || DEFAULT_BUDGET,
+  mode: Q.get("mode") || "transit",
+  window: Q.get("window") || "wd08",
+  smooth: Q.get("smooth") !== "0",
+  // Refine the mesh where the field bends it (refine.js), as the warp page does; ?refine=0 off.
+  refine: Q.get("refine") !== "0",
+  refineDepth: Number(Q.get("refineDepth")) || MAX_DEPTH,
 };
 const MORPH_MS = 1800;
 const RING_FROM_U = 0.9;          // the time rings fade in over the last tenth of the morph
-const REACH_MARGIN_M = 1000;      // tiles beyond the outer minute, for the fade-out
 const MISSING_RETRY_MS = 5000;
 const RESULTS_KEY = "timemap-mesh-lab-results";
 const $ = (id) => document.getElementById(id);
@@ -82,43 +96,22 @@ function camera() {
   return cam;
 }
 
-function reachable(spec, maxMinutes, fn) {
-  const f = spec.field;
-  for (let j = 0; j < f.ny; j += 2) for (let i = 0; i < f.nx; i += 2) {
-    const t = f.minutes[j * f.nx + i];
-    if (t >= 0 && t <= maxMinutes) fn(f.x0 + i * f.cell, f.y0 + j * f.cell);
-  }
-}
-
-// The zoom that puts most of the reachable area (90th percentile distance) on screen.
-export function fitFor(spec, frame, width, height, maxMinutes) {
-  let R = 12000;
-  if (spec.kind === "polar") {
-    const d = [];
-    reachable(spec, maxMinutes, (x, y) => d.push(Math.hypot(x, y)));
-    d.sort((a, b) => a - b);
-    if (d.length) R = Math.max(500, d[Math.floor(d.length * 0.9)]);
-  }
-  const short = Math.min(width, height);
-  const ppm = (0.45 * short) / R;
-  const zoom = Math.log2((ppm * frame.m) / WORLD_PX);
-  return { zoom, k: (0.42 * short) / maxMinutes };
-}
-
-// The tiles only need to cover what is reachable (plus a margin for the fade-out), not the
-// whole field: a 45-minute walk needs a few kilometres, not ±25 km.
-export function reachBox(spec, maxMinutes) {
-  if (spec.kind !== "polar") return [-FIELD_HALF, -FIELD_HALF, FIELD_HALF, FIELD_HALF];
-  let x0 = 0, y0 = 0, x1 = 0, y1 = 0;
-  reachable(spec, maxMinutes, (x, y) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); });
-  const m = REACH_MARGIN_M;
-  return [Math.max(-FIELD_HALF, x0 - m), Math.max(-FIELD_HALF, y0 - m), Math.min(FIELD_HALF, x1 + m), Math.min(FIELD_HALF, y1 + m)];
-}
+// fitFor and reachBox live in the shared mesh now (the warp page frames its views with them).
+export { fitFor, reachBox };
 
 // ── Scene requests ───────────────────────────────────────────────────
 function needsCpuTargets() {
   // C and A need per-vertex placements from the worker; B evaluates them on the GPU.
   return !(OPT.backend === "b" && S.renderer && S.renderer.mode === "gpu");
+}
+
+// Half a pixel at the largest px per minute the self-test draws (the desktop reference view,
+// outer ring at 0.42 of its 900 px short side), as the warp page's views.refineEps.
+function refineFor(spec) {
+  if (spec.kind !== "polar") return null;
+  const max = spec.maxMinutes ?? OPT.max, f = spec.field;
+  return { field: { origin: f.origin, cell: f.cell, nx: f.nx, ny: f.ny, x0: f.x0, y0: f.y0, minutes: f.minutes },
+           maxMinutes: max, eps: 0.5 / ((0.42 * 900) / max), maxDepth: OPT.refineDepth, angles: spec.angles || null };
 }
 
 function requestScene(view = S.pending || S, { clear = false } = {}) {
@@ -131,6 +124,7 @@ function requestScene(view = S.pending || S, { clear = false } = {}) {
     spacingDiv: OPT.spacing, budget: OPT.budget, source: OPT.geom,
     syntheticUrl: new URL("./synthetic-tiles.js", import.meta.url).href, network: S.network,
     warp: needsCpuTargets() ? view.spec : null,
+    refine: OPT.refine ? refineFor(view.spec) : null,
   });
   return S.gen;
 }
@@ -170,7 +164,7 @@ function onWorker(e) {
   const upload = S.deck ? S.deck.setScene(msg.scene) : S.renderer.setScene ? S.renderer.setScene(msg.scene) : 0;
   S.scene = msg.scene;
   S.sceneInfo = { ...msg.scene.stats, uploadMs: upload + warpMs, roundTripMs: t0 - S.requestedAt };
-  S.labels = sortCandidates(msg.scene.labels, S.spec.kind === "polar" ? (x, y) => sampleField(S.spec.field, x, y) : null);
+  S.labels = sortCandidates(msg.scene.labels, S.spec.kind === "polar" ? (x, y) => knownMinutes(S.spec.field, x, y) : null);
   S.dirty = true;
   if (OPT.folds) buildFoldLayer();
   if (!msg.partial) {
@@ -197,8 +191,12 @@ function originById(id) {
 // switches when that scene arrives (activate), so nothing is drawn with mismatched origins.
 function setOrigin(id, { frame: reframe = true, clear = false } = {}) {
   const origin = originById(id);
-  const spec = makeWarpSpec(OPT.field, origin, S.network, { example: S.example, maxMinutes: OPT.max });
-  if (spec.kind === "polar" && OPT.spread > 0) spec.angles = angularSpread(spec.field, spec.maxMinutes ?? OPT.max, { spread: OPT.spread });
+  let spec = makeWarpSpec(OPT.field, origin, S.network, { example: S.example, maxMinutes: OPT.max, real: S.real });
+  if (spec.kind === "polar" && OPT.layout === "squash") {
+    // The page's squash (ground scale, by-reach table on R): the gates then check the renderer
+    // against squash's own radius, out to its reach.
+    spec = { ...squashLayout(spec.source || spec.field, spec.maxMinutes ?? OPT.max, { spread: OPT.spread, scale: "ground" }).spec };
+  } else if (spec.kind === "polar" && OPT.spread > 0) spec.angles = angularSpread(spec.field, spec.maxMinutes ?? OPT.max, { spread: OPT.spread });
   const warp = createWarp(spec);
   const el = S.map.getContainer();
   const max = spec.maxMinutes ?? OPT.max;
@@ -270,7 +268,7 @@ function placeLabelsNow(cam) {
   S.placed = placeLabels(S.labels, {
     screenOf, measure,
     jacobianOf: (x, y) => S.warp.screenJacobian(x, y, cam, u),
-    minutesOf: S.spec.kind === "polar" ? (x, y) => sampleField(S.spec.field, x, y) : null,
+    minutesOf: S.spec.kind === "polar" ? (x, y) => knownMinutes(S.spec.field, x, y) : null,
     width: cam.width, height: cam.height, cap: phone ? LABEL_CAP.phone : LABEL_CAP.desktop,
     obstacles: [[cam.pin[0] - PIN_R, cam.pin[1] - PIN_R, cam.pin[0] + PIN_R, cam.pin[1] + PIN_R]],
   });
@@ -541,12 +539,12 @@ function meshMissing(kind) {
   return r;
 }
 
-async function runSelfTestNow() {
+async function runSelfTestNow(opts) {
   const missing = meshMissing("selftest");
   if (missing) return missing;
   out("Running the self-test…");
   const { runSelfTest } = await import("./selftest.js");
-  const r = await runSelfTest(labApi);
+  const r = await runSelfTest(labApi, opts);
   storeResult("selftest", r);
   out(JSON.stringify(r, null, 1));
   return r;
@@ -571,11 +569,161 @@ async function runCensusNow() {
   return r;
 }
 
+// ── Real fields (?field=real) and Direction 4 ────────────────────────
+async function fetchField(o, { mode = OPT.mode, window = OPT.window, smooth = OPT.smooth } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    const resp = await fetch("/api/travel-time-field", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ longitude: o.lon, latitude: o.lat, mode, ...(mode === "transit" ? { window, smooth } : {}) }),
+    });
+    if (resp.ok) return resp.json();
+    // The per-IP limit (20 a minute by default): wait as asked, a few times.
+    const after = Number(resp.headers.get("Retry-After"));
+    if (resp.status !== 429 || attempt >= 5 || !(after >= 0)) throw new Error(`field for ${o.id}: HTTP ${resp.status}`);
+    await new Promise((r) => setTimeout(r, (after + 1) * 1000));
+  }
+}
+
+async function loadRealFields() {
+  S.real = new Map();
+  S.realJson = new Map();
+  for (const o of S.network.origins) {
+    const json = await fetchField(o);
+    S.realJson.set(o.id, json);
+    S.real.set(o.id, decodeField(json));
+  }
+}
+
+const quantile = (a, q) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor(q * s.length))] : null; };
+
+// The jump where the 2 km walking near field meets the tables: |t(2.05 km) − t(1.95 km)|
+// along 360 bearings, where both hold a time.
+function nearFieldSeam(field) {
+  const jumps = [];
+  for (let k = 0; k < 360; k++) {
+    const a = (k * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+    const t0 = sampleField(field, 1950 * c, 1950 * s), t1 = sampleField(field, 2050 * c, 2050 * s);
+    if (t0 >= 0 && t1 >= 0 && t0 < 1e3 && t1 < 1e3) jumps.push(Math.abs(t1 - t0));
+  }
+  return { bearings: jumps.length, median: quantile(jumps, 0.5), p90: quantile(jumps, 0.9) };
+}
+
+// Direction 4's two numeric checks (folded share of the 45-minute ring ≤ 10%, median local
+// stretch ≤ 3:1) for every test origin, window, directions setting and smoothing, plus the
+// radius check, the seam, and Wembley Park from Baker Street. Numbers only.
+async function directionChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spreads = [0.5, 0], smooths = [true, false], ring = 45, mode = OPT.mode } = {}) {
+  const t0 = performance.now();
+  const results = [], seams = [], wembley = [];
+  const wp = S.network.origins.find((o) => o.id === "wembley-park");
+  for (const o of S.network.origins) {
+    for (const w of mode === "transit" ? windows : [null]) {
+      for (const sm of mode === "transit" ? smooths : [true]) {
+        const json = await fetchField(o, { mode, window: w, smooth: sm });
+        const field = decodeField(json);
+        const frame = localFrame(o);
+        // With sources "tables" (no walking near field) this is the field's own slope across
+        // 100 m at 2 km, not the near-field seam.
+        if (sm) seams.push({ origin: o.id, window: w, sources: json.sources, measures: json.sources === "tables" ? "slope (no near field)" : "near-field seam", ...nearFieldSeam(field) });
+        if (o.id === "baker-street" && sm) {
+          // At the station itself (the timetable's position), not the toy network's.
+          const st = (json.stations || []).find((s) => s.name === "Wembley Park");
+          const [x, y] = st ? frame.toLocal(st.lon, st.lat) : frame.toLocal(wp.lon, wp.lat);
+          wembley.push({ window: w, fieldMinutes: Math.round(sampleField(field, x, y) * 10) / 10, stationRowMinutes: st ? st.minutes : null, sources: json.sources });
+        }
+        for (const sp of spreads) {
+          const spec = { kind: "polar", field: geometryField(field), maxMinutes: ring };
+          if (sp > 0) spec.angles = angularSpread(field, ring, { spread: sp });
+          const d = directionFour(spec);
+          const rr = ringRadius(spec, { n: 1000 });     // an identity check of the JS warp, not G3
+          const r3 = (v) => (v === null ? null : Math.round(v * 1000) / 1000);
+          results.push({
+            origin: o.id, window: w, smooth: sm, spread: sp, sources: json.sources, notes: json.notes,
+            foldedShare: r3(d.at200.foldedShare), stackedShare: r3(d.at200.foldedSheets), medianStretch: r3(d.at200.medianStretch),
+            foldedShare800: r3(d.at800.foldedShare), medianStretch800: r3(d.at800.medianStretch),
+            foldedShareOutside2km: r3(d.outside2km.foldedShare), medianStretchOutside2km: r3(d.outside2km.medianStretch),
+            cellsSkipped: d.at200.skipped, cells: d.at200.cells,
+            passFolded: d.passFolded, passStretch: d.passStretch, radiusMaxErrMinutes: rr.maxError, radiusSamples: rr.n,
+            uncertainNodes: field.uncertain ? field.uncertain.reduce((a, v) => a + v, 0) : 0,
+          });
+        }
+      }
+    }
+  }
+  const smoothDefault = results.filter((r) => r.smooth && r.spread === 0.5);
+  const smoothCompass = results.filter((r) => r.smooth && r.spread === 0);
+  const passAll = (rs) => rs.length > 0 && rs.every((r) => r.passFolded && r.passStretch);
+  return {
+    kind: "direction-checks", at: new Date().toISOString(), mode, ring, limits: { folded: 0.1, stretch: 3 },
+    ms: Math.round(performance.now() - t0), results, seams, wembley,
+    summary: { byReachPassesEverywhere: passAll(smoothDefault), compassPassesEverywhere: passAll(smoothCompass) },
+  };
+}
+
+// Uncertain patches (server/warp/field.py) and the bent map's wedges, on real fields: King's
+// Cross (the warp page's opening pin) and the five test origins, by mode. Per field: the patch
+// nodes (and how many hold no data), the patches, the largest rise of a patch's minutes over its
+// drawn minutes, the drawn radius against the drawn minutes at patch nodes (an identity of the
+// JS warp), and enclosedFade at each outer ring, on the field's own minutes (what the fold drew
+// before patches) and on the field the fold bends by now. Patch centres and any wedge left are
+// listed in lon/lat for a look at the map.
+async function uncertainChecks({ modes = ["walking", "cycling", "driving"], rings = [15, 30, 45, 60] } = {}) {
+  const t0 = performance.now();
+  const ex = S.example.origin;
+  const origins = [{ id: "kings-cross", label: ex.label, lon: ex.lon, lat: ex.lat }, ...S.network.origins];
+  const ll = (frame, x, y) => frame.fromLocal(x, y).map((v) => Math.round(v * 1e4) / 1e4);
+  const results = [];
+  for (const o of origins) {
+    for (const mode of modes) {
+      const json = await fetchField(o, { mode });
+      const f = decodeField(json), g = geometryField(f), frame = localFrame(json.origin);
+      const u = f.uncertain || new Uint8Array(f.minutes.length);
+      // Patches: 4-connected groups of patch nodes.
+      const seen = new Uint8Array(u.length), patches = [];
+      let nodes = 0, noData = 0, largestRise = 0;
+      for (let k0 = 0; k0 < u.length; k0++) {
+        if (!u[k0] || seen[k0]) continue;
+        const members = [k0];
+        seen[k0] = 1;
+        for (let q = 0; q < members.length; q++) {
+          const k = members[q], i = k % f.nx;
+          for (const n of [i > 0 ? k - 1 : -1, i + 1 < f.nx ? k + 1 : -1, k - f.nx, k + f.nx]) {
+            if (n >= 0 && n < u.length && u[n] && !seen[n]) { seen[n] = 1; members.push(n); }
+          }
+        }
+        let sx = 0, sy = 0, top = -Infinity;
+        for (const k of members) {
+          nodes++;
+          const t = f.minutes[k];
+          if (t < 0) noData++;
+          else { largestRise = Math.max(largestRise, t - f.drawn[k]); top = Math.max(top, t); }
+          sx += f.x0 + (k % f.nx) * f.cell; sy += f.y0 + Math.floor(k / f.nx) * f.cell;
+        }
+        patches.push({ at: ll(frame, sx / members.length, sy / members.length), nodes: members.length,
+                       minutes: top > -Infinity ? Math.round(top * 10) / 10 : null });
+      }
+      const warp = createWarp({ kind: "polar", field: g, maxMinutes: Infinity });
+      let radiusErr = 0;
+      for (let k = 0; k < u.length; k++) {
+        if (!u[k]) continue;
+        const p = warp.target(f.x0 + (k % f.nx) * f.cell, f.y0 + Math.floor(k / f.nx) * f.cell);
+        if (p) radiusErr = Math.max(radiusErr, Math.abs(Math.hypot(p[0], p[1]) - f.drawn[k]));
+      }
+      const fade = rings.map((ring) => {
+        const before = enclosedFade(f, ring), after = enclosedFade(g, ring);
+        return { ring, before: before.count, after: after.count, left: after.where.map(([x, y, t]) => ({ at: ll(frame, x, y), minutes: t >= 0 && t < 1e4 ? Math.round(t * 10) / 10 : null })) };
+      });
+      results.push({ origin: o.id, mode, cell: f.cell, nodes, noData, patches: patches.length,
+                     largestRise: Math.round(largestRise * 10) / 10, radiusErr: Math.round(radiusErr * 1e4) / 1e4, fade, list: patches });
+    }
+  }
+  return { kind: "uncertain-checks", at: new Date().toISOString(), ms: Math.round(performance.now() - t0), results };
+}
+
 // What selftest.js and bench.js (and scripts/lab_headless.mjs) use.
 const labApi = {
   S, OPT, camera, setOrigin, requestScene, waitScene, morphTo, fitFor, reachBox,
   storeResult, allResults, percentile,
-  runSelfTest: runSelfTestNow, runBench: runBenchNow, runCensus: runCensusNow,
+  runSelfTest: runSelfTestNow, runBench: runBenchNow, runCensus: runCensusNow, directionChecks, uncertainChecks,
   onFrame(fn) { (S.frameListeners = S.frameListeners || []).push(fn); return () => { S.frameListeners = S.frameListeners.filter((f) => f !== fn); }; },
   onDraw(fn) { (S.drawListeners = S.drawListeners || []).push(fn); return () => { S.drawListeners = S.drawListeners.filter((f) => f !== fn); }; },
 };
@@ -585,9 +733,10 @@ async function boot() {
   if (typeof maplibregl === "undefined") { out("MapLibre didn't load."); return; }
   const [network, example] = await Promise.all([
     fetch("stations.json").then((r) => r.json()),
-    fetch("../example.json").then((r) => r.json()),
+    fetch("../example-field.json").then((r) => r.json()),
   ]);
   S.network = network; S.example = example;
+  if (OPT.field === "real") await loadRealFields();
   const first = originById(OPT.origin);
   S.worker = new Worker(new URL("../../shared/mesh/worker.js", import.meta.url), { type: "module" });
   S.worker.onmessage = onWorker;

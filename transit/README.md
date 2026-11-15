@@ -232,11 +232,12 @@ OSM extract and the prepared feeds stay in `transit/data/`; RSP's licence (claus
 forbids passing the rail timetable on. `.gitignore` keeps feed, extract and table files out
 of git anywhere in the repo, and `tests/test_no_data_in_git.py` fails if one is tracked.
 
-`python -m transit.build package` makes the archive of derived tables. Until
-`[publication] licences_cleared` is set to true in `sources.toml`, its `LICENSE-DATA.txt`
-says it is not licensed for publication, and `publish` refuses. Set the flag only after the
-licences in `docs/transit-sources.md` allow publishing derived tables and the owner has
-agreed. Then `python -m transit.build publish --confirm` makes a **draft** GitHub release.
+`python -m transit.build package` makes the archive of derived tables.
+`[publication] licences_cleared` in `sources.toml` is true: the owner holds the rail and TfL
+licences (confirmed 2026-11-13, `docs/transit-sources.md`). So the archive's `LICENSE-DATA.txt`
+grants the ODbL with every credit, and `python -m transit.build publish --confirm` makes a
+**draft** GitHub release. With the flag false, the file says the data is not licensed for
+publication and `publish` refuses.
 Published, the tables are derived from OpenStreetMap and go out under the ODbL, with the RSP
 notice of clause 3.3.2 (worded as agreed with RSP, if RSP asks for one) and every credit:
 

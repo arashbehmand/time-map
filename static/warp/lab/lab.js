@@ -5,12 +5,13 @@
 // spread=0..1 (directions by reach, default 0.5), style=plain, network=0, budget.
 // field=real takes the warp page's own field from the server (mode=transit|walking|cycling|
 // driving, window=wd08|wd13|wd19|sa13, smooth=0|1), for every test origin; with it,
-// __lab.directionChecks() reports Direction 4 of #5 (W-02) on real fields.
+// __lab.directionChecks() reports Direction 4 of #5 (W-02) on real fields; __lab.uncertainChecks()
+// the uncertain patches the server found and the bent map's wedges (enclosedFade), by mode.
 import { tileCover } from "../../shared/mesh/cover.js";
 import { fitFor, reachBox } from "../../shared/mesh/fit.js";
 import { cameraFromMap, localFrame, WORLD_PX } from "../../shared/mesh/frame.js";
 import { decodeField, geometryField, knownMinutes, sampleField } from "../../shared/mesh/field.js";
-import { directionFour, ringRadius } from "../../shared/mesh/diagnostics.js";
+import { directionFour, enclosedFade, ringRadius } from "../../shared/mesh/diagnostics.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "../../shared/mesh/labels.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "../../shared/mesh/pipeline.js";
 import { MAX_DEPTH } from "../../shared/mesh/refine.js";
@@ -642,6 +643,7 @@ async function directionChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spr
             foldedShareOutside2km: r3(d.outside2km.foldedShare), medianStretchOutside2km: r3(d.outside2km.medianStretch),
             cellsSkipped: d.at200.skipped, cells: d.at200.cells,
             passFolded: d.passFolded, passStretch: d.passStretch, radiusMaxErrMinutes: rr.maxError, radiusSamples: rr.n,
+            uncertainNodes: field.uncertain ? field.uncertain.reduce((a, v) => a + v, 0) : 0,
           });
         }
       }
@@ -657,11 +659,71 @@ async function directionChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spr
   };
 }
 
+// Uncertain patches (server/warp/field.py) and the bent map's wedges, on real fields: King's
+// Cross (the warp page's opening pin) and the five test origins, by mode. Per field: the patch
+// nodes (and how many hold no data), the patches, the largest rise of a patch's minutes over its
+// drawn minutes, the drawn radius against the drawn minutes at patch nodes (an identity of the
+// JS warp), and enclosedFade at each outer ring, on the field's own minutes (what the fold drew
+// before patches) and on the field the fold bends by now. Patch centres and any wedge left are
+// listed in lon/lat for a look at the map.
+async function uncertainChecks({ modes = ["walking", "cycling", "driving"], rings = [15, 30, 45, 60] } = {}) {
+  const t0 = performance.now();
+  const ex = S.example.origin;
+  const origins = [{ id: "kings-cross", label: ex.label, lon: ex.lon, lat: ex.lat }, ...S.network.origins];
+  const ll = (frame, x, y) => frame.fromLocal(x, y).map((v) => Math.round(v * 1e4) / 1e4);
+  const results = [];
+  for (const o of origins) {
+    for (const mode of modes) {
+      const json = await fetchField(o, { mode });
+      const f = decodeField(json), g = geometryField(f), frame = localFrame(json.origin);
+      const u = f.uncertain || new Uint8Array(f.minutes.length);
+      // Patches: 4-connected groups of patch nodes.
+      const seen = new Uint8Array(u.length), patches = [];
+      let nodes = 0, noData = 0, largestRise = 0;
+      for (let k0 = 0; k0 < u.length; k0++) {
+        if (!u[k0] || seen[k0]) continue;
+        const members = [k0];
+        seen[k0] = 1;
+        for (let q = 0; q < members.length; q++) {
+          const k = members[q], i = k % f.nx;
+          for (const n of [i > 0 ? k - 1 : -1, i + 1 < f.nx ? k + 1 : -1, k - f.nx, k + f.nx]) {
+            if (n >= 0 && n < u.length && u[n] && !seen[n]) { seen[n] = 1; members.push(n); }
+          }
+        }
+        let sx = 0, sy = 0, top = -Infinity;
+        for (const k of members) {
+          nodes++;
+          const t = f.minutes[k];
+          if (t < 0) noData++;
+          else { largestRise = Math.max(largestRise, t - f.drawn[k]); top = Math.max(top, t); }
+          sx += f.x0 + (k % f.nx) * f.cell; sy += f.y0 + Math.floor(k / f.nx) * f.cell;
+        }
+        patches.push({ at: ll(frame, sx / members.length, sy / members.length), nodes: members.length,
+                       minutes: top > -Infinity ? Math.round(top * 10) / 10 : null });
+      }
+      const warp = createWarp({ kind: "polar", field: g, maxMinutes: Infinity });
+      let radiusErr = 0;
+      for (let k = 0; k < u.length; k++) {
+        if (!u[k]) continue;
+        const p = warp.target(f.x0 + (k % f.nx) * f.cell, f.y0 + Math.floor(k / f.nx) * f.cell);
+        if (p) radiusErr = Math.max(radiusErr, Math.abs(Math.hypot(p[0], p[1]) - f.drawn[k]));
+      }
+      const fade = rings.map((ring) => {
+        const before = enclosedFade(f, ring), after = enclosedFade(g, ring);
+        return { ring, before: before.count, after: after.count, left: after.where.map(([x, y, t]) => ({ at: ll(frame, x, y), minutes: t >= 0 && t < 1e4 ? Math.round(t * 10) / 10 : null })) };
+      });
+      results.push({ origin: o.id, mode, cell: f.cell, nodes, noData, patches: patches.length,
+                     largestRise: Math.round(largestRise * 10) / 10, radiusErr: Math.round(radiusErr * 1e4) / 1e4, fade, list: patches });
+    }
+  }
+  return { kind: "uncertain-checks", at: new Date().toISOString(), ms: Math.round(performance.now() - t0), results };
+}
+
 // What selftest.js and bench.js (and scripts/lab_headless.mjs) use.
 const labApi = {
   S, OPT, camera, setOrigin, requestScene, waitScene, morphTo, fitFor, reachBox,
   storeResult, allResults, percentile,
-  runSelfTest: runSelfTestNow, runBench: runBenchNow, runCensus: runCensusNow, directionChecks,
+  runSelfTest: runSelfTestNow, runBench: runBenchNow, runCensus: runCensusNow, directionChecks, uncertainChecks,
   onFrame(fn) { (S.frameListeners = S.frameListeners || []).push(fn); return () => { S.frameListeners = S.frameListeners.filter((f) => f !== fn); }; },
   onDraw(fn) { (S.drawListeners = S.drawListeners || []).push(fn); return () => { S.drawListeners = S.drawListeners.filter((f) => f !== fn); }; },
 };

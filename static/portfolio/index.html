@@ -28,6 +28,8 @@
     .tool:focus-visible { border-radius: 16px; }
     .tool h2 { font-size: 22px; line-height: 1.25; }
     .tool p { color: var(--text-2); font-size: 16px; flex: 1; }
+    .tool p.transit-line { flex: 0 0 auto; font-size: 15px; }
+    .transit-line[hidden] { display: none; }
     .tool .go { color: var(--accent); font-weight: 700; }
     .tool svg { width: 100%; height: auto; max-height: 190px; background: #f0ede9; border-radius: 10px; }
 
@@ -70,7 +72,9 @@
         <circle cx="160" cy="95" r="9" fill="#c2185b" stroke="#fff" stroke-width="3" />
       </svg>
       <h2>How far can I get from here?</h2>
-      <p>A map that bends so places the same travel time away sit the same distance from you.</p>
+      <p>Coloured bands show where you can get to in a set time. You can also bend the map so
+        travel time becomes distance.</p>
+      <p class="transit-line" hidden>In London, public transport too, for the time of day you pick.</p>
       <span class="go">Open the map →</span>
     </a>
 
@@ -86,7 +90,8 @@
         <text x="170" y="106" text-anchor="middle" font-size="17" fill="#fff" font-family="system-ui, sans-serif">★</text>
       </svg>
       <h2>Where should we meet?</h2>
-      <p>Add where everyone starts and get the place that's fairest for the whole group.</p>
+      <p>Add where everyone starts and get the fairest place, and the one with the quickest average trip.</p>
+      <p class="transit-line" hidden>In London, people can come by public transport, and you pick when you meet.</p>
       <span class="go">Find a place →</span>
     </a>
   </main>
@@ -94,5 +99,23 @@
   <footer>Map data © <a href="https://www.mapbox.com/about/maps/">Mapbox</a> ·
     © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a></footer>
   <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
+  <script type="module">
+    // Public transport is mentioned only while this server has London's tables, unexpired
+    // (the same rule as the two tools). Right after a deploy the server may still be loading
+    // them: ask again a few times.
+    import { expired } from "/warp/views.js";
+    for (let tries = 0; tries < 10; tries++) {
+      let s;
+      try {
+        const resp = await fetch("/api/transit/status");
+        s = resp.ok ? await resp.json() : {};
+      } catch { break; /* no line, no error */ }
+      if (s.loading) { await new Promise((r) => setTimeout(r, 3000)); continue; }
+      if (s.available && !expired(s.valid_until)) {
+        for (const el of document.querySelectorAll(".transit-line")) el.hidden = false;
+      }
+      break;
+    }
+  </script>
 </body>
 </html>

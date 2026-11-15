@@ -41,7 +41,7 @@
       <h2 id="add-heading">Add someone</h2>
       <form id="add-form">
         <label class="field"><span>Name (optional)</span>
-          <input id="name-input" type="text" autocomplete="off" />
+          <input id="name-input" type="text" autocomplete="off" maxlength="40" />
         </label>
         <label class="field"><span>Where do they start?</span>
           <input id="loc-input" type="search" placeholder="A street, station or area" autocomplete="off" enterkeyhint="go" />
@@ -67,6 +67,7 @@
     </section>
 
     <section aria-labelledby="choice-heading">
+      <h2 id="choice-heading">Find a place</h2>
       <label class="field" id="window-field" hidden><span>When do you meet?</span>
         <select id="window-select"></select>
       </label>
@@ -75,19 +76,25 @@
       <label class="field" id="venue-field" hidden><span>Where?</span>
         <select id="venue-select"></select>
       </label>
-      <fieldset class="chips" id="objective">
-        <legend id="choice-heading" class="label">What matters most?</legend>
-        <label class="chip"><input type="radio" name="objective" value="minimax" checked /><span>Fairest</span></label>
-        <label class="chip"><input type="radio" name="objective" value="sum" /><span>Quickest on average</span></label>
-      </fieldset>
-      <p class="hint" id="objective-hint">Fairest keeps the longest trip as short as possible.</p>
-      <p class="hint" id="both-hint" hidden>With public transport we meet at a station, and show both
-        the fairest one and the one with the quickest average trip.</p>
+      <p class="hint" id="both-hint" hidden>We show the fairest place, where the longest trip is as
+        short as it can be, and the one with the quickest average trip when it's another place.</p>
       <p class="hint" id="venue-hint" hidden>We look for that kind of place within a 10-minute walk of
         public transport, and show both the fairest one and the one with the quickest average trip. If none
         works for everyone, or the best station we checked makes the longest trip more than 10 minutes
         shorter, we meet at that station and say so.</p>
       <button id="find-btn" class="btn primary wide" type="button" disabled>Add at least 2 people</button>
+      <details id="share" hidden>
+        <summary>Share this group</summary>
+        <p class="hint">The link holds everyone's start point, rounded to about 100 m unless you tick
+          them below, how they travel, and the names you typed. The part after # in the link isn't
+          sent to our server. Opening it finds a place for the group.</p>
+        <fieldset id="share-exact">
+          <legend class="label">Exact start point (ask them first)</legend>
+          <div id="share-exact-list"></div>
+        </fieldset>
+        <button id="share-btn" class="btn" type="button">Copy link</button>
+        <input id="share-url" type="text" readonly hidden aria-label="Link to this group" />
+      </details>
     </section>
 
     <p id="status" class="status" role="status" aria-live="polite"></p>

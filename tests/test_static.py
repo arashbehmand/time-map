@@ -126,7 +126,40 @@ def test_meetup_offers_public_transport_only_where_the_tables_are():
     # the page says otherwise: the empty When select must not show where there are no tables.
     css = (ROOT / "meetup/style.css").read_text()
     assert ".field[hidden]" in css and ".chips[hidden]" in css and "display: none" in css
-    assert '<fieldset class="chips" id="objective">' in html
+    # Every answer shows the fairest place and the quickest on average: no choice between them.
+    assert 'name="objective"' not in html and "objective()" not in js
+
+
+def test_meetup_share_links_keep_the_group_in_the_fragment():
+    html = (ROOT / "meetup/index.html").read_text()
+    js = (ROOT / "meetup/app.js").read_text()
+    # The share panel waits for a group, and its exact-point boxes start unticked.
+    assert '<details id="share" hidden>' in html and 'id="share-exact"' in html
+    assert "checked" not in html.split('id="share-exact"')[1].split("</fieldset>")[0]
+    css = (ROOT / "meetup/style.css").read_text()
+    assert "#share[hidden]" in css and "#share-url[hidden]" in css
+    # The group is read from the fragment, and the fragment is taken out of the address bar.
+    assert "location.hash" in js and "history.replaceState" in js
+    # A link opened in this tab survives a reload in history.state, and an edit forgets it.
+    assert "linkAtLoad(location.hash, history.state)" in js
+    assert "forgetLink();" in js.split("function groupChanged")[1].split("\n}\n")[0]
+    assert 'history.replaceState(null, "", location.href)' in js.split("function forgetLink")[1].split("\n}\n")[0]
+    # A rename is an edit too, and a new link hides a link shown for the old group.
+    assert js.count("forgetLink();") >= 2
+    assert "hideShareUrl();" in js.split("async function openShared")[1].split("\n}\n")[0]
+    assert "location.search)" in js and "?g=" not in js
+    # Only this page reads a fragment; nothing sends it anywhere.
+    for page in ("meetup/words.js", "meetup/share.js", "warp/app.js", "shared/api.js"):
+        assert "location.hash" not in (ROOT / page).read_text(), page
+    # Names are capped where they are typed, as in the link.
+    assert 'maxlength="40"' in html and 'maxlength="40"' in js
+
+
+def test_landing_mentions_public_transport_only_when_the_tables_are_there():
+    html = (ROOT / "portfolio/index.html").read_text()
+    lines = re.findall(r'<p class="transit-line"( hidden)?>', html)
+    assert len(lines) == 2 and all(lines)
+    assert 'fetch("/api/transit/status")' in html and ".transit-line[hidden]" in html
 
 
 @pytest.mark.parametrize("page", ["meetup/index.html", "warp/index.html", "portfolio/index.html"])
@@ -168,8 +201,8 @@ def test_no_jargon_in_page_text(page):
         assert not JARGON.search(chunk), JARGON.search(chunk).group(0)
 
 
-@pytest.mark.parametrize("page", ["meetup/app.js", "meetup/words.js", "warp/app.js", "warp/words.js", "warp/views.js",
-                                  "shared/api.js"])
+@pytest.mark.parametrize("page", ["meetup/app.js", "meetup/words.js", "meetup/share.js", "warp/app.js",
+                                  "warp/words.js", "warp/views.js", "shared/api.js"])
 def test_no_jargon_in_ui_strings(page):
     js = (ROOT / page).read_text()
     js = re.sub(r"/\*.*?\*/|^\s*//.*$", "", js, flags=re.S | re.M)      # comments

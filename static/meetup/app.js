@@ -1,15 +1,18 @@
 // "Where should we meet?"
 //
 // People are added by search, by "Use my location" or by tapping the map. Find asks the
-// server for the place that keeps the longest trip shortest ("Fairest") or the average trip
-// shortest. Only the latest answer counts: a change to the group throws away an answer
+// server for the place that keeps the longest trip shortest ("Fairest"), with the place whose
+// average trip is shortest beside it when that is another place. A group can be shared as a
+// link (share.js) that finds a place for it when opened. Only the latest answer counts: a change to the group throws away an answer
 // still on its way, and if one was on its way, the newest group is solved instead.
 import { createLatest } from "/shared/latest.js";
 import { esc, friendly, geocode, postJSON, savePref } from "/shared/api.js";
 import {
   ALL_TIES_TEXT, altText, answerNotes, headline, isPlace, isVenue, journeyLink, journeyNote, meaning, mins,
-  noPlaceSentence, OPEN_HOURS_HINT, placeHeadline, quickestText, stationAltText, TIE_TEXT, VENUE_WORD,
+  noPlaceSentence, OPEN_HOURS_HINT, placeHeadline, quickestText, SHARE_BAD_LINK, SHARE_COPIED, SHARE_FAILED,
+  SHARE_LABEL, SHARE_RESTORED, SHARE_WAITING, shareChanged, stationAltText, TIE_TEXT, VENUE_WORD,
 } from "/meetup/words.js";
+import { decodeGroup, encodeGroup, isGroupHash, linkAtLoad, reconcileGroup, STATE_KEY } from "/meetup/share.js";
 import { expired, insideArea } from "/warp/views.js";
 
 const COLORS = ["#c62828", "#00796b", "#6a1b9a", "#1565c0", "#ef6c00", "#2e7d32", "#ad1457", "#4e342e"];
@@ -60,6 +63,12 @@ let windowId = DEFAULT_WINDOW;        // when the group meets (public transport 
 let venueId = DEFAULT_VENUE;          // where the group meets (public transport only)
 let venueKinds = [];                  // the venue kinds the tables' build has
 let statusRetryMs = 5000;
+let openSeq = 0;                      // shared links opened, and group edits: the newest wins
+let shareSeq = 0;                     // links made; a newer one, or a changed box, voids an older one
+// Settles the first time the tables' status is known (or failed to load): a shared group with
+// someone on public transport waits for it before it is added.
+let settleTransit;
+const transitSettled = new Promise((resolve) => { settleTransit = resolve; });
 
 // ── DOM ─────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -79,10 +88,6 @@ function setStatus(text, kind = "", el = statusEl) {
   el.className = "status" + (kind ? " " + kind : "");
 }
 const setAddStatus = (text, kind = "") => setStatus(text, kind, addStatusEl);
-
-function objective() {
-  return document.querySelector('input[name="objective"]:checked').value;
-}
 
 // ── Map ─────────────────────────────────────────────────────────
 function buildMapStyle() {
@@ -170,9 +175,10 @@ function initMap() {
     const { lng, lat } = e.lngLat;
     tapTimer = setTimeout(() => {
       tapTimer = null;
-      const name = nameInput.value.trim() || defaultName();
+      const typed = nameInput.value.trim();
+      const name = typed || defaultName();
       setAddStatus("");   // before adding: addPerson may say the person is walking instead
-      if (addPerson({ name, lon: lng, lat, mode: modeSelect.value, label: "Picked on the map" })) {
+      if (addPerson({ name, named: !!typed, lon: lng, lat, mode: modeSelect.value, label: "Picked on the map" })) {
         nameInput.value = "";
         showUndo(`Added ${name}.`);
       }
@@ -189,15 +195,16 @@ function defaultName() {
 }
 
 // ── The group ───────────────────────────────────────────────────
-// `quiet`: the example is being set up, not edited by the visitor.
-function addPerson({ name, lon, lat, mode, label }, { quiet = false } = {}) {
+// `quiet`: the example or a shared group is being set up, not edited by the visitor.
+// `named`: the name was typed, not made up ("Person 2"); only typed names go in a share link.
+function addPerson({ name, named = false, lon, lat, mode, label }, { quiet = false } = {}) {
   if (people.length >= MAX_PARTICIPANTS) {
     setAddStatus(`A group can have up to ${MAX_PARTICIPANTS} people.`, "error");
     return null;
   }
   const id = nextId++;
   const outside = mode === "transit" && !transitOk({ lon, lat });
-  const p = { id, name, lon, lat, mode: outside ? "walking" : mode, label,
+  const p = { id, name, named, lon, lat, mode: outside ? "walking" : mode, label,
               color: COLORS[(id - 1) % COLORS.length] };
   people.push(p);
   addMarker(p);
@@ -215,8 +222,9 @@ function transitOk(pt) {
 
 const anyTransit = () => people.some((p) => p.mode === "transit");
 
-// The When and Where controls show while someone is on public transport; the Fairest/Quickest
-// choice hides then, because a station or venue answer shows both.
+// The When and Where controls show while someone is on public transport. Every answer shows
+// the fairest place and, when it is another place, the quickest on average; the venue hint
+// says that itself.
 function updateTransitControls() {
   const on = anyTransit();
   const atVenue = venueKinds.length > 0 && venueId !== "station";
@@ -224,9 +232,7 @@ function updateTransitControls() {
   $("venue-field").hidden = !on || venueKinds.length === 0;
   $("venue-hint").hidden = !on || !atVenue;
   $("window-hint").hidden = !on;
-  $("objective").hidden = on;
-  $("objective-hint").hidden = on;
-  $("both-hint").hidden = !on || atVenue;
+  $("both-hint").hidden = on && atVenue;
 }
 
 async function loadTransitStatus() {
@@ -234,9 +240,9 @@ async function loadTransitStatus() {
   let status;
   try {
     const resp = await fetch("/api/transit/status");
-    if (!resp.ok) { later(); return; }
+    if (!resp.ok) { settleTransit(); later(); return; }
     status = await resp.json();
-  } catch { later(); return; }
+  } catch { settleTransit(); later(); return; }
   statusRetryMs = 5000;
   if (status.loading) { setTimeout(loadTransitStatus, 3000); return; }
   transit = status.available && !expired(status.valid_until) ? status : { available: false };
@@ -272,6 +278,7 @@ async function loadTransitStatus() {
   }
   renderPeople();
   updateTransitControls();
+  settleTransit();
 }
 
 $("window-select").addEventListener("change", (e) => {
@@ -287,6 +294,7 @@ $("venue-select").addEventListener("change", (e) => {
 
 function removePerson(id) {
   const index = people.findIndex((p) => p.id === id);
+  if (index < 0) return;          // already gone (an Undo for a group that has since changed)
   people = people.filter((p) => p.id !== id);
   const m = markers.get(id);
   if (m) { m.remove(); markers.delete(id); }
@@ -323,6 +331,8 @@ function showUndo(text) {
 // on its way, the newest group is solved once the edits settle; otherwise Find is needed.
 function groupChanged() {
   touched = true;
+  openSeq++;                     // a shared link still waiting for the tables is dropped
+  forgetLink();
   const wasSolving = solves.busy || resolveTimer !== null;
   const hadAnswer = lastAnswer !== null;
   solves.cancel();
@@ -332,6 +342,7 @@ function groupChanged() {
   exampleNote.hidden = true;
   updateFind();
   updateTransitControls();
+  renderShareChoices();
   if (wasSolving && people.length >= 2) {
     setStatus("The group changed. Finding a place for the new group…", "busy");
     const later = () => {
@@ -351,7 +362,7 @@ function renderPeople() {
   peopleList.innerHTML = people.map((p, i) => `
     <li class="person" style="--color:${p.color}" data-id="${p.id}">
       <span class="dot" aria-hidden="true"></span>
-      <input type="text" class="p-name" value="${esc(p.name)}" aria-label="Name of person ${i + 1}" />
+      <input type="text" class="p-name" value="${esc(p.name)}" maxlength="40" aria-label="Name of person ${i + 1}" />
       <button type="button" class="remove" aria-label="Remove ${esc(p.name)}">×</button>
       <div class="where">
         <select class="p-mode" aria-label="How ${esc(p.name)} travels">
@@ -367,13 +378,19 @@ function renderPeople() {
     li.querySelector(".remove").addEventListener("click", () => removePerson(p.id));
     const nameEl = li.querySelector(".p-name");
     nameEl.addEventListener("change", () => {
-      // A name doesn't change the answer: keep it and show the new name.
-      p.name = nameEl.value.trim() || defaultName();
+      // A name doesn't change the answer: keep it and show the new name. A cleared name gets
+      // a made-up one again, which a share link leaves out.
+      const typed = nameEl.value.trim();
+      p.named = typed !== "";
+      p.name = typed || defaultName();
       nameEl.value = p.name;
       li.querySelector(".remove").setAttribute("aria-label", `Remove ${p.name}`);
       li.querySelector(".p-mode").setAttribute("aria-label", `How ${p.name} travels`);
       updateMarker(p);
       touched = true;
+      renderShareChoices({ keep: true });
+      hideShareUrl();               // a link shown for copying has the old name
+      forgetLink();                 // and a reload must not bring the old name back
       if (lastAnswer) renderAnswer();
     });
     const modeEl = li.querySelector(".p-mode");
@@ -384,6 +401,8 @@ function renderPeople() {
     });
   }
   $("people-empty").hidden = people.length > 0;
+  // Ticks are kept by person id; a change to the group (groupChanged) unticks them all.
+  renderShareChoices({ keep: true });
 }
 
 function updateFind() {
@@ -481,8 +500,8 @@ $("add-form").addEventListener("submit", async (e) => {
     return;
   }
   setAddStatus("");
-  const p = addPerson({ name: form.name || defaultName(), lon: res.value.lon, lat: res.value.lat,
-                        mode: form.mode, label: form.q });
+  const p = addPerson({ name: form.name || defaultName(), named: !!form.name, lon: res.value.lon,
+                        lat: res.value.lat, mode: form.mode, label: form.q });
   if (!p) return;
   // Clear the fields only if they still hold what was searched for.
   if (nameInput.value.trim() === form.name) nameInput.value = "";
@@ -505,7 +524,7 @@ $("locate-btn").addEventListener("click", () => {
       addSeq++;
       savePref(LOCATION_PREF, "yes");
       setAddStatus("");
-      const p = addPerson({ name: form.name || defaultName(), lon: pos.coords.longitude,
+      const p = addPerson({ name: form.name || defaultName(), named: !!form.name, lon: pos.coords.longitude,
                             lat: pos.coords.latitude, mode: form.mode, label: "their location" });
       if (!p) return;
       if (nameInput.value.trim() === form.name) nameInput.value = "";
@@ -530,21 +549,12 @@ $("new-group-btn").addEventListener("click", () => {
   locInput.focus();
 });
 
-for (const radio of document.querySelectorAll('input[name="objective"]')) {
-  radio.addEventListener("change", () => {
-    $("objective-hint").textContent = objective() === "sum"
-      ? "Quickest on average keeps the total travel time as low as possible."
-      : "Fairest keeps the longest trip as short as possible.";
-    groupChanged();
-  });
-}
-
 // ── Find ────────────────────────────────────────────────────────
 async function solve() {
   if (people.length < 2) return;
   const stations = anyTransit();
   const snap = {
-    objective: stations ? "minimax" : objective(),
+    objective: "minimax",     // the quickest on average comes with it
     window: stations ? windowId : null,
     venue: stations ? venueId : null,
     people: people.map(({ id, name, lon, lat, mode, color }) => ({ id, name, lon, lat, mode, color })),
@@ -616,9 +626,21 @@ function showResults(data, snap) {
       .setPopup(new maplibregl.Popup({ offset: 16 }).setHTML(`<strong>Option ${i + 2}</strong><br>${esc(altText(c, snap.objective))}`))
       .addTo(map));
   });
+  const quick = data.quickest;
+  if (quick) {
+    const q = document.createElement("div");
+    q.className = "cand-marker quick-marker";
+    q.textContent = "Q";
+    q.setAttribute("aria-hidden", "true");
+    resultMarkers.push(new maplibregl.Marker({ element: q })
+      .setLngLat([quick.lon, quick.lat])
+      .setPopup(new maplibregl.Popup({ offset: 16 }).setHTML(`<strong>Quickest on average</strong><br>${esc(altText(quick, "sum"))}`))
+      .addTo(map));
+  }
 
   renderAnswer();
-  fitTo([...snap.people.map((p) => [p.lon, p.lat]), [best.lon, best.lat]], 14);
+  fitTo([...snap.people.map((p) => [p.lon, p.lat]), [best.lon, best.lat],
+         ...(quick ? [[quick.lon, quick.lat]] : [])], 14);
 }
 
 // ── Answer at a station or a venue ──────────────────────────────
@@ -649,7 +671,8 @@ function showStations(data, snap) {
   fitTo([...snap.people.map((p) => [p.lon, p.lat]), ...places.map((c) => [c.lon, c.lat])], 14);
 }
 
-function tripRows(place, snap) {
+// `links`: a "Plan journey" link per person (station and venue answers, which say what it does).
+function tripRows(place, snap, { links = true } = {}) {
   const times = snap.people.map((p) => ({ p, t: place.times[String(p.id)] }));
   const longest = Math.max(...times.map((x) => x.t));
   const width = (t) => (longest > 0 ? Math.max(4, (t / longest) * 100) : 100).toFixed(1);
@@ -657,8 +680,8 @@ function tripRows(place, snap) {
     <ul class="bars" aria-label="Each person's trip">
       ${times.map(({ p, t }) => `
         <li class="bar-row" style="--color:${p.color}">
-          <span><strong>${esc(nameOf(p))}</strong> · ${mins(t)} min ${MODE_ING[p.mode] || p.mode}${t === longest && times.length > 1 ? " (longest)" : ""}
-            · <a href="${esc(journeyLink(p, place))}" target="_blank" rel="noopener noreferrer">Plan journey</a></span>
+          <span><strong>${esc(nameOf(p))}</strong> · ${mins(t)} min ${MODE_ING[p.mode] || p.mode}${t === longest && times.length > 1 ? " (longest)" : ""}${links ? `
+            · <a href="${esc(journeyLink(p, place))}" target="_blank" rel="noopener noreferrer">Plan journey</a>` : ""}</span>
           <span class="track" aria-hidden="true"><span class="fill" style="width:${width(t)}%"></span></span>
         </li>`).join("")}
     </ul>`;
@@ -727,6 +750,11 @@ function renderAnswer() {
       <button type="button" class="btn" id="reach-btn" aria-pressed="${reachShown}">${reachShown ? "Hide reach" : REACH_LABEL}</button>
       <p class="hint">${esc(REACH_HINT)}</p>
     </div>
+    ${data.quickest ? `
+      <div class="answer-card quick-card">
+        <p class="headline"><span class="alt-num" aria-hidden="true">Q</span> ${esc(quickestText(data.quickest))}</p>
+        ${tripRows(data.quickest, snap, { links: false })}
+      </div>` : ""}
     ${alts.length ? `
       <h2>Close alternatives</h2>
       <ul class="alternatives">
@@ -859,6 +887,140 @@ async function toggleReach() {
   }
 }
 
+// ── Share links ─────────────────────────────────────────────────
+// The share panel: one "exact start point" box per person, unticked, rebuilt whenever the
+// group changes (`keep` keeps the ticks when only a name changed). A link made for an older
+// group is hidden then too.
+function renderShareChoices({ keep = false } = {}) {
+  const list = $("share-exact-list");
+  const was = keep ? new Set([...list.querySelectorAll("input:checked")].map((i) => i.value)) : new Set();
+  list.innerHTML = people.map((p) => `
+    <label class="check"><input type="checkbox" value="${p.id}"${was.has(String(p.id)) ? " checked" : ""} />
+      ${esc(p.name)}</label>`).join("");
+  $("share").hidden = people.length < 2;
+  if (!keep) hideShareUrl();
+}
+
+// A link shown for copying by hand is for the boxes as they were: any change hides it, and a
+// copy still on its way for older boxes is dropped (shareSeq).
+function hideShareUrl() {
+  shareSeq++;
+  const urlEl = $("share-url");
+  urlEl.hidden = true;
+  urlEl.value = "";
+}
+$("share-exact-list").addEventListener("change", hideShareUrl);
+
+// Copy first, as the button says. Only where there is no clipboard does the share sheet open
+// (some phones), and only if that fails too is the link shown to copy by hand.
+async function shareGroup() {
+  hideShareUrl();
+  const mine = shareSeq;
+  const exact = new Set([...$("share-exact-list").querySelectorAll("input:checked")].map((i) => +i.value));
+  const hash = encodeGroup({
+    people: people.map((p) => ({ ...p, exact: exact.has(p.id) })), window: windowId, venue: venueId,
+  });
+  const url = `${location.origin}${location.pathname}#${hash}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    if (mine === shareSeq) setStatus(SHARE_COPIED);
+    return;
+  } catch { /* no clipboard here: try the share sheet */ }
+  if (mine !== shareSeq) return;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "Where should we meet?", url });
+      return;
+    } catch (err) {
+      if (err && err.name === "AbortError") return;     // the visitor closed the share sheet
+    }
+  }
+  if (mine !== shareSeq) return;
+  const urlEl = $("share-url");
+  urlEl.value = url;
+  urlEl.hidden = false;
+  urlEl.focus();
+  urlEl.select();
+  setStatus(SHARE_FAILED);
+}
+
+$("share-btn").addEventListener("click", shareGroup);
+
+// The group is no longer the link's: a reload shouldn't bring the link's group back.
+function forgetLink() {
+  if (history.state && history.state[STATE_KEY]) history.replaceState(null, "", location.href);
+}
+
+// Open a group from a link: replace the group, then find a place for it once (`solveNow`;
+// a group restored after a reload waits for Find). If this page can't give someone the public
+// transport the link asks for (or its time of day or kind of place), say what changed and wait
+// for Find instead. Returns false for a link that isn't a whole, valid group (nothing is
+// changed then).
+async function openShared(hash, { solveNow = true } = {}) {
+  const group = decodeGroup(hash);
+  // Out of the address bar, so it never shows an old group; into this tab's history entry, so
+  // a reload (or a phone reloading a discarded tab) brings the group back without finding
+  // again. groupChanged() forgets it once the visitor edits the group.
+  history.replaceState(group ? { [STATE_KEY]: hash.replace(/^#/, "") } : null, "",
+                       location.pathname + location.search);
+  if (!group) {
+    setStatus(SHARE_BAD_LINK, "error");
+    return false;
+  }
+  // groupChanged() bumps openSeq too: any edit by the visitor (a new group, an added person)
+  // while this link waits for the tables wins over the link.
+  const mine = ++openSeq;
+  touched = true;
+  newAddition();
+  clearTimeout(tapTimer); tapTimer = null;          // a map tap about to add someone
+  clearTimeout(undoTimer); $("toast").hidden = true;  // Undo is for the old group
+  hideShareUrl();                                     // so is a link shown for copying
+  clearTimeout(resolveTimer);
+  resolveTimer = null;
+  solves.cancel();
+  for (const m of markers.values()) m.remove();
+  markers.clear();
+  people = [];
+  clearResults();
+  exampleNote.hidden = true;
+  setAddStatus("");
+  renderPeople();
+  updateFind();
+  if (group.people.some((q) => q.mode === "transit")) {
+    // Until the tables' status is known, nobody can be told public transport isn't here: a
+    // server still loading them answers "loading", and this waits for the real answer.
+    setStatus(SHARE_WAITING, "busy");
+    await transitSettled;
+    if (mine !== openSeq) return true;
+  }
+  const r = reconcileGroup(group, {
+    transitOk, windows: (transit.windows || []).map((w) => w.id), venues: venueKinds,
+  });
+  const added = r.people.map((q) => addPerson({ name: q.name || defaultName(), named: !!q.name,
+    lon: q.lon, lat: q.lat, mode: q.mode, label: SHARE_LABEL }, { quiet: true }));
+  if (r.window) windowId = r.window;
+  if (r.venue) venueId = r.venue;
+  $("window-select").value = windowId;
+  $("venue-select").value = venueId;
+  renderPeople();
+  updateTransitControls();
+  updateFind();
+  fitTo(people.map((p) => [p.lon, p.lat]));
+  const changed = shareChanged(r.walkers.map((i) => added[i] && added[i].name).filter(Boolean),
+                               r.windowGone, r.venueGone);
+  if (changed) {
+    setStatus(changed);
+    return true;
+  }
+  if (!solveNow) {
+    setStatus(SHARE_RESTORED);
+    return true;
+  }
+  setStatus("");
+  solve();
+  return true;
+}
+
 // ── Example ─────────────────────────────────────────────────────
 // Shown only on an untouched page: if the visitor has already started, it is dropped.
 async function loadExample() {
@@ -877,8 +1039,6 @@ async function loadExample() {
   const added = ex.participants.map((q) =>
     addPerson({ name: q.name, lon: q.lon, lat: q.lat, mode: q.mode, label: q.label }, { quiet: true }));
   if (added.some((p) => !p)) return;
-  const radio = document.querySelector(`input[name="objective"][value="${ex.objective}"]`);
-  if (radio) radio.checked = true;
   const snap = {
     objective: ex.objective,
     people: added.map(({ id, name, lon, lat, mode, color }) => ({ id, name, lon, lat, mode, color })),
@@ -889,7 +1049,8 @@ async function loadExample() {
     ...c,
     times: Object.fromEntries(Object.entries(c.times).map(([k, v]) => [ids.get(k), v])),
   });
-  showResults({ ...ex.result, best: remap(ex.result.best), top: ex.result.top.map(remap) }, snap);
+  showResults({ ...ex.result, best: remap(ex.result.best), top: ex.result.top.map(remap),
+                quickest: ex.result.quickest ? remap(ex.result.quickest) : null }, snap);
   updateFind();
   exampleNote.hidden = false;
 }
@@ -903,6 +1064,13 @@ if (typeof maplibregl === "undefined") {
   initMap();
   renderPeople();
   updateFind();
-  loadExample();
+  updateTransitControls();      // the hints for a page with no public transport, until the status says
+  // A shared link opens its group instead of the example (a link opened before a reload comes
+  // back without finding again); a broken one leaves the example.
+  const link = linkAtLoad(location.hash, history.state);
+  if (link) openShared(link.hash, { solveNow: link.solve }).then((ok) => { if (!ok) loadExample(); });
+  else loadExample();
   loadTransitStatus();
+  // A link pasted into this tab changes only the fragment.
+  window.addEventListener("hashchange", () => { if (isGroupHash(location.hash)) openShared(location.hash); });
 }

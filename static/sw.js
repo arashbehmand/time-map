@@ -15,6 +15,7 @@ const APP_SHELL = [
   "/meetup/style.css",
   "/meetup/app.js",
   "/meetup/words.js",
+  "/meetup/share.js",
   "/meetup/example.json",
   "/warp/",
   "/warp/style.css",

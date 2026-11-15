@@ -12,7 +12,7 @@ Powered by [Mapbox](https://www.mapbox.com/) — this project relies on several 
 | Tool | Question | What it shows |
 |------|----------|---------------|
 | **Warp map** (`/warp/`) | How far can I get from here? | A pin and travel-time bands around it on the normal map (walk, cycle, drive, and public transport in London when the tables are installed). "Bend the map" (experimental) bends it so the bands become circles: distance from the pin means travel time. |
-| **Meetup** (`/meetup/`) | Where should we meet? | Where everyone starts, and the place that keeps the longest trip shortest ("Fairest") or the average trip shortest ("Quickest on average"), with each person's minutes. |
+| **Meetup** (`/meetup/`) | Where should we meet? | Where everyone starts, the place that keeps the longest trip shortest ("Fairest"), and the place with the shortest average trip ("Quickest on average") when that is another place, with each person's minutes. A group can be shared as a link. |
 
 Both open on a saved London example, so the first view makes no routing request.
 
@@ -22,8 +22,9 @@ Both open on a saved London example, so the first view makes no routing request.
   London transit tables farther out), drawn as bands on the MapLibre map and bent by a WebGL2
   mesh renderer that moves the map's own geometry.
 - **Meetup:** candidate points on an H3 hexagonal grid, travel times from the Mapbox
-  Directions Matrix API, and a minimax (fairest) or weighted-sum (quickest on average)
-  objective. The API also accepts a `hybrid` blend, which the page no longer offers.
+  Directions Matrix API, and a minimax (fairest) answer with the quickest-on-average place
+  beside it, from the places already checked. The API also accepts `sum` and a `hybrid`
+  blend as the objective, which the page doesn't offer.
 - **Both:** FastAPI, MapLibre GL JS, vanilla JavaScript modules with no build step.
 
 ## Prerequisites
@@ -105,7 +106,7 @@ static/                          # Frontend assets (vanilla JS modules, no build
 │   └── vendor/                  # pbf, @mapbox/vector-tile, point-geometry, earcut (ES modules)
 ├── warp/                        # Warp map — app.js, views.js (choices), words.js (sentences), example-field.json
 │   └── lab/                     # /warp/lab/: renderer lab (unlinked, synthetic travel times)
-├── meetup/                      # Meetup — app.js, words.js (its sentences), example.json
+├── meetup/                      # Meetup — app.js, words.js (its sentences), share.js (share links), example.json
 ├── portfolio/                   # Landing page
 ├── manifest.json                # PWA manifest
 ├── sw.js                        # Service worker (versioned per deploy, network first)
@@ -237,7 +238,12 @@ See [transit/README.md](transit/README.md#stations-only-layout-6-l-01).
    - **hybrid** — blend of both (API only)
 4. Refine: score the children of the best coarse cells at the next finer resolution, and keep
    whichever stage has the better answer, so refining never makes it worse.
-5. Return the best meeting point, top-k runners-up and a meeting area polygon.
+5. Return the best meeting point, top-k runners-up and a meeting area polygon. With
+   `minimax` (the page's only objective), also return `quickest`: the place with the lowest
+   average trip among the places both stages checked, when it is at least 150 m from the best
+   and saves at least a minute on the average trip. It costs no extra Matrix call, and
+   because the finer stage refines around the fairest places, it is the quickest of the
+   places checked, which the page says. Alternatives at the same spot are left out.
 
 Each answer is shown where the Matrix API snapped it onto the street network, with the
 street's name when Mapbox gives one. Each travel mode's times are to that mode's own snapped
@@ -524,8 +530,17 @@ Participant locations are often people's homes.
   2026-11-15). The page builds them; the server never contacts Google. A link sends that
   person's start point and the station to Google only when it is clicked, and the answer
   says so under the times. Links open in a new tab with `rel="noopener noreferrer"`.
-- Shareable links are still planned. When they come, keep the scenario in the URL fragment,
-  which is never sent to the server. Round locations unless their owner opts in.
+- Meetup share links (`static/meetup/share.js`) keep the group in the URL fragment
+  (`#g=1&p=lat,lon,mode[,name]&p=…`, with the commas and any name percent-encoded), which the
+  browser never sends to a server. Start points are rounded to 3 decimals (about 100 m)
+  unless that person's "Exact start point" box is ticked (5 decimals); the boxes start
+  unticked and untick whenever the group changes. A name goes in only if someone typed it
+  (the saved example's names don't count); search labels, answers and ids never do; names
+  lose control and invisible characters. Opening a link finds a place for the group once and
+  moves the link from the address bar into that tab's history entry (`history.state`), so a
+  reload, or a phone reloading a tab it discarded, brings the group back without finding
+  again (press Find). Once the group is edited, the tab forgets the link. A link is still
+  readable by anyone who has it, and stays in browser history.
 
 Provider terms and where we stand on each: [docs/provider-terms.md](docs/provider-terms.md).
 

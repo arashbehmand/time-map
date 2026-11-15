@@ -51,8 +51,12 @@ export function placeHeadline(best) {
 // Said under a venue answer: OpenStreetMap doesn't reliably say when a place is open.
 export const OPEN_HOURS_HINT = "We don't know whether it's open.";
 
+// A station or venue by its name; a street answer comes from the places the search checked,
+// so it says so, and points at the Q marker when the street has no name.
 export function quickestText(q) {
-  return `Quickest on average: ${placeName(q)}. The average trip is ${mins(q.mean_time_min)} min; ` +
+  const where = isPlace(q) ? `Quickest on average: ${placeName(q)}`
+    : `Of the places we checked, the quickest on average is ${onStreet(q) || "at the Q on the map"}`;
+  return `${where}. The average trip is ${mins(q.mean_time_min)} min; ` +
     `the longest is ${mins(q.max_time_min)} min.`;
 }
 
@@ -152,4 +156,26 @@ export function noPlaceSentence(err, names) {
       "Try moving people closer, or pick other ways to travel.";
   }
   return "";
+}
+
+// ── Share links (share.js) ──────────────────────────────────────
+export const SHARE_COPIED = "Link copied. Opening it finds a place for this group.";
+export const SHARE_FAILED = "Copy the link below.";
+export const SHARE_BAD_LINK = "That link doesn't hold a group we can open.";
+export const SHARE_RESTORED = "This is the group from the link you opened. Press Find to look for a place again.";
+export const SHARE_WAITING = "Opening the shared group. Waiting for the public transport times…";
+export const SHARE_LABEL = "a shared link";   // the row says "from a shared link"
+
+// What changed between the link and this page, said before asking for Find.
+export function shareChanged(walkers, windowGone, venueGone) {
+  const parts = [];
+  if (walkers.length) {
+    parts.push(`public transport isn't available for ${joinNames(walkers)} here, so ` +
+      `${walkers.length === 1 ? "they walk" : "they all walk"}`);
+  }
+  if (windowGone) parts.push("the time of day in the link isn't offered here");
+  if (venueGone) parts.push("the kind of place in the link isn't offered here");
+  if (!parts.length) return "";
+  const said = parts.join("; ");
+  return `This group changed from the link: ${said}. Press Find when it looks right.`;
 }

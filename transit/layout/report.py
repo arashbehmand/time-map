@@ -91,6 +91,7 @@ def headlines(frames: list[dict], lines_at: dict, restart: dict, pairs, labels_a
         "sigma1_real_map": frames[0]["metrics"]["sigma1"], "sigma1_time_map": last["metrics"]["sigma1"],
         "metropolitan_breaks": count_breaks(met),
         "metropolitan_absent": sorted({a for r in met for a in r["absent"]}),
+        "metropolitan_not_tested": [r["name"] for r in met if r["in_order"] is None],
         "restart_better_found": restart["better_start_found"],
         "reflection_fits_better": [f["lam_tilde"] for f in frames[1:] if f["reflection_fits_better"]],
         "left_out_groups": len(pairs.left_out),
@@ -239,6 +240,33 @@ def _break_text(b: dict) -> str:
     return f"the hop to {st} crosses {b['crosses']}"
 
 
+def restart_text(r: dict) -> str:
+    """The restart check's line: each start's stress, and whether the comparison is complete."""
+    starts = ", ".join(f"{k} σ₁ {v['sigma1']:.4f}" + ("" if v["converged"] else " (stopped at the iteration cap)")
+                       for k, v in r["starts"].items())
+    verdict = ("**a better start was found**." if r["better_start_found"]
+               else "none is better by more than 0.1%.")
+    if not r.get("complete", True):
+        verdict += " A start stopped at the cap, so the check is incomplete."
+    return f"- **Restarts at λ = 0:** {starts} against the continuation's {r['continuation_sigma1']:.4f}: {verdict}"
+
+
+def run_text(run: dict) -> str:
+    """One Metropolitan run's line in report.md."""
+    line = f"- {run['name']} ({run['stations']} stations in this build): "
+    if run["in_order"] is None:
+        line += "not tested: fewer than two of its stations are in this build."
+    elif run["in_order"]:
+        line += "in order."
+    else:
+        line += "; ".join(_break_text(b) for b in run["breaks"]) + "."
+    if run["small"]:
+        line += f" {run['small']} small departures."
+    if run["absent"]:
+        line += f" Absent: {', '.join(run['absent'])}."
+    return line
+
+
 def report_md(rep: dict) -> str:
     h = rep["headlines"]
     p = rep["prep"]
@@ -300,13 +328,12 @@ def report_md(rep: dict) -> str:
     out.append(f"- **Metropolitan line order** on the pure time map: {h['metropolitan_breaks']} breaks over a "
                f"tolerance of one map-minute ({rep['s_m_per_min']:.0f} m), listed below"
                + (f"; ids not in this build: {', '.join(h['metropolitan_absent'])}" if h["metropolitan_absent"] else "")
+               + (f"; not tested (fewer than two stations in this build): {', '.join(h['metropolitan_not_tested'])}"
+                  if h["metropolitan_not_tested"] else "")
                + ".")
     if h["labels_absent"]:
         out.append(f"- **Label ids not in this build:** {', '.join(h['labels_absent'])}.")
-    r = rep["restart"]
-    out.append("- **Restarts at λ = 0:** " + ", ".join(f"{k} σ₁ {v['sigma1']:.4f}" for k, v in r["starts"].items())
-               + f" against the continuation's {r['continuation_sigma1']:.4f}: "
-               + ("**a better start was found**." if r["better_start_found"] else "none is better by more than 0.1%."))
+    out.append(restart_text(rep["restart"]))
     out.append("- **Solves:** every solve converged and went down at every step (a build where one doesn't is "
                "refused)"
                + (f"; a reflection would fit better at {', '.join(_lam_text(v) for v in h['reflection_fits_better'])}"
@@ -332,13 +359,7 @@ def report_md(rep: dict) -> str:
         out.append(f"**{name}.**")
         out.append("")
         for run in rep["metropolitan"][key]:
-            line = f"- {run['name']} ({run['stations']} stations): "
-            line += ("in order." if run["in_order"] else "; ".join(_break_text(b) for b in run["breaks"]) + ".")
-            if run["small"]:
-                line += f" {run['small']} small departures."
-            if run["absent"]:
-                line += f" Absent: {', '.join(run['absent'])}."
-            out.append(line)
+            out.append(run_text(run))
         out.append("")
     out += ["## Files", "",
             "`layout.json` (and `layout.js`, the same for the viewer), `index.html` (open it from disk), "

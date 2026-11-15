@@ -184,14 +184,18 @@
     tip.style.top = `${Math.max(4, py - 34)}px`;
   }
 
+  // A press that barely moves is a tap: it shows the nearest station, which is how touch,
+  // with no hover, opens a station's details. Anything longer pans.
   let drag = null;
   canvas.addEventListener("pointerdown", (e) => {
-    drag = { x: e.offsetX, y: e.offsetY, cx: state.cx, cy: state.cy };
-    canvas.setPointerCapture(e.pointerId);
+    drag = { x: e.offsetX, y: e.offsetY, cx: state.cx, cy: state.cy, moved: false };
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* the pointer is already gone */ }
     canvas.classList.add("dragging");
   });
   canvas.addEventListener("pointermove", (e) => {
     if (drag) {
+      if (Math.hypot(e.offsetX - drag.x, e.offsetY - drag.y) > 6) drag.moved = true;
+      if (!drag.moved) return;
       state.cx = drag.cx - (e.offsetX - drag.x) / state.scale;
       state.cy = drag.cy - (e.offsetY - drag.y) / state.scale;
       draw();
@@ -202,9 +206,21 @@
     showTip(i, e.offsetX, e.offsetY);
   });
   const endDrag = () => { drag = null; canvas.classList.remove("dragging"); };
-  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointerup", (e) => {
+    const tap = drag && !drag.moved;
+    endDrag();
+    if (tap) {
+      const i = nearest(e.offsetX, e.offsetY);
+      state.hover = i;
+      draw();
+      showTip(i, e.offsetX, e.offsetY);
+    }
+  });
   canvas.addEventListener("pointercancel", endDrag);
-  canvas.addEventListener("pointerleave", () => { state.hover = -1; showTip(-1); draw(); });
+  canvas.addEventListener("pointerleave", (e) => {
+    if (e.pointerType === "touch") return;    // a touch pointer leaves after every tap; keep its details
+    state.hover = -1; showTip(-1); draw();
+  });
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault();
     const k = Math.exp(-e.deltaY * 0.0015);
@@ -223,7 +239,8 @@
   $("labels").addEventListener("change", (e) => { state.labels = e.target.checked; draw(); });
   $("line").addEventListener("change", (e) => { state.line = e.target.checked; draw(); });
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
-  window.addEventListener("resize", resize);
+  // The canvas changes size with the window, and when the readout wraps onto more or fewer lines.
+  new ResizeObserver(() => resize()).observe(canvas);
 
   $("ramp").style.background = `linear-gradient(to right, ${RAMP.join(", ")})`;
   $("ramp-hi").textContent = `${top}+`;

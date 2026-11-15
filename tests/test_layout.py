@@ -585,3 +585,40 @@ def test_the_notice_takes_the_licence_from_the_manifest(tmp_path, monkeypatch, c
     assert job.main(["--build", BUILD, "--out-dir", str(tmp_path / "o"), "--checks", str(checks)]) == 0
     notice = json.loads((tmp_path / "o" / "layout.json").read_text())["notice"]
     assert notice.startswith("Local use only") and words in notice
+
+
+# ── restarts and untested runs are reported as such ─────────────────
+def test_restart_check_records_unconverged_and_rising_starts(pairs):
+    from transit.layout import report
+    r = smacof.restart_check(pairs, sigma_ref=0.3, seeds=(1,), max_iter=2)
+    assert all(not s["converged"] and "rose" in s for s in r["starts"].values())
+    assert r["complete"] is False
+    assert "incomplete" in report.restart_text(r)
+
+
+def test_a_restart_that_raises_the_objective_stops_the_job(build_dir, tmp_path, monkeypatch):
+    def rising(pairs, sigma_ref, **kw):
+        return {"continuation_sigma1": sigma_ref, "best_sigma1": sigma_ref, "better_start_found": False,
+                "complete": False, "starts": {"random_1": {"sigma1": 1.0, "iterations": 3, "converged": False,
+                                                           "rose": True}}}
+    monkeypatch.setattr(job, "restart_check", rising)
+    b = load_build(build_dir, WINDOW)
+    checks = {"wembley": {}, "metropolitan": [], "labels": {"stations": []}}
+    with pytest.raises(job.Refused, match="restart"):
+        job.run(b, checks, tmp_path / "never", log=lambda *_: None)
+    assert not (tmp_path / "never").exists()
+
+
+def test_a_run_with_fewer_than_two_stations_is_not_tested(pairs):
+    from transit.layout import report
+    res = measures.line_order(pairs, pairs.xy, [{"name": "short", "stations": ["syn:G22", "syn:NOPE"]}])[0]
+    assert res["in_order"] is None and res["stations"] == 1
+    assert "not tested" in report.run_text(res)
+
+
+def test_viewer_handles_taps_and_resizes():
+    # Checked by hand in Chromium with real touch input: a tap opens a station's details, and the
+    # canvas redraws when the readout wraps. This guards the two code paths against removal.
+    js = (ROOT / "transit" / "layout" / "viewer" / "viewer.js").read_text()
+    assert "new ResizeObserver(" in js and ".observe(canvas)" in js
+    assert 'addEventListener("pointerup"' in js and "drag.moved" in js and 'e.pointerType === "touch"' in js

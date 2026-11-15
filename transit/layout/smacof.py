@@ -188,7 +188,8 @@ def restart_check(pairs: Pairs, sigma_ref: float, seeds=(1, 2), tol: float = TOL
     for name, X0 in starts.items():
         res = solve(X0, pairs, 0.0, tol=tol, max_iter=max_iter)
         results[name] = {"sigma1": sigma1(res.X, pairs), "iterations": res.iterations,
-                         "converged": res.converged}
-    best = min(r["sigma1"] for r in results.values())
+                         "converged": res.converged, "rose": res.rose}
+    best = min(r["sigma1"] for r in results.values()) if results else sigma_ref
     return {"continuation_sigma1": sigma_ref, "starts": results, "best_sigma1": best,
-            "better_start_found": bool(best < sigma_ref * (1 - margin))}
+            "better_start_found": bool(best < sigma_ref * (1 - margin)),
+            "complete": all(r["converged"] and not r["rose"] for r in results.values())}

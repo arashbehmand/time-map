@@ -284,7 +284,8 @@ def line_order(pairs, X: np.ndarray, runs: list[dict], A: np.ndarray | None = No
     - crosses itself: two hops that share no station cross, where the real ones don't.
 
     Departures over the tolerance are listed as breaks with their size (a crossing is always
-    one); the rest are counted as small. Ids not in the build are listed as absent."""
+    one); the rest are counted as small. Ids not in the build are listed as absent; a run with
+    fewer than two stations in the build is not tested (in_order None)."""
     A = pairs.xy if A is None else A
     tol = float(pairs.s if tol is None else tol)
     out = []
@@ -333,7 +334,8 @@ def line_order(pairs, X: np.ndarray, runs: list[dict], A: np.ndarray | None = No
                             and not _segments_cross(Q[i], Q[i + 1], Q[j], Q[j + 1])):
                         add("crosses itself", j + 1, 0.0,
                             crosses=f"{pairs.labels[nodes[i]]}–{pairs.labels[nodes[i + 1]]}")
-        res["in_order"] = not res["breaks"]
+        # Fewer than two of the run's stations in the build: nothing was tested.
+        res["in_order"] = (not res["breaks"]) if len(nodes) >= 2 else None
         out.append(res)
     return out
 

@@ -308,7 +308,8 @@ It stops with exit code 2, having written nothing, when:
   layout is aligned to the real map by rotation and shift only (with an anchor, the solution is
   already aligned, so this moves it by under a metre; at λ = 0 it fixes the free position).
 - **Restart check:** λ = 0 is solved again from classical MDS and two random starts; the report
-  flags any that ends more than 0.1% lower than the sweep.
+  flags any that ends more than 0.1% lower than the sweep. A start that stops at the iteration
+  cap is marked and the check called incomplete; one that raises the objective stops the job.
 - **Normalised stress σ₁:** √(Σ w (map distance − s·t)² ÷ Σ w (s·t)²) over the used pairs.
   A station's leftover stress (its dot's colour) is the same ratio over its own pairs.
 - **Trustworthiness and continuity** at k = 10 (Venna & Kaski), time against map distance,
@@ -328,7 +329,8 @@ It stops with exit code 2, having written nothing, when:
   to Rickmansworth. Following each in order, a break is a station nearer the first station than
   the one before it, or further from the last; the line turning back where the real line turns
   by at most 90°; or the line crossing itself. Departures under one map-minute (s metres) are
-  counted as small. Ids missing from a build are listed as absent.
+  counted as small. Ids missing from a build are listed as absent, and a run with fewer than two
+  of its stations in a build is reported as not tested.
 
 **Local use only.** Everything it writes is derived from the tables, so it stays in the
 git-ignored output folder: never in git, never under `static/`, never on the site. That is #6

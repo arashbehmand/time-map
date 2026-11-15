@@ -176,6 +176,9 @@ def run(b: BuildInput, checks: dict, out: Path, lam_tildes=LAM_TILDES, tol: floa
         if i in (0, len(frames) - 1):
             lines_at[i] = lines
     restart = restart_check(pairs, frames[-1]["metrics"]["sigma1"], tol=tol, max_iter=max_iter)
+    rose = [name for name, r in restart["starts"].items() if r["rose"]]
+    if rose:
+        raise RefusedSolve(f"the restart from {', '.join(rose)} raised the objective; nothing was written")
     bins = {"real": measures.shepard_bins(pairs, A), "time": measures.shepard_bins(pairs, frames[-1]["X"])}
     settings_used = {"merge_m": 50.0, "floor_min": 0.5, "weight": "t^-2", "lam_tildes": list(lam_tildes),
                      "lam_unit": lam_unit(pairs), "tol": tol, "max_iter": max_iter, "tc_k": k,

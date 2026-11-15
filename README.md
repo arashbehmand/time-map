@@ -362,10 +362,13 @@ hides the select and meets at stations. A group with nobody on public transport 
   reach its cell within 10 minutes (about 670 m), of that point's table time plus the walk
   (#1's formula). When its own cell has no such walk, the nearest ring of cells that has one
   is used, 2 minutes a ring, counted inside the 10. A venue no point reaches within 10
-  minutes is left out. Someone who starts near a venue may also walk there straight: 1.3
-  times the straight line at 4 km/h, within 10 minutes, and only when the pin and the venue
-  share an access point, so the walk stays on the same side of a river or railway. Road
-  people are timed by Mapbox as above, and the walk from where Mapbox ends the trip is added.
+  minutes is left out. Someone who starts within 150 m of a venue in a straight line may walk
+  there straight, 1.3 times the straight line at 4 km/h, when the pin and the venue share an
+  access point: the same short reach the warp field walks straight from a station, too short
+  to cross the Thames or a railway yard. Road people are timed by Mapbox as above, and the
+  walk from where Mapbox ends the trip is added. A road person's reach (`MODE_RADIUS_KM`) is
+  checked against stations and venues together, so a venue everyone can reach is never
+  refused for want of a station everyone can reach.
 - **Scoring.** Stations and venues of the kind asked for are scored together. The answer is
   made from the venues only, by the rules above (fairest, quickest, 500 m apart, five places, the
   same tie lines). It falls back to the station answer, with a note that says why

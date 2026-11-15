@@ -25,7 +25,7 @@ from tiny_transit import (
 
 import server.meetup.stations as st
 from server.errors import NoFeasiblePoint
-from server.meetup.limits import SolveLimits
+from server.meetup.limits import GroupTooSpread, SolveLimits
 from server.meetup.routing import Snap
 from server.transit.provider import MAX_RING, RING_MINUTES, TransitData
 from server.transit.venues import KIND_TAGS, VENUE_WALK_MAX_MIN, clean_name
@@ -91,8 +91,8 @@ def reference_links(data, lon, lat):
 
 def reference_walk(data, pin, venue_links, venue):
     """The straight walk from a pin to a venue by hand: when they share an access point (the
-    pin's: the first ring any walkshed holds, plus a station within 100 m), the straight line
-    times 1.3 at 4 km/h, if that is 10 minutes or less."""
+    pin's: the first ring any walkshed holds, plus a station within 100 m) and are at most
+    150 m apart in a straight line, the straight line times 1.3 at 4 km/h."""
     access = set()
     for k in range(MAX_RING + 1):
         hits = _ring_hits(data, *pin, k)
@@ -104,8 +104,8 @@ def reference_walk(data, pin, venue_links, venue):
         access.add(nearest.idx)
     if not access & {p for p, _ in venue_links}:
         return math.inf
-    walk = haversine_m(pin[0], pin[1], venue.lon, venue.lat) * 1.3 / (4000 / 60)
-    return walk if walk <= VENUE_WALK_MAX_MIN else math.inf
+    metres = haversine_m(pin[0], pin[1], venue.lon, venue.lat)
+    return metres * 1.3 / (4000 / 60) if metres <= 150 else math.inf
 
 
 def reference_minutes(links, row):
@@ -422,6 +422,10 @@ def test_someone_starting_beside_a_venue_walks_there_straight(tiny):
     walk = pool.walk_from(*pin, tiny.access_points(*pin))
     straight = haversine_m(*pin, pond.lon, pond.lat) * 1.3 / (4000 / 60)
     assert pool.minutes(row, walk)[j] == pytest.approx(straight) and straight < via_station - 2
+    # Over 150 m in a straight line, the walk goes through the tables, whatever is shared:
+    # sharing a station doesn't rule out a river between the two.
+    across = near(POND, 0, 300)
+    assert np.isinf(pool.walk_from(*across, tiny.access_points(*across))[j - len(tiny.places)])
     # A venue that shares no access point with the pin is never walked to straight.
     far = pool.walk_from(*near(B, 0, 50), tiny.access_points(*near(B, 0, 50)))
     assert np.isinf(far).all()
@@ -528,6 +532,33 @@ def test_no_common_place_counts_stations_only():
         run(data, [person("a", (0, 51.5)), person("b", (0, 51.32), mode="walking")], venue="pub")
     assert exc.value.extra["reason"] == "no_common_place"
     assert exc.value.extra["who"] == [{"index": 0, "reason": "reaches_few", "reach": 0, "of": 1}]
+
+
+def test_a_venue_everyone_reaches_is_not_refused_for_want_of_a_station():
+    """The walker starts 16.7 km south of both stations, beyond walking's 15 km, but 14.5 km
+    from a pub a short walk from one of them: the group meets at the pub. Asked for a station
+    instead, the walker is the one named too far."""
+    from test_meetup_stations import _FakeData
+
+    from server.transit.provider import Place, Pool, VenueLinks
+
+    class WithPubs(_FakeData):
+        def pool(self, kind):
+            pub = Place("node/1", "The Anchor", 0.0, 51.48, -1, "pub")
+            links = VenueLinks([pub], np.array([0]), np.array([5.0]), np.array([0]),
+                               np.array([0.0]), np.array([51.48]))
+            return Pool(kind, self.places + [pub], np.array([False, False, True]), np.arange(2), links)
+
+        def access_points(self, lon, lat):
+            return np.zeros(0, np.int64)
+
+    data = WithPubs([[4, 9]], np.array([0.0, 0.01]), np.array([51.5, 51.5]))
+    people = [person("a", (0, 51.5)), person("b", (0, 51.35), mode="walking")]
+    resp = run(data, people, venue="pub")
+    assert resp.best.kind == "pub" and resp.best.times["a"] == 9.0
+    with pytest.raises(GroupTooSpread) as exc:
+        run(data, people)
+    assert "no station is within the 15 km limit for walking" in exc.value.message
 
 
 # ── through the API ─────────────────────────────────────────────────

@@ -36,7 +36,7 @@ import asyncio
 import logging
 import math
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 import numpy as np
@@ -94,7 +94,7 @@ VENUE_SLACK_MIN = 10.0
 # can't fill it; a third of the places on it are stations, so the station the best venue is
 # compared with (and the one shown when it falls back) is the best of several. A shortlist is
 # never shorter than two places when there are two (plan_stations: Mapbox bills two elements a
-# request whatever its size), so it always holds a station and a venue.
+# request whatever its size), so it holds a station and a venue whenever both are in reach.
 SHORTLIST_GAP_M = 250.0
 SHORTLIST_STATION_SHARE = 1 / 3
 
@@ -250,10 +250,12 @@ def pool_shortlist(fair: np.ndarray, quick: np.ndarray, is_venue: np.ndarray, lo
     """
     The places to ask about by road when stations and venues are scored together: venues by
     the estimate (fairest and quickest in turn), each at least gap_m from the venues already
-    taken, in all but about one in six of the k slots; stations, the same way, in the rest. A
-    single slot is a station.
+    taken, in about two thirds of the k slots; stations, the same way, in the rest. A single
+    slot is a station when there is one.
     """
-    n_st = max(1, round(k * SHORTLIST_STATION_SHARE))
+    # Slots for stations only as far as there are stations to fill them (a group can be
+    # within reach of a venue and of no station).
+    n_st = min(max(1, round(k * SHORTLIST_STATION_SHARE)), int((~is_venue[fair]).sum()))
     venues: list[int] = []
     for i in _turns(fair[is_venue[fair]], quick[is_venue[quick]]):
         if len(venues) >= k - n_st:
@@ -321,8 +323,8 @@ def prepare(req: SolveRequest, data: TransitData) -> Group:
     Check the group before anything is planned or sent: everyone on public transport starts
     inside the tables' area and near a street or station they reach, and every road person
     is within their mode's reach of some station. Raises with who is stuck, in request order.
-    Asked for a venue, the places are then every candidate station and the venues of that kind
-    within every road person's reach; with none, the group stays on stations and says why.
+    Asked for a venue, the places are every station and every venue of that kind within every
+    road person's reach; with no such venue, the group stays on stations and says why.
     """
     index_of = sorted(range(len(req.participants)), key=lambda i: req.participants[i].id)
     people = [req.participants[i] for i in index_of]
@@ -341,50 +343,54 @@ def prepare(req: SolveRequest, data: TransitData) -> Group:
     if not data.places:
         raise NoFeasiblePoint()
 
+    # The places: every station, then (asked for a venue the build has) every venue of that
+    # kind. Road people's reach is checked against all of them, so a venue everyone can reach
+    # is never refused for want of a station everyone can reach.
+    fallback = None
+    pool = None
+    if req.venue != "station":
+        pool = data.pool(req.venue)
+        if pool is None:
+            fallback = "not_loaded"
+        elif not pool.is_venue.any():
+            fallback, pool = "none_in_reach", None
     lons = np.array([p.lon for p in data.places])
     lats = np.array([p.lat for p in data.places])
+    is_venue = np.zeros(len(lons), dtype=bool)
+    if pool is not None:
+        lons, lats = np.r_[lons, pool.venue_lons], np.r_[lats, pool.venue_lats]
+        is_venue = pool.is_venue
+    what = "station" if pool is None else f"station or {WORD[req.venue]}"
     near = {k: haversine_m(people[k].lon, people[k].lat, lons, lats) / 1000.0
             <= MODE_RADIUS_KM[people[k].mode] for k in road}
     alone = [k for k in road if not near[k].any()]
     if alone:
-        # Name whoever has no station within their own mode's reach, with that mode's limit.
+        # Name whoever has no place within their own mode's reach, with that mode's limit.
         k = min(alone, key=lambda k: (MODE_RADIUS_KM[people[k].mode], index_of[k]))
         mode = people[k].mode
         who = "one person starts" if len(alone) == 1 else f"{len(alone)} people start"
         raise GroupTooSpread(
-            f"From where {who}, no station is within the {MODE_RADIUS_KM[mode]:.0f} km limit "
+            f"From where {who}, no {what} is within the {MODE_RADIUS_KM[mode]:.0f} km limit "
             f"for {MODE_WORDS[mode]}. Pick a faster way for them to travel, or move them closer.",
             extra={"who": [{"index": index_of[k], "reason": "too_far"}
                            for k in sorted(alone, key=lambda k: index_of[k])]})
-    keep = np.ones(len(data.places), dtype=bool)
+    keep = np.ones(len(lons), dtype=bool)
     for k in road:
         keep &= near[k]
     cand = np.flatnonzero(keep)
     if not len(cand):
         raise GroupTooSpread(
-            "No station is within reach of everyone: each person can reach some stations, but "
+            f"No {what} is within reach of everyone: each person can reach some places, but "
             "none that all of you can. Pick faster ways to travel or move people closer.")
-    g = Group(people, index_of, transit, road, cand, lons[cand], lats[cand], data.places,
-              data.place_minutes, np.zeros(len(cand), dtype=bool), req.venue)
-    if req.venue == "station":
-        return g
-    pool = data.pool(req.venue)
     if pool is None:
-        return replace(g, fallback="not_loaded")
-    v = np.flatnonzero(pool.is_venue)
-    if not len(v):
-        return replace(g, fallback="none_in_reach")
-    v_lons, v_lats = pool.venue_lons, pool.venue_lats
-    near_v = np.ones(len(v), dtype=bool)
-    for k in road:
-        near_v &= haversine_m(people[k].lon, people[k].lat, v_lons, v_lats) / 1000.0 \
-            <= MODE_RADIUS_KM[people[k].mode]
-    if not near_v.any():
-        return replace(g, fallback="none_work")
-    return replace(g, cand=np.r_[cand, v[near_v]], lons=np.r_[lons[cand], v_lons[near_v]],
-                   lats=np.r_[lats[cand], v_lats[near_v]], places=pool.places, minutes=pool.minutes,
-                   is_venue=np.r_[np.zeros(len(cand), dtype=bool), np.ones(int(near_v.sum()), dtype=bool)],
-                   pool=pool)
+        return Group(people, index_of, transit, road, cand, lons[cand], lats[cand], data.places,
+                     data.place_minutes, np.zeros(len(cand), dtype=bool), req.venue, fallback)
+    if not is_venue[cand].any():
+        # Every venue is beyond some road person's reach: the stations answer, and say why.
+        return Group(people, index_of, transit, road, cand, lons[cand], lats[cand], data.places,
+                     data.place_minutes, np.zeros(len(cand), dtype=bool), req.venue, "none_work")
+    return Group(people, index_of, transit, road, cand, lons[cand], lats[cand], pool.places,
+                 pool.minutes, is_venue[cand], req.venue, None, pool)
 
 
 # ── road people, one request each ───────────────────────────────────

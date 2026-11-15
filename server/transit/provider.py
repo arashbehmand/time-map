@@ -135,17 +135,19 @@ class VenueLinks:
     def walk_from(self, lon: float, lat: float, access: np.ndarray) -> np.ndarray:
         """
         Minutes on foot straight to each venue from a pin whose own access points are `access`
-        (table indexes): the straight line times WALK_DETOUR at 4 km/h, for a venue that shares
-        an access point with the pin and is within VENUE_WALK_MAX_MIN that way; inf for the
-        rest. Without it, someone starting beside a pub would be timed to a station and back.
-        Sharing an access point keeps the walk on the same side of a river or railway: the walk
-        through that point is already a route between the two.
+        (table indexes), for a venue within STATION_WALK_M of the pin in a straight line that
+        shares an access point with it: the straight line times WALK_DETOUR at 4 km/h; inf for
+        the rest. Without it, someone starting beside a pub would be timed to a station and
+        back. It is kept to the same short reach the field walks straight from a station
+        (TransitData.field), too short to cross the Thames or a railway yard, and sharing an
+        access point keeps the two in the same part of the street network.
         """
         if not len(self.places) or not len(access):
             return np.full(len(self.places), np.inf)
         shared = np.logical_or.reduceat(np.isin(self.point, access), self.starts)
-        walk = haversine_m(lon, lat, self.lons, self.lats) * WALK_DETOUR / WALK_M_PER_MIN
-        return np.where(shared & (walk <= VENUE_WALK_MAX_MIN), walk, np.inf)
+        metres = haversine_m(lon, lat, self.lons, self.lats)
+        walk = metres * WALK_DETOUR / WALK_M_PER_MIN
+        return np.where(shared & (metres <= STATION_WALK_M), walk, np.inf)
 
 
 @dataclass(frozen=True, eq=False)

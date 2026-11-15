@@ -264,11 +264,23 @@ one:
 TRANSIT_OUT=<folder holding the build> python -m transit.layout --build 2026-11-12   # --window wd13
 ```
 
-It reads `points.csv`, `point_ok.npy`, `tt_<window>.npy`, that table's fingerprint and
-`manifest.json`. It refuses a table that is not the one the manifest lists (sha256, shape), an
-incomplete table, a `points.csv` the table was not built from, and any value from 181 to 254.
-It writes to `transit/out/<build>/layout/<window>/` in this checkout, whatever `TRANSIT_OUT`
-is, and refuses an `--out-dir` inside the repo that git would track.
+It reads `points.csv`, `point_ok.npy`, `tt_<window>.npy`, that table's fingerprint,
+`manifest.json` and `transit/layout/checks.toml` (`--checks`). It writes to
+`transit/out/layout/<build>/<window>/` in this checkout, beside the builds and never inside one,
+whatever `TRANSIT_OUT` is.
+
+It stops with exit code 2, having written nothing, when:
+
+- the table is not the one the manifest lists (sha256, shape), is incomplete, has a fingerprint
+  the manifest doesn't record or a value from 181 to 254, or `points.csv` is not the one it was
+  built from;
+- the checks file can't be read or isn't shaped like `checks.toml`;
+- fewer than 32 stations are joined both ways (neighbourhoods of 10 need more), or the scale is
+  not a positive number;
+- any solve stops at the iteration cap or raises the objective;
+- the output folder is under `static/` or `server/` (the app serves or ships them), is inside the
+  repo where git would track any file written, or holds a symlink where a file would go;
+- the viewer would be over 2 MB gzipped.
 
 | File | What it is |
 |---|---|
@@ -285,33 +297,40 @@ is, and refuses an `--out-dir` inside the repo that git would track.
   position, whose time to another node is the fastest member-to-member time.
 - **Pairs:** no self-pairs; a pair is used only if it has a time both ways (255 is "no time" and
   never a length). t is the mean of the two directions, floored at 0.5 min; w = t⁻². Only the
-  largest group of nodes joined by used pairs is laid out; the report names the rest.
+  largest group of nodes joined by used pairs is laid out; the report and the viewer name the
+  stations of every group left out.
 - **Scale:** s = median real distance ÷ median t over the used pairs, fixed once per build.
 - **Objective:** Σ w (map distance − s·t)² + λ Σ (distance to the real position)², solved by
   weighted SMACOF (`smacof.py`). Each step solves the majorizing quadratic, so the objective
-  never rises; a rise stops the solve and is reported. λ = λ̃ × the mean of each node's summed
-  weights; λ̃ runs over 24 values from 30 down to 0.001, then 0, each solve starting from the
-  previous layout. Every layout is aligned to the real map by rotation and shift only.
+  can't rise: a step that would raise it is not taken, and one that would raise it beyond float
+  noise is a bug that stops the job. λ = λ̃ × the mean of each node's summed weights; λ̃ runs over
+  24 values from 30 down to 0.001, then 0, each solve starting from the previous layout. Every
+  layout is aligned to the real map by rotation and shift only (with an anchor, the solution is
+  already aligned, so this moves it by under a metre; at λ = 0 it fixes the free position).
 - **Restart check:** λ = 0 is solved again from classical MDS and two random starts; the report
   flags any that ends more than 0.1% lower than the sweep.
 - **Normalised stress σ₁:** √(Σ w (map distance − s·t)² ÷ Σ w (s·t)²) over the used pairs.
   A station's leftover stress (its dot's colour) is the same ratio over its own pairs.
 - **Trustworthiness and continuity** at k = 10 (Venna & Kaski), time against map distance,
-  whole-minute ties broken by tiny seeded jitter, averaged over 5 seeds. The proposed pass line
-  is 0.9 at λ = 0; the real map's own score is printed beside it.
-- **Folds:** a Delaunay triangulation of the real positions, with thin or long boundary
-  triangles (smallest angle under 10°, or longest edge over 4× the median) peeled off. A fold
-  is a triangle whose orientation flips; crossings between boundary edges are counted too. The
-  report gives the smallest fold-free λ, where the fold-free run from the real map ends, and the
-  smallest λ with at most 1% of the area folded, plus the unpeeled counts.
+  whole-minute ties broken by tiny seeded jitter, averaged over 5 seeds, scored over the stations
+  with at least 10 neighbours that have a time. The proposed pass line is 0.9 at λ = 0; the real
+  map's own score is printed beside it.
+- **Folds:** a Delaunay triangulation of the real positions. A fold is a triangle whose
+  orientation flips, or two boundary edges that cross. The report gives how far the map stays
+  fold-free going from the real map toward λ = 0, on the full triangulation and on the one with
+  thin or long boundary triangles (smallest angle under 10°, or longest edge over 4× the median)
+  peeled off; any fold-free frame found again after a fold; and how far at most 1% of the area
+  is folded.
 - **Wembley Park:** r = map distance ÷ travel time. The check passes when Wembley Park to Baker
   Street's r is within σ₁ (a relative error) of the median r over all used pairs. Reading "within
   the build's stress" as σ₁ is this job's choice.
-- **Metropolitan line:** `transit/layout/checks.toml` lists its stations by hand, as runs out
-  from Baker Street and Harrow-on-the-Hill. A station nearer the run's start on the map than the
-  one before it is a backtrack; each is listed with its size and the table's times. Ids missing
-  from a build are listed as absent.
+- **Metropolitan line:** `checks.toml` lists the line end to end, Aldgate to Uxbridge and Aldgate
+  to Rickmansworth. Following each in order, a break is a station nearer the first station than
+  the one before it, or further from the last; the line turning back where the real line turns
+  by at most 90°; or the line crossing itself. Departures under one map-minute (s metres) are
+  counted as small. Ids missing from a build are listed as absent.
 
-**Licence.** Everything it writes is derived from tables that are not licensed for publication.
-It stays in the git-ignored output folder: never in git, never under `static/`, never on the
-site.
+**Local use only.** Everything it writes is derived from the tables, so it stays in the
+git-ignored output folder: never in git, never under `static/`, never on the site. That is #6
+L-01's rule whatever the build's licence; the report and the viewer show the licence status from
+the build's own manifest.

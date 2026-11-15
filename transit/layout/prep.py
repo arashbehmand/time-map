@@ -29,8 +29,20 @@ _NAME_SUFFIXES = (" Underground Station", " DLR Station", " Tram Stop", " Rail S
                   " (London)")
 
 
-class RefusedInput(Exception):
+class Refused(Exception):
+    """The job stops before writing anything: the reason is printed and the exit code is 2."""
+
+
+class RefusedInput(Refused):
     """The build can't be used as it is (missing, incomplete, or not what its manifest says)."""
+
+
+class RefusedOutput(Refused):
+    """The output folder or the output itself breaks a rule (ignored by git, not shipped, ≤ 2 MB)."""
+
+
+class RefusedSolve(Refused):
+    """A solve did not converge, or raised the objective: its layout is not a solution."""
 
 
 class LengthError(ValueError):
@@ -73,7 +85,7 @@ def load_build(build_dir: Path, window: str) -> BuildInput:
     if missing:
         raise RefusedInput(f"{build_dir} has no {', '.join(missing)}")
 
-    manifest = json.loads(paths["manifest"].read_text())
+    manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
     outputs = manifest.get("outputs", {})
     entry = outputs.get(f"tt_{window}")
     if entry is None:
@@ -85,9 +97,11 @@ def load_build(build_dir: Path, window: str) -> BuildInput:
     if ok_entry is None or ok_entry.get("sha256") != sha256(paths["ok"]):
         raise RefusedInput("point_ok.npy is not the mask manifest.json describes")
 
-    fingerprint = json.loads(paths["fingerprint"].read_text())
+    fingerprint = json.loads(paths["fingerprint"].read_text(encoding="utf-8"))
     if not fingerprint.get("complete"):
         raise RefusedInput(f"tt_{window}.npy is incomplete (a pilot or an interrupted build)")
+    if manifest.get("tables_fingerprints", {}).get(window) != fingerprint.get("inputs"):
+        raise RefusedInput(f"tt_{window}.fingerprint.json is not the fingerprint manifest.json records")
     points_sha = sha256(paths["points"])
     if fingerprint.get("inputs", {}).get("points_sha256") != points_sha:
         raise RefusedInput(f"points.csv is not the one tt_{window}.npy was built from")
@@ -99,10 +113,17 @@ def load_build(build_dir: Path, window: str) -> BuildInput:
     if not 0 < max_time < UNREACHABLE:
         raise RefusedInput(f"max_time_min {max_time} must be below the 255 sentinel")
 
-    with open(paths["points"], newline="") as f:
+    with open(paths["points"], newline="", encoding="utf-8") as f:
         points = list(csv.DictReader(f))
-    if [int(p["idx"]) for p in points] != list(range(len(points))):
+    try:
+        in_order = [int(p["idx"]) for p in points] == list(range(len(points)))
+    except (KeyError, TypeError, ValueError):
+        in_order = False
+    if not in_order:
         raise RefusedInput("points.csv rows are not in idx order")
+    total = manifest.get("points", {}).get("total")
+    if total is not None and total != len(points):
+        raise RefusedInput(f"points.csv has {len(points)} rows, manifest.json says {total}")
 
     table = np.load(paths["table"], mmap_mode="r")
     if table.dtype != np.uint8 or table.ndim != 2 or table.shape != (len(points), len(points)):
@@ -133,6 +154,14 @@ def clean_name(name: str) -> str:
     if out.isupper():
         out = " ".join(w[:1].upper() + w[1:].lower() for w in out.split(" "))
     return out
+
+
+def median_scale(real: np.ndarray, t: np.ndarray) -> float:
+    """Metres of map per minute: median real distance ÷ median time, which must be a positive number."""
+    s = float(np.median(real) / np.median(t)) if len(real) and len(t) else float("nan")
+    if not (np.isfinite(s) and s > 0):
+        raise RefusedInput(f"the scale (median real distance ÷ median time) is {s}, not a positive number")
+    return s
 
 
 def _pairwise(xy: np.ndarray) -> np.ndarray:
@@ -243,6 +272,8 @@ def station_pairs(b: BuildInput) -> Pairs:
     rows = [p for p in b.points
             if p["kind"] == "station" and p["ok"] == "True" and b.point_ok[int(p["idx"])]]
     excluded_stations = sum(1 for p in b.points if p["kind"] == "station") - len(rows)
+    if not rows:
+        raise RefusedInput("the build has no usable station")
     idx = np.array([int(p["idx"]) for p in rows], dtype=np.int64)
     lonlat = np.array([[float(p["lon"]), float(p["lat"])] for p in rows])
     xy = to_local(lonlat[:, 0], lonlat[:, 1])
@@ -287,7 +318,7 @@ def station_pairs(b: BuildInput) -> Pairs:
     iu = np.triu_indices(n, 1)
     use_iu = both[iu]
     real = _pairwise(node_xy)[iu][use_iu]
-    s = float(np.median(real) / np.median(t[iu][use_iu]))
+    s = median_scale(real, t[iu][use_iu])
     asym = np.abs(d - d.T)[iu][use_iu]
 
     pairs = Pairs(

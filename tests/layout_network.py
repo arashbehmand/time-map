@@ -112,9 +112,10 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def write_build(root: Path, build: str = BUILD, table_hook=None, dtype=np.uint8) -> Path:
+def write_build(root: Path, build: str = BUILD, table_hook=None, dtype=np.uint8, manifest_hook=None) -> Path:
     """Write the synthetic build into root/<build>/ and return that folder. `table_hook(t, at)`
-    may change the table (as uint8, with `at` mapping ids to rows) before it is hashed."""
+    may change the table (as uint8, with `at` mapping ids to rows) before it is hashed;
+    `manifest_hook(manifest)` may change the manifest before it is written."""
     out = Path(root) / build
     out.mkdir(parents=True, exist_ok=True)
     st = _stations()
@@ -151,18 +152,22 @@ def write_build(root: Path, build: str = BUILD, table_hook=None, dtype=np.uint8)
     np.save(out / f"tt_{WINDOW}.npy", t.astype(dtype))
     np.save(out / "point_ok.npy", ok)
     table = out / f"tt_{WINDOW}.npy"
+    inputs = {"points_sha256": _sha(out / "points.csv"), "departure": "2026-01-07T13:00:00"}
     manifest = {
         "build": build, "valid_until": "2026-02-01", "licences_cleared": False,
         "attribution": ["Synthetic test network"],
         "settings": {"r5": {"max_time_min": 180}},
+        "points": {"total": n},
+        "tables_fingerprints": {WINDOW: inputs},
         "outputs": {f"tt_{WINDOW}": {"file": table.name, "bytes": table.stat().st_size,
                                      "sha256": _sha(table), "shape": [n, n],
                                      "departure": "2026-01-07T13:00:00"},
                     "point_ok.npy": {"file": "point_ok.npy", "sha256": _sha(out / "point_ok.npy")}},
     }
+    if manifest_hook:
+        manifest_hook(manifest)
     (out / "manifest.json").write_text(json.dumps(manifest))
-    (out / f"tt_{WINDOW}.fingerprint.json").write_text(json.dumps(
-        {"inputs": {"points_sha256": _sha(out / "points.csv")}, "complete": True}))
+    (out / f"tt_{WINDOW}.fingerprint.json").write_text(json.dumps({"inputs": inputs, "complete": True}))
     return out
 
 

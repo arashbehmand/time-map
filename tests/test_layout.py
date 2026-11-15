@@ -53,7 +53,7 @@ def test_every_step_lowers_the_objective(pairs, lam_tilde):
     res = smacof.solve(start, pairs, lam_tilde * smacof.lam_unit(pairs), tol=1e-12, max_iter=3000)
     trace = np.asarray(res.trace)
     assert res.iterations > 5 and not res.rose
-    assert np.all(trace[1:] <= trace[:-1] * (1 + 1e-12))
+    assert np.all(np.diff(trace) <= 0)            # no accepted step raises it, not even by float noise
     assert trace[-1] < trace[0]
 
 
@@ -175,12 +175,20 @@ def test_clean_name():
 
 
 # ── frame and alignment ─────────────────────────────────────────────
+# frame.js localFrame({lon: -0.1276, lat: 51.5073}).toLocal(lon, lat); tests/js/layout-frame.test.js
+# pins the same numbers on the JavaScript side.
+FRAME_JS = [(-0.27883, 51.56384, -10478.259699, -6297.913424),
+            (-0.0928, 51.3754, 2411.184537, 14661.841866),
+            (0.1, 51.65, 15769.701167, -15910.235562)]
+
+
 def test_frame_matches_frame_js():
+    for lon, lat, x, y in FRAME_JS:
+        assert to_local(lon, lat) == pytest.approx([x, y], abs=1e-5)
     assert np.allclose(to_local(*ORIGIN), [0, 0])
     east = to_local(ORIGIN[0] + 0.01, ORIGIN[1])
     m = EARTH_CIRCUMFERENCE_M * math.cos(math.radians(ORIGIN[1]))
     assert east[0] == pytest.approx(0.01 / 360 * m) and abs(east[1]) < 1e-9
-    assert to_local(ORIGIN[0], ORIGIN[1] + 0.01)[1] < 0                   # y points south
     pts = np.array([[-0.3, 51.4], [0.1, 51.65]])
     xy = to_local(pts[:, 0], pts[:, 1])
     assert np.allclose(from_local(xy[:, 0], xy[:, 1]), pts, atol=1e-10)
@@ -299,16 +307,59 @@ def test_ratio_check(pairs):
     assert measures.ratio_check(pairs, X, "syn:NOPE", "syn:G22", sigma=1)["status"] == "absent"
 
 
-def test_line_order(pairs):
-    run = [{"name": "diagonal", "stations": ["syn:G22", "syn:G33", "syn:G44", "syn:G55", "syn:NOPE"]}]
-    res = measures.line_order(pairs, pairs.xy, run)[0]
-    assert res["in_order"] and res["absent"] == ["syn:NOPE"] and res["stations"] == 4
+DIAGONAL = [{"name": "diagonal", "stations": ["syn:G22", "syn:G33", "syn:G44", "syn:G55", "syn:NOPE"]}]
+
+
+def _breaks(pairs, X):
+    res = measures.line_order(pairs, X, DIAGONAL)[0]
+    return res, {(b["kind"], b["station"]) for b in res["breaks"]}
+
+
+def _diag(pairs):
+    X = pairs.xy.copy()
+    a, b = X[_node(pairs, "syn:G22")], X[_node(pairs, "syn:G33")]
+    h = b - a
+    return X, a, h, np.array([-h[1], h[0]])
+
+
+def test_line_order_on_the_real_map(pairs):
+    res, kinds = _breaks(pairs, pairs.xy)
+    assert res["in_order"] and not kinds and res["absent"] == ["syn:NOPE"] and res["stations"] == 4
+    assert res["tolerance_m"] == pytest.approx(pairs.s)
+
+
+def test_line_order_finds_a_station_nearer_the_start(pairs):
     X = pairs.xy.copy()
     X[_node(pairs, "syn:G44")] = X[_node(pairs, "syn:G22")] + [10, 10]
-    res = measures.line_order(pairs, X, run)[0]
-    assert not res["in_order"]
-    bt = res["backtracks"][0]
-    assert bt["station"] == "Syn G44" and bt["before"] == "Syn G33" and bt["metres"] > 1000
+    res, kinds = _breaks(pairs, X)
+    assert not res["in_order"] and ("nearer the start", "Syn G44") in kinds
+    b = next(b for b in res["breaks"] if b["kind"] == "nearer the start")
+    assert b["before"] == "Syn G33" and b["metres"] > 1000
+
+
+def test_line_order_finds_a_station_further_from_the_end(pairs):
+    X, a, h, perp = _diag(pairs)
+    X[_node(pairs, "syn:G33")] = a + 0.8 * perp - 0.3 * h        # off to the side, away from G55
+    _, kinds = _breaks(pairs, X)
+    assert ("further from the end", "Syn G33") in kinds
+
+
+def test_line_order_finds_the_line_turning_back(pairs):
+    X, a, h, perp = _diag(pairs)
+    X[_node(pairs, "syn:G44")] = a + h - 0.9 * h + 3 * perp      # far out sideways, and back
+    X[_node(pairs, "syn:G55")] = X[_node(pairs, "syn:G44")] + 2 * perp
+    res, kinds = _breaks(pairs, X)
+    assert ("turns back", "Syn G44") in kinds
+    b = next(b for b in res["breaks"] if b["kind"] == "turns back")
+    assert b["map_turn_deg"] > 90 and b["real_turn_deg"] <= 90 and b["metres"] > pairs.s
+
+
+def test_line_order_finds_the_line_crossing_itself(pairs):
+    X, a, h, perp = _diag(pairs)
+    X[_node(pairs, "syn:G44")] = a + h + perp
+    X[_node(pairs, "syn:G55")] = a + 0.5 * h - perp               # back across G22–G33
+    _, kinds = _breaks(pairs, X)
+    assert ("crosses itself", "Syn G55") in kinds
 
 
 # ── the whole job ───────────────────────────────────────────────────
@@ -342,15 +393,21 @@ def test_build_end_to_end(tmp_path, monkeypatch):
 
     rep = json.loads((out / "report.json").read_text())
     h = rep["headlines"]
-    for key in ("smallest_fold_free", "fold_free_run_from_real_map_ends_at", "wembley_at_time_map",
-                "tc_time_map", "tc_pass", "metropolitan_backtracks", "metropolitan_absent", "restart_better_found"):
+    for key in ("fold_free", "folded_area_1pct_down_to", "wembley_at_time_map", "tc_time_map", "tc_pass",
+                "metropolitan_breaks", "metropolitan_absent", "restart_better_found", "labels_absent", "expired"):
         assert key in h
-    assert h["metropolitan_absent"] == ["syn:NOPE"]
-    assert all(f["monotone"] and not f["rose"] for f in rep["frames"])
+    assert set(h["fold_free"]) == {"peeled", "full"}
+    assert h["metropolitan_absent"] == ["syn:NOPE"] and h["labels_absent"] == ["syn:NOPE"]
+    assert h["expired"] is True                                   # the synthetic build ran out in 2026-02
+    assert all(f["monotone"] and not f["rose"] and f["converged"] for f in rep["frames"])
+    assert rep["settings"]["tol"] == 1e-9                         # provenance keeps small numbers
+    assert rep["settings"]["lam_tildes"][1] == pytest.approx(smacof.LAM_TILDES[1], rel=1e-5)
     md = (out / "report.md").read_text()
-    for words in ("Normalised stress", "Trustworthiness / continuity", "smallest fold-free",
-                  "Wembley Park to Baker Street", "Metropolitan line", "not licensed for publication"):
-        assert words in md
+    for words in ("Normalised stress", "Trustworthiness / continuity", "fold-free from the real map",
+                  "full triangulation", "Wembley Park to Baker Street", "Metropolitan line",
+                  "Local use only", "not cleared for publication", "expired",
+                  "group 1 (2 stations): Syn I1, Syn I2"):
+        assert words in md, words
 
     gz = sum(len(gzip.compress((out / n).read_bytes())) for n in ("layout.js", "index.html", "viewer.js",
                                                                       "viewer.css"))
@@ -366,23 +423,46 @@ def test_two_runs_write_the_same_layout(tmp_path, monkeypatch):
     assert (a / "layout.json").read_bytes() == (b / "layout.json").read_bytes()
 
 
-def test_output_inside_the_repo_must_be_git_ignored(tmp_path, monkeypatch, capsys):
+def test_default_output_is_beside_the_builds_not_inside_one():
+    out = job.default_out("2026-11-12", "wd13")
+    assert out == ROOT / "transit" / "out" / "layout" / "2026-11-12" / "wd13"
+    job.check_out_dir(out)                                        # ignored: accepted
+
+
+@pytest.mark.parametrize("where, words", [
+    ("static/layout-test-should-not-exist", "serves or ships"),
+    ("server/layout-test-should-not-exist", "serves or ships"),
+    ("docs/layout-test-should-not-exist", "not git-ignored"),
+])
+def test_output_inside_the_repo_must_be_ignored_and_not_shipped(tmp_path, monkeypatch, capsys, where, words):
     monkeypatch.setattr(settings, "OUT", tmp_path / "out")
     write_build(tmp_path / "out")
-    target = ROOT / "static" / "layout-test-should-not-exist"
+    target = ROOT / where
     assert job.main(["--build", BUILD, "--out-dir", str(target)]) == 2
-    assert "not git-ignored" in capsys.readouterr().err
+    assert words in capsys.readouterr().err
     assert not target.exists()
 
 
-def test_viewer_makes_no_requests():
+def test_output_files_must_not_be_symlinks(tmp_path):
+    out = tmp_path / "layout"
+    out.mkdir()
+    (out / "layout.js").symlink_to(ROOT / "static" / "manifest.json")
+    with pytest.raises(job.Refused, match="symlink"):
+        job.check_out_dir(out)
+
+
+def test_viewer_loads_only_its_own_files():
+    import re
     viewer = ROOT / "transit" / "layout" / "viewer"
+    html = (viewer / "index.html").read_text()
+    refs = re.findall(r'(?:src|href)="([^"]*)"', html)
+    assert sorted(refs) == ["data:,", "layout.js", "viewer.css", "viewer.js"]
+    assert 'name="robots" content="noindex"' in html
     for path in viewer.iterdir():
         text = path.read_text()
-        for word in ("http:", "https:", "fetch(", "/api/", "XMLHttpRequest", "import "):
+        for word in ("://", "fetch(", "XMLHttpRequest", "WebSocket", "sendBeacon", "EventSource", "import(",
+                     "import ", "url(", "/api/"):
             assert word not in text, f"{path.name} has {word!r}"
-    html = (viewer / "index.html").read_text()
-    assert '<script src="layout.js"></script>' in html and 'name="robots" content="noindex"' in html
 
 
 def test_layout_imports_numpy_only():
@@ -391,3 +471,117 @@ def test_layout_imports_numpy_only():
             "print(bad); sys.exit(1 if bad else 0)")
     r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+# ── refusals and guards ─────────────────────────────────────────────
+def test_unconverged_solves_are_refused_before_anything_is_written(build_dir, tmp_path):
+    b = load_build(build_dir, WINDOW)
+    checks = {"wembley": {}, "metropolitan": [], "labels": {"stations": []}}
+    with pytest.raises(job.Refused, match="did not converge"):
+        job.run(b, checks, tmp_path / "never", max_iter=2, log=lambda *_: None)
+    assert not (tmp_path / "never").exists()
+
+
+def test_too_few_nodes_for_the_neighbourhoods_is_refused(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(measures, "TC_K", 13)                     # needs more than 40 nodes; there are 39
+    code, out = _run(tmp_path, monkeypatch)
+    assert code == 2 and "too few" in capsys.readouterr().err and not out.exists()
+
+
+@pytest.mark.parametrize("text", ["[wembley\nstation = 1", "[[metropolitan]]\nname = 'x'\nstations = 'syn:G22'\n",
+                                  "[labels]\nstations = [1, 2]\n"])
+def test_bad_checks_are_refused(tmp_path, monkeypatch, capsys, text):
+    monkeypatch.setattr(settings, "OUT", tmp_path / "out")
+    write_build(tmp_path / "out")
+    (tmp_path / "bad.toml").write_text(text)
+    assert job.main(["--build", BUILD, "--out-dir", str(tmp_path / "o"), "--checks", str(tmp_path / "bad.toml")]) == 2
+    assert "checks" in capsys.readouterr().err
+
+
+def test_the_manifest_must_list_this_tables_fingerprint(tmp_path):
+    d = write_build(tmp_path, manifest_hook=lambda m: m["tables_fingerprints"].update({WINDOW: {"other": 1}}))
+    with pytest.raises(RefusedInput, match="fingerprint"):
+        load_build(d, WINDOW)
+
+
+def test_the_scale_must_be_a_positive_number():
+    from transit.layout.prep import median_scale
+    assert median_scale(np.array([100.0, 300.0]), np.array([1.0, 3.0])) == pytest.approx(100.0)
+    with pytest.raises(RefusedInput, match="scale"):
+        median_scale(np.zeros(4), np.ones(4))
+
+
+def test_restart_check_flags_a_better_start(pairs):
+    assert smacof.restart_check(pairs, sigma_ref=10.0, seeds=())["better_start_found"]
+    real = smacof.restart_check(pairs, sigma_ref=0.0, seeds=())
+    assert not real["better_start_found"]
+
+
+def test_alignment_never_raises_the_anchored_objective(pairs):
+    lam = smacof.lam_unit(pairs)
+    res = smacof.solve(pairs.xy, pairs, lam)
+    aligned, _ = smacof.align_rigid(res.X, pairs.xy)
+    assert smacof.objective(aligned, pairs, lam) <= smacof.objective(res.X, pairs, lam) * (1 + 1e-12)
+
+
+def test_trust_continuity_skips_nodes_without_k_neighbours():
+    rng = np.random.default_rng(8)
+    P = rng.uniform(0, 10, (20, 2))
+    used = ~np.eye(20, dtype=bool)
+    used[0, 3:] = used[3:, 0] = False                             # node 0 has 2 neighbours with a time
+    tc = measures.TrustContinuity(smacof.distances(P), used, k=3, seeds=1, jitter=1e-9)
+    got = tc(P)
+    assert got["covered"] == 19 and got["of"] == 20
+
+
+# ── the headlines ───────────────────────────────────────────────────
+def _frame(lam, folded=0, crossings=0, full=0, area=0.0, wembley="fail"):
+    return {"lam_tilde": lam, "converged": True, "rose": False, "monotone": True, "reflection_fits_better": False,
+            "metrics": {"folds": {"folded": folded, "boundary_crossings": crossings, "area_share": area},
+                        "folds_full": {"folded": full, "boundary_crossings": 0, "area_share": area},
+                        "wembley": {"status": wembley}, "T": 0.95, "C": 0.97, "T_range": [0.95, 0.95],
+                        "C_range": [0.97, 0.97], "sigma1": 0.3}}
+
+
+def _headlines(frames):
+    from types import SimpleNamespace
+
+    from transit.layout import report
+    restart = {"better_start_found": False}
+    return report.headlines(frames, {len(frames) - 1: []}, restart, SimpleNamespace(left_out=[]),
+                            labels_absent=[], expired=False)
+
+
+def test_fold_headline_is_the_run_from_the_real_map_and_names_islands():
+    h = _headlines([_frame(None), _frame(30.0, full=1), _frame(5.0, full=1), _frame(3.0, 7, 0, 9, 0.0005),
+                    _frame(1.0, full=3, area=0.0), _frame(0.0, 390, 7, 406, 0.29, "pass")])
+    assert h["fold_free"]["peeled"] == {"down_to": 5.0, "only_real_map": False, "islands": [1.0]}
+    assert h["fold_free"]["full"] == {"down_to": None, "only_real_map": True, "islands": []}
+    assert h["folded_area_1pct_down_to"] == 1.0
+    assert h["fold_free_and_wembley_pass"] == []
+
+
+def test_fold_headline_when_every_frame_is_fold_free():
+    h = _headlines([_frame(None), _frame(1.0), _frame(0.0, wembley="pass")])
+    assert h["fold_free"]["peeled"] == {"down_to": 0.0, "only_real_map": False, "islands": []}
+    assert h["fold_free_and_wembley_pass"] == [0.0]
+
+
+def test_a_boundary_crossing_alone_is_a_fold():
+    h = _headlines([_frame(None), _frame(1.0, crossings=1), _frame(0.0)])
+    assert h["fold_free"]["peeled"] == {"down_to": None, "only_real_map": True, "islands": [0.0]}
+
+
+@pytest.mark.parametrize("cleared, words", [(False, "not cleared for publication"),
+                                            (True, "cleared for publication on 2026-11-13")])
+def test_the_notice_takes_the_licence_from_the_manifest(tmp_path, monkeypatch, cleared, words):
+    def hook(m):
+        m["licences_cleared"] = cleared
+        if cleared:
+            m["licences_cleared_on"] = "2026-11-13"
+    monkeypatch.setattr(settings, "OUT", tmp_path / "out")
+    write_build(tmp_path / "out", manifest_hook=hook)
+    checks = write_checks(tmp_path / "checks.toml")
+    assert job.main(["--build", BUILD, "--out-dir", str(tmp_path / "o"), "--checks", str(checks)]) == 0
+    notice = json.loads((tmp_path / "o" / "layout.json").read_text())["notice"]
+    assert notice.startswith("Local use only") and words in notice

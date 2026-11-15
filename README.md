@@ -222,7 +222,7 @@ travel times by default, or on the page's own fields with `?field=real`.
 `transit/layout/` (#6, L-01) lays London's stations out offline so that map distance follows
 travel time, from the transit tables above, by weighted SMACOF with a slider from the real map
 to the pure time map. It writes a report and a local viewer into the git-ignored
-`transit/out/`; the tables are not licensed for publication, so nothing it makes is served.
+`transit/out/layout/`, and nothing it makes goes into git or onto the site.
 See [transit/README.md](transit/README.md#stations-only-layout-6-l-01).
 
 ## How the Meetup Works

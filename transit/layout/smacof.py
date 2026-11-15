@@ -120,8 +120,11 @@ def solve(X0: np.ndarray, pairs: Pairs, lam: float, A: np.ndarray | None = None,
             Xn -= Xn.mean(axis=0)
         En = distances(Xn)
         fn = _objective(Xn, w, delta, lam, A, En)
-        if fn > f * (1 + RISE):
-            rose = True
+        if fn > f:
+            # The majorizer can't raise the objective, so the step is not taken. A rise above
+            # float noise is a bug (flagged); at the noise floor the solve has converged.
+            rose = fn > f * (1 + RISE)
+            converged = not rose
             break
         X, E = Xn, En
         trace.append(fn)

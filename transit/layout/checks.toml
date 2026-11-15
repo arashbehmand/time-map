@@ -8,36 +8,24 @@
 station = "gbt:910GCATEZWY"      # Wembley Park
 reference = "gbt:910GLONDNBS"    # Baker Street
 
-# Each run goes out from its first station; every station should sit further from that
-# station on the map than the one before it.
+# Each run is the line end to end, in order, through the bends at Baker Street and
+# Harrow-on-the-Hill (transit/layout/measures.py, line_order, says what is tested).
 [[metropolitan]]
-name = "Baker Street to Aldgate"
+name = "Aldgate to Uxbridge"
 stations = [
-  "gbt:910GLONDNBS",   # Baker Street
-  "gbt:940GZZLUGPS",   # Great Portland Street
-  "gbt:940GZZLUESQ",   # Euston Square
-  "gbt:910GKNGX",      # King's Cross St Pancras (the build's one "London Kings Cross")
-  "gbt:910GFRNDNLT",   # Farringdon
-  "gbt:940GZZLUBBN",   # Barbican
-  "gbt:910GMRGT",      # Moorgate
-  "gbt:910GLIVST",     # Liverpool Street
   "gbt:940GZZLUALD",   # Aldgate
-]
-
-[[metropolitan]]
-name = "Baker Street to Harrow-on-the-Hill"
-stations = [
+  "gbt:910GLIVST",     # Liverpool Street
+  "gbt:910GMRGT",      # Moorgate
+  "gbt:940GZZLUBBN",   # Barbican
+  "gbt:910GFRNDNLT",   # Farringdon
+  "gbt:910GKNGX",      # King's Cross St Pancras (the build's one "London Kings Cross")
+  "gbt:940GZZLUESQ",   # Euston Square
+  "gbt:940GZZLUGPS",   # Great Portland Street
   "gbt:910GLONDNBS",   # Baker Street
   "gbt:910GFNCHMET",   # Finchley Road
   "gbt:910GCATEZWY",   # Wembley Park
   "gbt:940GZZLUPRD",   # Preston Road
   "gbt:940GZZLUNKP",   # Northwick Park
-  "gbt:910GHAROOTH",   # Harrow-on-the-Hill
-]
-
-[[metropolitan]]
-name = "Harrow-on-the-Hill to Uxbridge"
-stations = [
   "gbt:910GHAROOTH",   # Harrow-on-the-Hill
   "gbt:940GZZLUWHW",   # West Harrow
   "gbt:940GZZLURYL",   # Rayners Lane
@@ -50,8 +38,21 @@ stations = [
 ]
 
 [[metropolitan]]
-name = "Harrow-on-the-Hill to Rickmansworth"
+name = "Aldgate to Rickmansworth"
 stations = [
+  "gbt:940GZZLUALD",   # Aldgate
+  "gbt:910GLIVST",     # Liverpool Street
+  "gbt:910GMRGT",      # Moorgate
+  "gbt:940GZZLUBBN",   # Barbican
+  "gbt:910GFRNDNLT",   # Farringdon
+  "gbt:910GKNGX",      # King's Cross St Pancras
+  "gbt:940GZZLUESQ",   # Euston Square
+  "gbt:940GZZLUGPS",   # Great Portland Street
+  "gbt:910GLONDNBS",   # Baker Street
+  "gbt:910GFNCHMET",   # Finchley Road
+  "gbt:910GCATEZWY",   # Wembley Park
+  "gbt:940GZZLUPRD",   # Preston Road
+  "gbt:940GZZLUNKP",   # Northwick Park
   "gbt:910GHAROOTH",   # Harrow-on-the-Hill
   "gbt:940GZZLUNHA",   # North Harrow
   "gbt:940GZZLUPNR",   # Pinner
@@ -61,24 +62,25 @@ stations = [
   "gbt:910GRCKMNSW",   # Rickmansworth
 ]
 
-# Stations always labelled in the viewer.
+# Stations always labelled in the viewer, in priority order: where two collide, the one listed
+# first keeps its place, so the crowded centre comes first.
 [labels]
 stations = [
   "gbt:910GLONDNBS",   # Baker Street
   "gbt:910GCATEZWY",   # Wembley Park
-  "gbt:910GHAROOTH",   # Harrow-on-the-Hill
-  "gbt:940GZZLUALD",   # Aldgate
-  "gbt:940GZZLUUXB",   # Uxbridge
-  "gbt:910GRCKMNSW",   # Rickmansworth
   "gbt:910GKNGX",      # King's Cross St Pancras
   "gbt:910GLIVST",     # Liverpool Street
+  "gbt:940GZZLUALD",   # Aldgate
+  "gbt:910GLNDNBDE",   # London Bridge
   "gbt:940GZZLUCYF",   # Canary Wharf
   "gbt:910GSTFD",      # Stratford
-  "gbt:910GECROYDN",   # East Croydon
   "gbt:910GCLPHMJC",   # Clapham Junction
-  "gbt:910GRICHMND",   # Richmond
-  "gbt:910GHTRWAPT",   # Heathrow Terminals 2 & 3
-  "gbt:910GWLTWCEN",   # Walthamstow Central
-  "gbt:910GLNDNBDE",   # London Bridge
+  "gbt:910GHAROOTH",   # Harrow-on-the-Hill
   "gbt:910GEALINGB",   # Ealing Broadway
+  "gbt:910GWLTWCEN",   # Walthamstow Central
+  "gbt:910GRICHMND",   # Richmond
+  "gbt:910GECROYDN",   # East Croydon
+  "gbt:910GHTRWAPT",   # Heathrow Terminals 2 & 3
+  "gbt:940GZZLUUXB",   # Uxbridge
+  "gbt:910GRCKMNSW",   # Rickmansworth
 ]

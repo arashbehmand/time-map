@@ -206,7 +206,10 @@ class TrustContinuity:
     """Trustworthiness and continuity at k (Venna & Kaski): are each station's k nearest by
     travel time also near it on the map (continuity), and are its k nearest on the map near
     it in time (trustworthiness)? Whole-minute ties in time are broken by seeded jitter, the
-    result averaged over seeds; breaking them by real distance would favour the real map."""
+    result averaged over seeds; breaking them by real distance would favour the real map.
+
+    Only nodes with at least k neighbours that have a time both ways are scored, so their k
+    nearest in time are real times; a pair with no time ranks after every pair with one."""
 
     def __init__(self, t: np.ndarray, used: np.ndarray, k: int = TC_K, seeds: int = TC_SEEDS,
                  jitter: float = TC_JITTER_MIN):
@@ -214,22 +217,28 @@ class TrustContinuity:
         n = len(t)
         if n <= 3 * k + 1:
             raise ValueError(f"trustworthiness at k={k} needs more than {3 * k + 1} nodes")
+        self.rows = np.asarray(used).sum(axis=1) >= k
+        self.covered, self.n = int(self.rows.sum()), n
+        if not self.covered:
+            raise ValueError(f"no node has {k} neighbours with a time both ways")
         base = np.where(used, t, np.inf)
         self.in_ranks = [_ranks(base + np.random.default_rng(s).uniform(0, jitter, base.shape))
                          for s in range(seeds)]
-        self.norm = 2.0 / (n * k * (2 * n - 3 * k - 1))
+        self.norm = 2.0 / (self.covered * k * (2 * n - 3 * k - 1))
 
     def __call__(self, X: np.ndarray) -> dict:
         k = self.k
         out_r = _ranks(distances(X))
         out_nn = out_r < k
         T, C = [], []
+        rows = self.rows
         for in_r in self.in_ranks:
             in_nn = in_r < k
-            T.append(1 - self.norm * float(((in_r + 1 - k) * (out_nn & ~in_nn)).sum()))
-            C.append(1 - self.norm * float(((out_r + 1 - k) * (in_nn & ~out_nn)).sum()))
+            T.append(1 - self.norm * float(((in_r + 1 - k) * (out_nn & ~in_nn))[rows].sum()))
+            C.append(1 - self.norm * float(((out_r + 1 - k) * (in_nn & ~out_nn))[rows].sum()))
         return {"T": float(np.mean(T)), "T_range": [float(min(T)), float(max(T))],
-                "C": float(np.mean(C)), "C_range": [float(min(C)), float(max(C))]}
+                "C": float(np.mean(C)), "C_range": [float(min(C)), float(max(C))],
+                "covered": self.covered, "of": self.n}
 
 
 # ── the issue's checks ──────────────────────────────────────────────
@@ -255,10 +264,29 @@ def ratio_check(pairs, X: np.ndarray, station: str, reference: str, sigma: float
             "minutes_directed": [int(pairs.directed[i, j]), int(pairs.directed[j, i])]}
 
 
-def line_order(pairs, X: np.ndarray, runs: list[dict]) -> list[dict]:
-    """For each run of stations out from its first station: every station should be further
-    from the start on the map than the one before. Each backtrack is listed with its size and
-    the table times from and to the start; ids not in the build are listed as absent."""
+def _turn_deg(u: np.ndarray, v: np.ndarray) -> float:
+    nu, nv = float(np.hypot(*u)), float(np.hypot(*v))
+    if nu == 0 or nv == 0:
+        return 0.0
+    return math.degrees(math.acos(max(-1.0, min(1.0, float(u @ v) / (nu * nv)))))
+
+
+def line_order(pairs, X: np.ndarray, runs: list[dict], A: np.ndarray | None = None,
+               tol: float | None = None) -> list[dict]:
+    """Does each run of a line, listed in order, keep its order on the map? Four tests, each
+    judged against the real map A, with a tolerance of one map-minute (s metres) unless given:
+
+    - nearer the start: a station is nearer the run's first station than the one before it;
+    - further from the end: a station is further from the run's last station than the one
+      before it;
+    - turns back: where the real line turns by at most 90°, the next station lies behind the
+      turning station along the hop that led to it;
+    - crosses itself: two hops that share no station cross, where the real ones don't.
+
+    Departures over the tolerance are listed as breaks with their size (a crossing is always
+    one); the rest are counted as small. Ids not in the build are listed as absent."""
+    A = pairs.xy if A is None else A
+    tol = float(pairs.s if tol is None else tol)
     out = []
     for run in runs:
         nodes, absent = [], []
@@ -268,21 +296,44 @@ def line_order(pairs, X: np.ndarray, runs: list[dict]) -> list[dict]:
                 absent.append(sid)
             elif not nodes or nodes[-1] != i:
                 nodes.append(i)
-        res = {"name": run["name"], "stations": len(nodes), "absent": absent, "backtracks": []}
+        res = {"name": run["name"], "stations": len(nodes), "absent": absent, "tolerance_m": tol,
+               "breaks": [], "small": 0}
+
+        def add(kind, k, metres, res=res, nodes=nodes, **extra):
+            if kind == "crosses itself" or metres > tol:
+                res["breaks"].append({"kind": kind, "station": pairs.labels[nodes[k]],
+                                      "before": pairs.labels[nodes[k - 1]], "metres": float(metres), **extra})
+            else:
+                res["small"] += 1
+
         if len(nodes) >= 2:
-            s0 = nodes[0]
-            d = np.hypot(*(X[nodes] - X[s0]).T)
+            P, Q = X[nodes], A[nodes]
+            first, last = nodes[0], nodes[-1]
+            d0 = np.hypot(*(P - P[0]).T)
+            d1 = np.hypot(*(P - P[-1]).T)
             for k in range(1, len(nodes)):
-                if d[k] < d[k - 1]:
-                    a, b = nodes[k - 1], nodes[k]
-                    res["backtracks"].append({
-                        "before": pairs.labels[a], "station": pairs.labels[b],
-                        "metres": float(d[k - 1] - d[k]),
-                        "start_to_before_min": int(pairs.directed[s0, a]),
-                        "before_to_start_min": int(pairs.directed[a, s0]),
-                        "start_to_station_min": int(pairs.directed[s0, b]),
-                        "station_to_start_min": int(pairs.directed[b, s0])})
-        res["in_order"] = not res["backtracks"]
+                if d0[k] < d0[k - 1]:
+                    add("nearer the start", k, d0[k - 1] - d0[k],
+                        minutes_from_start=[int(pairs.directed[first, nodes[k]]),
+                                            int(pairs.directed[nodes[k], first])])
+                if d1[k] > d1[k - 1]:
+                    add("further from the end", k, d1[k] - d1[k - 1],
+                        minutes_to_end=[int(pairs.directed[nodes[k], last]),
+                                        int(pairs.directed[last, nodes[k]])])
+            for k in range(1, len(nodes) - 1):
+                h0, h1 = P[k] - P[k - 1], P[k + 1] - P[k]
+                g0, g1 = Q[k] - Q[k - 1], Q[k + 1] - Q[k]
+                behind = -float(h1 @ h0) / max(float(np.hypot(*h0)), 1e-9)
+                if behind > 0 and _turn_deg(g0, g1) <= 90:
+                    add("turns back", k + 1, behind, map_turn_deg=_turn_deg(h0, h1),
+                        real_turn_deg=_turn_deg(g0, g1))
+            for i in range(len(nodes) - 1):
+                for j in range(i + 2, len(nodes) - 1):
+                    if (_segments_cross(P[i], P[i + 1], P[j], P[j + 1])
+                            and not _segments_cross(Q[i], Q[i + 1], Q[j], Q[j + 1])):
+                        add("crosses itself", j + 1, 0.0,
+                            crosses=f"{pairs.labels[nodes[i]]}–{pairs.labels[nodes[i + 1]]}")
+        res["in_order"] = not res["breaks"]
         out.append(res)
     return out
 

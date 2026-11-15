@@ -7,5 +7,6 @@ strength λ to each station's real position, solved for a sweep of λ from the r
 pure time map. It writes a report and a local viewer.
 
 numpy and the standard library only. Nothing here is imported by the web app or by the table
-build, and nothing it writes may go into git: the tables are not licensed for publication.
+build, and nothing it writes may go into git or onto the site (#6 L-01's rule, whatever the
+build's licence).
 """

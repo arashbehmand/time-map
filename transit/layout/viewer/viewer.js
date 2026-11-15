@@ -112,16 +112,14 @@
       for (const i of L.labels) {
         const text = L.nodes[i].label;
         const wdt = ctx.measureText(text).width;
-        const y = P[i][1];
-        // Right of the dot, else left of it, else not at all.
-        let x = P[i][0] + r + 4;
-        let box = [x - 2, y - 8, x + wdt + 2, y + 8];
-        if (hits(box)) {
-          x = P[i][0] - r - 4 - wdt;
-          box = [x - 2, y - 8, x + wdt + 2, y + 8];
-          if (hits(box)) continue;
-        }
-        boxes.push(box);
+        // Right of the dot, left, above, below; dropped only when all four collide. Labels are
+        // placed in checks.toml's order, so the central ones listed first win.
+        const [px, py] = P[i];
+        const spots = [[px + r + 4, py], [px - r - 4 - wdt, py], [px - wdt / 2, py - r - 11], [px - wdt / 2, py + r + 11]];
+        const spot = spots.find(([x, y]) => !hits([x - 2, y - 8, x + wdt + 2, y + 8]));
+        if (!spot) continue;
+        const [x, y] = spot;
+        boxes.push([x - 2, y - 8, x + wdt + 2, y + 8]);
         ctx.lineWidth = 3;
         ctx.strokeStyle = css("--halo");
         ctx.strokeText(text, x, y);
@@ -130,7 +128,7 @@
       }
     }
 
-    // Scale bar: metres on the map, and the minutes they stand for on the time map.
+    // Scale bar: metres on the map, and on the pure time map the minutes they stand for.
     const km = niceKm(110);
     const len = km * 1000 * state.scale;
     const x0 = 16, y0 = state.h - 18;
@@ -143,7 +141,7 @@
     ctx.font = "12px system-ui, sans-serif";
     ctx.textBaseline = "bottom";
     const mins = (km * 1000) / L.s_m_per_min;
-    ctx.fillText(state.frame === 0 ? `${km} km` : `${km} km ≈ ${mins.toFixed(mins < 10 ? 1 : 0)} min`, x0, y0 - 4);
+    ctx.fillText(state.frame === last ? `${km} km ≈ ${mins.toFixed(mins < 10 ? 1 : 0)} min` : `${km} km`, x0, y0 - 4);
   }
 
   function fmt(v, d) { return v === null || v === undefined ? "–" : Number(v).toFixed(d); }
@@ -154,9 +152,12 @@
       ? "Pure time map (λ = 0)" : `λ̃ = ${Number(f.lam_tilde).toPrecision(2)}`;
     const wem = m.wembley_ratio === null || m.wembley_ratio === undefined ? m.wembley
       : `${fmt(m.wembley_ratio, 2)}× the median ratio (${m.wembley})`;
+    // Fold-free is the report's rule: no flipped triangle and no crossing boundary edges.
+    const folds = m.folded === 0 && m.boundary_crossings === 0 ? "fold-free"
+      : `folds ${m.folded} (${fmt(m.folded_area * 100, 1)}% of the area), ${m.boundary_crossings} boundary crossings`;
     $("readout").textContent = `${name} · stress σ₁ ${fmt(m.sigma1, 3)} · trustworthiness ${fmt(m.T, 3)}, ` +
-      `continuity ${fmt(m.C, 3)} · folds ${m.folded} (${fmt(m.folded_area * 100, 1)}% of the area)` +
-      ` · Wembley Park–Baker Street ${wem}` + (m.converged === false ? " · stopped at the iteration cap" : "");
+      `continuity ${fmt(m.C, 3)} · ${folds} · Wembley Park–Baker Street ${wem}` +
+      ` · Metropolitan line breaks ${m.met_breaks}`;
   }
 
   function nearest(px, py) {
@@ -174,7 +175,9 @@
     if (i < 0) { tip.hidden = true; return; }
     const f = L.frames[state.frame], f0 = L.frames[0];
     const moved = Math.hypot(f.x[i] - f0.x[i], f.y[i] - f0.y[i]) / 1000;
-    tip.textContent = `${L.nodes[i].name} · leftover stress ${fmt(f.stress[i], 3)}` +
+    const node = L.nodes[i];
+    tip.textContent = `${node.label}${node.name !== node.label ? ` (${node.name})` : ""} · leftover stress ` +
+      `${fmt(f.stress[i], 3)}` +
       (state.frame ? ` · moved ${moved.toFixed(1)} km` : "");
     tip.hidden = false;
     tip.style.left = `${Math.min(px + 12, state.w - 270)}px`;
@@ -225,9 +228,13 @@
   $("ramp").style.background = `linear-gradient(to right, ${RAMP.join(", ")})`;
   $("ramp-hi").textContent = `${top}+`;
   if (L.notice) $("notice").textContent = L.notice;
-  $("credits").textContent = `Build ${L.build}, ${L.window} (departing ${L.departure}). ` +
-    (L.left_out && L.left_out.length ? `${L.left_out.length} unconnected group(s) left out. ` : "") +
-    (L.attribution || []).join(" · ");
+  const expired = L.valid_until && new Date() > new Date(`${L.valid_until}T23:59:59`);
+  $("credits").textContent = `Build ${L.build}, ${L.window} (departing ${L.departure}); tables valid until ` +
+    `${L.valid_until}${expired ? " (EXPIRED: rebuild them)" : ""}. ` + (L.attribution || []).join(" · ");
+  if (L.left_out && L.left_out.length) {
+    $("left-out").textContent = "Left out, not joined both ways to the rest: " +
+      L.left_out.map((g) => `${g.names.join(", ")} (${g.names.length})`).join("; ") + ".";
+  }
   readout();
   resize();
 })();

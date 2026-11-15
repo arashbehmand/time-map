@@ -318,14 +318,21 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
 
     # ── public transport, from the tables ─────────────────────────────
     def table_rows() -> np.ndarray:
-        rows = [data.place_minutes(data.row(people[k].lon, people[k].lat, window))[g.cand]
+        rows = [data.place_minutes(data.row(people[k].lon, people[k].lat, window))
                 for k in g.transit]
-        return np.array(rows).reshape(len(g.transit), n_c)
+        return np.array(rows).reshape(len(g.transit), len(data.places))
 
+    full = await asyncio.to_thread(table_rows)      # every station, before the radius filter
     times = np.full((len(people), n_c), np.inf)
-    times[g.transit] = await asyncio.to_thread(table_rows)
+    times[g.transit] = full[:, g.cand]
     # Who on public transport is stuck can be told before anyone else is asked about. The
-    # tables keep trips up to 3 hours, so "no time" there is not "no route".
+    # tables keep trips up to 3 hours, so "no time" there is not "no route"; and it is said
+    # only when no station at all has a time, not just none of those in road people's reach.
+    no_time = [k for k, row in zip(g.transit, full) if not np.isfinite(row).any()]
+    if no_time:
+        raise NoFeasiblePoint("no_transit_time", [
+            {"index": index_of[k], "reason": "no_transit_time"}
+            for k in sorted(no_time, key=lambda k: index_of[k])])
     try:
         t_longest, _ = scores(times[g.transit], weights[g.transit], limits[g.transit])
         explain_infeasible(times[g.transit], np.zeros((len(g.transit), n_c), dtype=bool), t_longest,
@@ -333,8 +340,10 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
     except NoFeasiblePoint as exc:
         if exc.extra.get("reason") != "no_route":
             raise
-        raise NoFeasiblePoint("no_transit_time", [{**w, "reason": "no_transit_time"}
-                                                  for w in exc.extra["who"]]) from None
+        # Times to some stations, but none within the road people's reach: no common place.
+        raise NoFeasiblePoint("no_common_place", [
+            {"index": w["index"], "reason": "reaches_few", "reach": 0, "of": int(n_c)}
+            for w in exc.extra["who"]]) from None
 
     cols = np.arange(n_c)                       # the places scored, as indexes into g.cand
     unresolved = np.zeros((len(people), n_c), dtype=bool)

@@ -677,3 +677,13 @@ def test_the_shortlist_finds_what_asking_about_every_station_finds(tmp_path):
         full = asyncio.run(st.solve_stations(req, data, FixedRouter(bumpy), everything, "wd19", g))
         regrets.append(short.best.max_time_min - full.best.max_time_min)
     assert len(regrets) >= 40 and max(regrets) <= 1e-6, regrets
+
+
+def test_times_only_beyond_a_road_person_s_reach_is_no_common_place():
+    # The rider has a time to P1 only, 20 km away, beyond the walker's 15 km: that is no
+    # common place, not "no trip within 3 hours to any station".
+    data = _FakeData([[np.inf, 30]], np.zeros(2), np.array([51.5, 51.5 + 20 / 111.195]))
+    with pytest.raises(NoFeasiblePoint) as exc:
+        run(data, [person("a", (0, 51.5)), person("b", (0, 51.5), mode="walking")])
+    assert exc.value.extra["reason"] == "no_common_place"
+    assert exc.value.extra["who"] == [{"index": 0, "reason": "reaches_few", "reach": 0, "of": 1}]

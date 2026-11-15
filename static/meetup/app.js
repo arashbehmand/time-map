@@ -245,7 +245,11 @@ async function loadTransitStatus() {
     if (!ids.includes(windowId)) windowId = ids.includes(DEFAULT_WINDOW) ? DEFAULT_WINDOW : ids[0];
     sel.value = windowId;
   } else if (anyTransit()) {
-    for (const p of people) if (p.mode === "transit") p.mode = "walking";
+    for (const p of people) {
+      if (p.mode !== "transit") continue;
+      p.mode = "walking";
+      updateMarker(p);     // the marker's popup says how they travel
+    }
     groupChanged();
     setAddStatus("Public transport times aren't available right now, so everyone on it is walking.");
   }

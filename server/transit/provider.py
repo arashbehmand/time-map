@@ -158,9 +158,19 @@ class TransitData:
                 raise TransitUnavailable("files_differ")
             if verify_hashes and _sha256(path) != out["sha256"]:
                 raise TransitUnavailable("files_differ")
+        # Complete tables: a build folder has each table's fingerprint file; a published package
+        # (transit.build's package stage) leaves those out, and its manifest's record of complete
+        # tables stands in for them. Either way the sizes and hashes above pin the files to the
+        # manifest.
+        recorded = manifest.get("tables_fingerprints") or {}
         for w in WINDOWS:
+            fp_path = d / f"tt_{w}.fingerprint.json"
+            if not fp_path.exists():
+                if w not in recorded:
+                    raise TransitUnavailable("incomplete")
+                continue
             try:
-                fp = json.loads((d / f"tt_{w}.fingerprint.json").read_text())
+                fp = json.loads(fp_path.read_text())
             except (OSError, ValueError):
                 raise TransitUnavailable("incomplete") from None
             if fp.get("complete") is not True:

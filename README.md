@@ -145,7 +145,8 @@ don't. How to build, the one key it needs and what it writes: [transit/README.md
 Sources and licences: [docs/transit-sources.md](docs/transit-sources.md); results so far:
 [docs/transit-spike.md](docs/transit-spike.md).
 
-The warp map reads a build at runtime when `TRANSIT_DIR` points at one
+The warp map reads a build at runtime when `TRANSIT_DIR` points at one (a build folder, or a
+package from `transit.build`'s package stage, extracted)
 (`server/transit/provider.py`, using `transit/tables.py` only). It serves it only if the build is
 complete, unexpired, matches the hashes in its manifest and says `licences_cleared: true`.
 `TRANSIT_ALLOW_UNCLEARED=1` serves an uncleared build for local development: only to requests

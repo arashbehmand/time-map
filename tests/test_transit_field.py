@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from tiny_transit import POND, A, B, C, cell_of, make_build
 
-from server.transit.provider import TransitData, TransitUnavailable, display_name, window_label
+from server.transit.provider import WINDOWS, TransitData, TransitUnavailable, display_name, window_label
 from server.warp.field import LocalFrame
 from transit.tables import compose_pair
 
@@ -124,6 +124,20 @@ def test_expired_and_incomplete_builds_are_refused(tmp_path):
     half = make_build(tmp_path / "half", complete=False)
     with pytest.raises(TransitUnavailable, match="incomplete"):
         TransitData.load(half, allow_uncleared=True)
+
+
+def test_a_published_package_loads_without_fingerprint_files(tmp_path):
+    # transit.build's package stage ships the tables, points, walksheds and manifest, not the
+    # tt_*.fingerprint.json files: the manifest's record of complete tables stands in for them.
+    d = make_build(tmp_path, cleared=True)
+    for w in WINDOWS:
+        (d / f"tt_{w}.fingerprint.json").unlink()
+    with pytest.raises(TransitUnavailable, match="incomplete"):
+        TransitData.load(d)                          # no record anywhere: refused
+    manifest = json.loads((d / "manifest.json").read_text())
+    manifest["tables_fingerprints"] = {w: {"inputs": w} for w in WINDOWS}
+    (d / "manifest.json").write_text(json.dumps(manifest))
+    assert TransitData.load(d).table("wd08").shape[0] == 4
 
 
 def test_changed_files_are_refused(build):

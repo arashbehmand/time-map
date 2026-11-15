@@ -13,6 +13,9 @@ Issue #5, part W-02. Written 2026-11-13 on top of W-01 (#12, `docs/warp-renderer
 - Measured with live Mapbox routing and tiles: the walking, cycling and driving fields, the
   transit near field and its seam, Direction 4 with the near field, the lab's gates on real
   Streets tiles, and the page's pans, pins and bend.
+- **Fixed 2026-11-15:** on the bent map the platforms north of King's Cross were drawn as a wedge
+  out to the outer ring. Ground the contours leave out is now an uncertain patch, drawn small
+  and left uncoloured (see [Uncertain patches](#uncertain-patches-the-wedge-north-of-kings-cross)).
 - **Not measured:** the phones and the comprehension test (both the owner's).
 
 The raw numbers are in `docs/warp-time-polar-results.json`. No field, table or real-tile
@@ -77,11 +80,17 @@ Minutes on a regular grid in local metres around the pin (W-01's `field.js` shap
   Walking times stay as they are. Direction 4 is reported both ways.
 - **Gaps:** water and parkland up to about 300 m from a known node are filled from their
   neighbours and flagged. They are drawn, but excluded from taps and checks.
+- **Uncertain patches:** ground the contours leave out of a hole through two or more
+  consecutive contours, rising above its way out by more than walking in from its edge explains
+  (King's Cross's platforms). Each keeps its own minutes. It also gets drawn minutes, which only
+  the bent map's geometry uses. See [Uncertain patches](#uncertain-patches-the-wedge-north-of-kings-cross).
 - **Wire format:** uint16 tenths of a minute, base64 in JSON.
   - 0xFFFF means no data.
   - 0xFFFE means beyond: no time within the tables' 180 minutes. It is a status everywhere
     (the CPU and GPU samplers, labels, taps), never blended into minutes.
   - Bit 15 marks a filled node.
+  - `uncertain`, only when there are patches: `nodes_b64` (uint32 node indices, increasing)
+    and `drawn_b64` (uint16 tenths, one per node).
 
 | Field (King's Cross / five transit origins) | Grid | gzip | Server maths | Endpoint, cold |
 |---|---|---|---|---|
@@ -90,7 +99,8 @@ Minutes on a regular grid in local metres around the pin (W-01's `field.js` shap
 | Driving | 207 × 151 @ 400 m | 19 kB | 125 ms | 1,453 ms |
 | Transit, weekday 08–09 | about 640 × 511 @ 100 m | 294–299 kB | | 204–951 ms |
 
-"Endpoint, cold" includes the two Mapbox calls. A field built without its walking near field
+"Endpoint, cold" includes the two Mapbox calls. Finding uncertain patches adds at most 4 ms to a
+walking field and 15–85 ms to a cycling or driving one (measured on live fields, 2026-11-15). A field built without its walking near field
 (a refused isochrone call) is served with a note and not cached.
 
 **Transit is served only from a build that passes every check:**
@@ -171,6 +181,134 @@ passes either check.**
 run: with `?polar=1` the overlap and the tap list are there to test. A fold-free layout is
 #6's question, not W-02's.
 
+## Uncertain patches: the wedge north of King's Cross
+
+**What the owner saw (2026-11-14).** At the opening example (King's Cross, walking, 30
+minutes, Fold, By reach), the normal map has a pale notch north of the pin: the platforms and
+tracks, which nobody walks into. Bent, the notch became a bright wedge from the pin to the 30
+ring, with the tracks fanned up along it.
+
+**Why.**
+- Mapbox's walking contours leave the platforms out of every contour up to 50 minutes.
+- `contour_field` interpolates them to about 50 minutes; the streets 200 m further north are at
+  12. The saved field's north ray read 0, 3.8, 50.0, 50.1, 20.2, 11.7, 11.9, 13.4.
+- The fold draws every place at its own minutes, and the fade sends places past the outer ring
+  onto it. So the triangles between the station (4 minutes) and the ring stretched into a wedge.
+- The station's label read "London King's Cross · 33 min": the patch's interpolated time.
+
+**How it was missed.**
+- The same explosion was reported in squash and fixed there only (the cut).
+- The second review packet described the cut as a squash step, so every review looked at squash.
+- Every numeric check here (Direction 4, G1–G5) trusts the field: a hole interpolated to 50
+  minutes counts as a real 50-minute place, and the fade past the outer ring is by design.
+- A real-tile screenshot of the walking fold at King's Cross was taken during the timing runs
+  and never looked at.
+
+**The rule** (`server/warp/field.py`; the owner accepted it as a heuristic for uncertain
+ground, 2026-11-14):
+- **Way out:** for each node, the highest level, over paths to the grid's edge, of the lowest
+  time along the path. No data counts as +∞. It is the flood of squash's cut.
+- **On the grid,** contour k's region is exactly {t ≤ t_k}. So a node is in a hole of contour k
+  when its way out ≤ t_k < its time. A node in holes of two or more consecutive contours is a
+  candidate (no data counts as slower than every contour).
+- **A group of candidates** (4-connected) is an uncertain patch when its largest rise above the
+  way out is more than walking in from its edge explains: depth × 2 ÷ speed + 3 minutes. Speed
+  is 4 km/h walking, 15 km/h cycling and 24 km/h driving. A park 1.2 km across stays a real
+  place; the platforms (one 100 m cell deep, 38 minutes up) don't.
+- **Drawn minutes:** a smooth fill from the ground around the patch (neighbour means working
+  inward, then Jacobi passes with the rim held). King's Cross's platforms are drawn at 6.1, 8.2
+  and 9.6 between 3.8 and 11.7.
+- **The provider's minutes stay on the wire** for audit. The patch is not marked filled, which
+  means water.
+- **Transit:** the walking near field is classified before the 2 km merge. A patch's walking
+  time never beats a time from the tables: the tables win there, and the patch is kept only
+  where they have none. At the five transit origins the tables cover every walking patch, so
+  transit fields carry none.
+
+**What each view does with a patch.**
+- **Normal map:** the bands leave it out at every ring, a pale notch as before, and the colour
+  bar doesn't count it.
+- **Bent map** (fold and squash, CPU and GPU, both workers, the lab): bent by the field with
+  each patch node at its drawn minutes, so it is drawn small between the station front and the
+  streets beyond. The band layer and the overlap tint leave it uncoloured. By reach gives it no
+  room.
+- **Labels and taps:**
+  - A label whose cell touches a patch shows its name with no minutes.
+  - A tap on a patch, normal or bent, says "No reliable travel time here: the route data leaves
+    this patch out." A tap on the street 600 m north still says about 12 minutes.
+- **Checks:** G3, Direction 4's diagnostics and the radius check leave the patch footprint out,
+  as they leave filled ground out. The drawn radius of patch nodes equals their drawn minutes
+  (`__lab.uncertainChecks`, error 0).
+
+**Measured on live fields, 2026-11-15** (`__lab.uncertainChecks()`).
+- **The wedges:** nodes the warp sends onto the outer ring though every way out crosses ground at
+  least 10 minutes inside the ring (`diagnostics.enclosedFade`). They are counted before (the
+  field's own minutes, as the fold drew them) and after (what it draws now).
+- **The two-contour rule** makes "after" 0 at 15, 30 and 60. At 45 one 10-minute contour step
+  can hide a single-contour spike. At 60, Baker Street cycling keeps one deep patch.
+
+| Origin | Mode | Patch nodes (no data) | Patches | Wedges at 15 | 30 | 45 | 60 |
+|---|---|---|---|---|---|---|---|
+| King’s Cross | Walk | 5 (1) | 3 | 0 → 0 | 2 → 0 | 4 → 1 | 1 → 0 |
+| King’s Cross | Cycle | 284 (270) | 131 | 1 → 0 | 27 → 0 | 105 → 1 | 270 → 0 |
+| King’s Cross | Drive | 11 (11) | 5 | 0 → 0 | 0 → 0 | 4 → 0 | 11 → 0 |
+| Baker Street | Walk | 17 (9) | 9 | 0 → 0 | 5 → 0 | 9 → 0 | 9 → 0 |
+| Baker Street | Cycle | 276 (265) | 128 | 0 → 0 | 43 → 0 | 107 → 1 | 266 → 1 |
+| Baker Street | Drive | 68 (67) | 31 | 0 → 0 | 0 → 0 | 1 → 0 | 67 → 0 |
+| Wembley Park | Walk | 50 (38) | 32 | 0 → 0 | 4 → 0 | 12 → 1 | 38 → 0 |
+| Wembley Park | Cycle | 737 (717) | 185 | 0 → 0 | 59 → 0 | 107 → 0 | 717 → 0 |
+| Wembley Park | Drive | 225 (208) | 96 | 0 → 0 | 0 → 0 | 15 → 2 | 208 → 0 |
+| Canary Wharf | Walk | 6 (5) | 5 | 0 → 0 | 0 → 0 | 2 → 0 | 5 → 0 |
+| Canary Wharf | Cycle | 157 (149) | 75 | 0 → 0 | 1 → 0 | 49 → 0 | 149 → 0 |
+| Canary Wharf | Drive | 318 (287) | 133 | 0 → 0 | 0 → 0 | 8 → 1 | 287 → 0 |
+| Heathrow | Walk | 0 (0) | 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 |
+| Heathrow | Cycle | 1158 (1139) | 200 | 0 → 0 | 42 → 0 | 327 → 1 | 1139 → 0 |
+| Heathrow | Drive | 593 (527) | 223 | 0 → 0 | 33 → 0 | 95 → 3 | 527 → 0 |
+| Croydon | Walk | 22 (18) | 17 | 0 → 0 | 2 → 0 | 5 → 1 | 18 → 0 |
+| Croydon | Cycle | 711 (691) | 224 | 0 → 0 | 39 → 0 | 142 → 1 | 691 → 0 |
+| Croydon | Drive | 125 (107) | 57 | 0 → 0 | 1 → 0 | 17 → 0 | 107 → 0 |
+
+Most patches in cycling and driving fields are enclosed no-data holes: `denoise=0` keeps every
+hole Mapbox returns. Before, they faded onto the outer ring from ground well inside it; now they
+are drawn at the times around them. A patch with its own minutes is the kind that could take a
+real place's colour. There are 0–12 such nodes per walking field and 0–66 per cycling or driving
+field. They were not looked at one by one.
+
+**The check that would have caught it.**
+- `tests/js/warp-example.test.js` checks the committed example:
+  - no wedge at rings 15, 30 and 60;
+  - at most the one at 45;
+  - from 100 to 700 m north of the pin, every point drawn in place within 15 minutes, By reach
+    and True compass.
+- `tests/test_ux.py` checks that the platforms are a patch, with minutes kept and drawn
+  under 15.
+- Run against the example at 81e2106, both fail: at ring 30, and on the first platform node.
+- **And looking:** the default bent view at the opening example is opened and read after every
+  visual change, not only the view a report names.
+
+**Looked at** (real tiles, desktop, 2026-11-15):
+
+| Origin | Mode | View | Ring | Seen |
+|---|---|---|---|---|
+| King's Cross | Walk | Normal | 30 | The pale notch north of the pin, as before |
+| King's Cross | Walk | Fold, by reach | 30 | No wedge. The platforms are a small uncoloured block between the 5 and 12 minute radii, and the tracks run north from it at the times of the ground around them (Maiden Lane 24 min). Taps say the new sentence on the block and about 12 min 600 m north |
+| King's Cross | Walk | Fold, by reach | 15 | No wedge. The tracks north of the block reach the ring at their own times (15+ minutes) |
+| King's Cross | Walk | Fold, by reach | 60 | No wedge. A few small slivers 24–40 minutes out near Maiden Lane and Caledonian Road: single-contour spikes, a node one contour above its neighbours |
+| King's Cross | Walk | Fold, true compass | 30 | No wedge; the block sits north of the pin |
+| King's Cross | Walk | Squash | 30 | No wedge; the block is drawn small inside the 15 ring |
+| King's Cross | Cycle | Fold, by reach | 30 | No wedge; "London King's Cross" with no minutes; a few small slivers |
+| King's Cross | Drive | Fold, by reach | 30 | No wedge |
+| Baker Street | Walk | Fold, by reach | 30 | No wedge; Regent's Park keeps its own times (the allowance) |
+| Canary Wharf | Walk | Fold, by reach | 30 | No wedge |
+
+Not looked at: a transit origin with `?polar=1`. The transit fields at the five origins carry no
+patches, so their bent view is unchanged.
+
+**Direction 4, rerun 2026-11-15.** The weekday 08–09 smoothed rows at all five origins and both
+direction settings are unchanged to the third decimal place, because the transit fields carry no
+patches. The whole-minute rows were not rerun: this checkout's build is marked cleared, so the
+server smooths every field. The recorded ones stand.
+
 ## Trial: squash, another layout for transit's pockets
 
 Around each station the minutes drop, then rise again as you walk away, so along a line out
@@ -180,9 +318,11 @@ minutes" to stop that. It is on the bent map behind `?layouts=1` (`static/shared
 the default is still the fold, and transit's bend stays hidden. It is not the issue's view: if
 it is to ship for transit, #5 needs the owner to accept it in place of "distance = minutes".
 
-- **The cut.** A place standing at least 5 minutes above the way out around it (a station's
-  platforms in a walking field, whose times the contour interpolation invents) is lowered to that
-  way out, so it doesn't push everything behind it outward. Slow streets between stations (most
+- **The cut.** A place standing at least 5 minutes above the way out around it is lowered to
+  that way out, so it doesn't push everything behind it outward. Since 2026-11-15 the worst
+  of these in a walking field, a station's platforms, arrive from the server as uncertain patches
+  with their drawn minutes. Squash bends from those, like the fold, so the cut is left with
+  transit's slow ridges. Slow streets between stations (most
   of them under 3 minutes above their way out) keep their minutes; unknown holes and "beyond"
   ground are never crossed or changed. Walking from King's Cross, the platforms read 28–50
   minutes against 10–12 for the streets beyond them and blew the north sector past the outer
@@ -247,7 +387,7 @@ Every row is about the shipped path: the normal map, and the fold where the map 
 
 | Done when | Result |
 |---|---|
-| 1,000 random cells within 1 px | **Met in the lab.** G3, dots drawn and read back from pixels, is at most 0.062 px at all five origins (live transit fields, real tiles, back-end B), and 0.062 px on back-end C at Baker Street |
+| 1,000 random cells within 1 px | **Met in the lab.** G3, dots drawn and read back from pixels, is at most 0.062 px at all five origins (live transit fields, real tiles, back-end B), and 0.062 px on back-end C at Baker Street. On the walking fold at King's Cross after the patch fix: 0.028 px. Cells touching an uncertain patch are left out: they have no reliable time to match |
 | Wembley Park from Baker Street within #1's limits | **Met on the accepted line by 0.1 minute, on one pair; not on the issue's line.** See [TfL journeys](#tfl-journeys) |
 | Any number of rings, no 60-minute cap for transit | **Met.** Transit offers up to 120 minutes (13 rings); the tables reach 180, and the grid spans the whole coverage box |
 | No Matrix calls; at most two isochrone requests per new origin | **Met, live and in the tests.** Live usage counter: a new transit pin +2 isochrone, 0 Matrix; walking and another window at that pin +0. Concurrent walk and transit requests share the calls in flight (`tests/test_field_api.py`) |
@@ -341,6 +481,15 @@ places, each with its minutes.
    runtime build).
 
 ## Risks and things not checked
+
+- **Single-contour spikes stay.** A node one contour above all its neighbours is not an uncertain
+  patch: the owner's rule needs two contours. Beyond 30 minutes the contours are 10 minutes
+  apart, so it can still be drawn as a thin sliver toward the ring at 45 or 60 (1–3 per field at
+  45 above). Widening the rule is the owner's call.
+- **An uncertain patch may be real ground.** A gated estate or a yard behind a long fence, in
+  holes of two contours and too slow to walk into from its edge, would be left uncoloured and
+  drawn at the times around it. Its minutes stay in the field. The thresholds (detour 2, 3
+  minutes, 15 and 24 km/h) are first guesses, checked only against the counts above.
 
 - **Walk mode is slower than the old page.** It moved to 4 km/h from Mapbox's 5.1 km/h, so
   walking reach is about 22% smaller. That is deliberate, and the page says 4 km/h.

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>London Station Times</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="viewer.css">
+</head>
+<body>
+<header>
+  <h1>London by travel time: stations</h1>
+  <p class="notice" id="notice">Local use only: derived from the transit tables, kept out of git and off the site.</p>
+  <p class="notice" id="left-out"></p>
+</header>
+<main>
+  <canvas id="map" aria-label="Stations placed by travel time"></canvas>
+  <div id="tip" role="status" hidden></div>
+  <p id="status" class="status"></p>
+</main>
+<section id="controls" aria-label="Controls">
+  <div class="slider">
+    <span>Real map</span>
+    <input id="frame" type="range" min="0" max="0" step="1" value="0" aria-label="From the real map to the pure time map">
+    <span>Time map</span>
+  </div>
+  <p id="readout" class="readout"></p>
+  <div class="row">
+    <label><input id="labels" type="checkbox" checked> Names</label>
+    <label><input id="line" type="checkbox"> Metropolitan line</label>
+    <button id="fit" type="button">Fit</button>
+    <span class="legend"><span>Leftover stress</span><span id="ramp" class="ramp"></span><span id="ramp-lo">0</span>–<span id="ramp-hi"></span></span>
+  </div>
+  <p id="credits" class="credits"></p>
+</section>
+<script src="layout.js"></script>
+<script src="viewer.js"></script>
+</body>
+</html>

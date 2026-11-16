@@ -11,9 +11,12 @@ export const SCHEMA = "mapbox-streets-v8";
 export const TILE_URL = (z, x, y) => `/tiles/${z}/${x}/${y}`;
 
 // Draw order. Fills first, then lines: road casings under road fills, and rail on top.
+// `boundary` (borough outlines) is drawn only by the London time map (#6, L-02), which builds
+// its own scene; the tile pipeline never fills it, and a pass with no buffer is skipped.
 export const PASSES = [
   { name: "water", kind: "fill" },
   { name: "park", kind: "fill" },
+  { name: "boundary", kind: "line" },
   { name: "roadCase", kind: "line", buffer: "road", casing: true },
   { name: "road", kind: "line" },
   { name: "rail", kind: "line" },
@@ -33,6 +36,7 @@ export const STYLES = [
   { name: "trunk", color: "#f9b29c", width: [[10, 2], [16, 6]], casing: "#c89b7a", casingWidth: [[10, 2], [16, 7]], bent: 0.7 },
   { name: "primary", color: "#fcd6a4", width: [[10, 1.5], [16, 5]], casing: "#c89b7a", casingWidth: [[10, 2], [16, 7]], bent: 0.55 },
   { name: "secondary", color: "#f7fabf", width: [[10, 1], [16, 4]], casing: "#e0d8c0", casingWidth: [[10, 1], [16, 5]], bent: 0.4 },
+  { name: "boundary", color: "#c49a5c", width: [[10, 1.1], [16, 2]] },
 ];
 export const STYLE_ID = Object.fromEntries(STYLES.map((s, i) => [s.name, i]));
 export const BACKGROUND = "#f0ede9";

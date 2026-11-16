@@ -112,15 +112,31 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def write_build(root: Path, build: str = BUILD, table_hook=None, dtype=np.uint8, manifest_hook=None) -> Path:
+def extra_cells(n: int) -> list[tuple[str, float, float]]:
+    """n table cells on a jittered grid over the stations and a ring round them (the full time
+    map, #6 L-02, thins them to its extra points)."""
+    side = math.ceil(math.sqrt(n))
+    rng = np.random.default_rng(11)
+    out = []
+    for k in range(n):
+        r, c = divmod(k, side)
+        jx, jy = rng.uniform(-200, 200, 2)
+        out.append((f"cell{k:04d}", -2000 + c * 11500 / max(side - 1, 1) + jx,
+                    -2000 + r * 11500 / max(side - 1, 1) + jy))
+    return out
+
+
+def write_build(root: Path, build: str = BUILD, table_hook=None, dtype=np.uint8, manifest_hook=None,
+                n_cells: int = 0) -> Path:
     """Write the synthetic build into root/<build>/ and return that folder. `table_hook(t, at)`
     may change the table (as uint8, with `at` mapping ids to rows) before it is hashed;
-    `manifest_hook(manifest)` may change the manifest before it is written."""
+    `manifest_hook(manifest)` may change the manifest before it is written; `n_cells` adds that
+    many cells (see extra_cells)."""
     out = Path(root) / build
     out.mkdir(parents=True, exist_ok=True)
     st = _stations()
     ids = sorted(st)
-    cells = [("88194ad86dfffff", 1000.0, -2000.0), ("88194ad87dfffff", 2500.0, -2000.0)]
+    cells = [("88194ad86dfffff", 1000.0, -2000.0), ("88194ad87dfffff", 2500.0, -2000.0)] + extra_cells(n_cells)
     rows = []
     for sid in ids:
         x, y = st[sid]

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>London Time Map</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header>
+  <h1>London by travel time</h1>
+  <p class="lede">Press “Bend by travel time”, or drag the slider: stations a fast train joins pull together, and the city bunches and stretches around them without ever turning inside out.</p>
+  <p class="notice" id="notice">Local use only: derived from the transit tables, kept out of git and off the site.</p>
+</header>
+<main>
+  <canvas id="map" aria-hidden="true"></canvas>
+  <canvas id="overlay" aria-label="London's land, stations and the Metropolitan line, placed by travel time"></canvas>
+  <div id="tip" role="status" hidden></div>
+  <p id="status" class="status"></p>
+</main>
+<section id="controls" aria-label="Controls">
+  <div class="row primary-row">
+    <button id="bend" class="primary" type="button">Bend by travel time</button>
+  </div>
+  <div class="slider">
+    <span>Real map</span>
+    <div class="track">
+      <input id="frame" type="range" min="0" max="0" step="any" value="0" aria-label="From the real map to the time map">
+      <div id="marks" class="marks" aria-hidden="true"></div>
+    </div>
+    <span>Time map</span>
+  </div>
+  <div id="readout" class="readout" aria-live="polite"></div>
+  <div class="row">
+    <button id="fit" type="button">Fit</button>
+    <label><input id="labels" type="checkbox" checked> Names</label>
+    <label><input id="line" type="checkbox" checked> Metropolitan line</label>
+    <label><input id="ghosts" type="checkbox" checked> Where they really are</label>
+    <label><input id="smooth" type="checkbox" checked> Smooth lines</label>
+    <label><input id="mesh" type="checkbox"> Mesh</label>
+  </div>
+  <p id="credits" class="credits"></p>
+</section>
+<script type="module" src="app.js"></script>
+</body>
+</html>

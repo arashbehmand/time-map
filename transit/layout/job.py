@@ -59,12 +59,12 @@ def default_out(build: str, window: str) -> Path:
     return REPO / "transit" / "out" / "layout" / build / window
 
 
-def check_out_dir(out: Path) -> None:
+def check_out_dir(out: Path, names=report.OUTPUT_FILES) -> None:
     """Everything the job writes is derived from the transit tables, so it must not reach git or
     the app: refuse a symlinked output file, a folder the app serves or ships, and a folder inside
-    the repo where git would track any of the files written."""
+    the repo where git would track any of the files written (`names`, relative to `out`)."""
     out = Path(out)
-    for name in report.OUTPUT_FILES:
+    for name in names:
         if (out / name).is_symlink():
             raise RefusedOutput(f"{out / name} is a symlink; the job writes only plain files")
     real = out.resolve()
@@ -74,7 +74,7 @@ def check_out_dir(out: Path) -> None:
         return
     if rel.parts and rel.parts[0] in SHIPPED:
         raise RefusedOutput(f"{rel} is under {rel.parts[0]}/, which the app serves or ships")
-    probes = [(rel / name).as_posix() for name in report.OUTPUT_FILES]
+    probes = [(rel / name).as_posix() for name in names]
     try:
         r = subprocess.run(["git", "check-ignore", "--no-index", "--", *probes], cwd=REPO,
                            capture_output=True, text=True)

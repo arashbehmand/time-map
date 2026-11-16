@@ -8,6 +8,33 @@
 station = "gbt:910GCATEZWY"      # Wembley Park
 reference = "gbt:910GLONDNBS"    # Baker Street
 
+# More stations judged by the same rule (the full time map, #6 L-02, reports them; the
+# stations-only job ignores them). Wembley Stadium is on the Chiltern line: against Baker Street
+# like Wembley Park, and against Marylebone, the Chiltern terminus it is one stop from.
+[[ratio]]
+name = "Wembley Stadium to Baker Street"
+station = "gbt:910GWEMBLSM"      # Wembley Stadium
+reference = "gbt:910GLONDNBS"    # Baker Street
+
+[[ratio]]
+name = "Wembley Stadium to Marylebone"
+station = "gbt:910GWEMBLSM"      # Wembley Stadium
+reference = "gbt:910GMARYLBN"    # London Marylebone
+
+# Train links the full time map must find in the feed (#6, L-02): one missing means the stops
+# were joined to stations the wrong way, and the job stops.
+[[required_link]]
+a = "gbt:910GCATEZWY"            # Wembley Park
+b = "gbt:910GFNCHMET"            # Finchley Road
+
+[[required_link]]
+a = "gbt:910GFNCHMET"            # Finchley Road
+b = "gbt:910GLONDNBS"            # Baker Street
+
+[[required_link]]
+a = "gbt:910GWEMBLSM"            # Wembley Stadium
+b = "gbt:910GMARYLBN"            # London Marylebone
+
 # Each run is the line end to end, in order, through the bends at Baker Street and
 # Harrow-on-the-Hill (transit/layout/measures.py, line_order, says what is tested).
 [[metropolitan]]
@@ -83,4 +110,6 @@ stations = [
   "gbt:910GHTRWAPT",   # Heathrow Terminals 2 & 3
   "gbt:940GZZLUUXB",   # Uxbridge
   "gbt:910GRCKMNSW",   # Rickmansworth
+  "gbt:910GWEMBLSM",   # Wembley Stadium
+  "gbt:910GMARYLBN",   # London Marylebone
 ]

@@ -47,7 +47,7 @@ const S = {
   window: V.defaultWindow(),
   outer: V.MODES.walking.defaultOuter,
   directions: V.DEFAULT_DIRECTIONS,
-  layout: V.DEFAULT_LAYOUT,      // fold | squash (a trial: ?layouts=1)
+  layoutPick: null,      // a chip picked while ?layouts=1 shows them: {mode, layout}, for that mode only
   active: null,          // the field drawn now: {key, json, field, frame}
   bent: false,           // what the person asked for
   u: 0, fade: 0,         // morph (0 ordinary … 1 bent) and the mesh's opacity
@@ -281,6 +281,13 @@ const squashOpts = () => ({ minSlope: Number(Q.get("squashslope")) > 0 ? Number(
                              scale: Q.get("ringscale") === "minutes" ? "minutes" : "ground",
                              spread: V.DIRECTIONS[S.directions] });
 
+// The layout wanted now (views.js layoutFor): a chip picked in this mode, else ?layout=, else
+// the mode's own (squash for public transport, the fold otherwise).
+function layoutNow() {
+  const chip = S.layoutPick && S.layoutPick.mode === S.mode ? S.layoutPick.layout : null;
+  return V.layoutFor(S.mode, chip || Q.get("layout"));
+}
+
 // What the workers need (plain arrays; they rebuild the field, its geometry field and the
 // warp). Both get the same: the minutes, the filled flags and the uncertain patches.
 function workerField(f) {
@@ -289,7 +296,7 @@ function workerField(f) {
 }
 
 // The bent view wanted now: the active field, the outer ring, the directions setting.
-const desiredMeshKey = () => (S.active ? `${S.active.key}|${S.outer}|${S.directions}|${S.layout}` : "");
+const desiredMeshKey = () => (S.active ? `${S.active.key}|${S.outer}|${S.directions}|${layoutNow()}` : "");
 
 // Ask the worker for the bent view of the active field: the map's scene, and the band layer
 // with its overlap index. It is swapped in when both have arrived, if still the one wanted.
@@ -307,7 +314,7 @@ function prepareMesh({ retry = false } = {}) {
   const eps = V.refineEps(fit.k);
   const gen = ++S.gen;
   const prev = retry && S.mesh && S.mesh.key === key ? S.mesh : null;
-  S.pendingMesh = { key, gen, entry, layout: S.layout, spec, outer: S.outer, warp: createWarp(spec), frame: entry.frame,
+  S.pendingMesh = { key, gen, entry, layout: layoutNow(), spec, outer: S.outer, warp: createWarp(spec), frame: entry.frame,
                     kRef: fit.k, zRef: fit.zoom, requestedAt: performance.now(), retried: retry,
                     layers: prev ? prev.layers : null, scene: null };
   const plain = workerField(entry.field), angles = spec.angles || null;   // the same field to both workers
@@ -316,14 +323,14 @@ function prepareMesh({ retry = false } = {}) {
   S.worker.postMessage({
     type: "scene", gen, origin: entry.frame.origin, tiles: cover.tiles,
     spacingDiv: DEFAULT_SPACING_DIV, budget: DEFAULT_BUDGET, source: "tiles",
-    layout: S.layout, squash: squashOpts(),
+    layout: layoutNow(), squash: squashOpts(),
     warp: needsCpuTargets() ? { kind: "polar", field: plain, maxMinutes: S.outer, angles } : null,
     refine: { field: plain, maxMinutes: S.outer, eps, angles },
   });
   if (!prev) {
     S.fieldWorker.postMessage({ type: "layers", key, gen, field: workerField(entry.field), maxMinutes: S.outer,
                                 angles, eps, box: reach, cpu: needsCpuTargets(),
-                                layout: S.layout, squash: squashOpts(), levels: levels() });
+                                layout: layoutNow(), squash: squashOpts(), levels: levels() });
   }
   if (S.bent && !S.mesh) setStatus(T.PREPARING, "busy");
 }
@@ -694,7 +701,7 @@ function loop(now) {
 function updateLegend() {
   const bentNow = S.u > 0.5;
   const outer = bentNow && S.mesh ? S.mesh.outer : S.outer;
-  const layout = bentNow && S.mesh ? S.mesh.layout : S.layout;    // the view drawn, not the next
+  const layout = bentNow && S.mesh ? S.mesh.layout : layoutNow();    // the view drawn, not the next
   setText($("from"), T.fromLine(S.origin));
   setText($("sentence"), S.dragging ? "Drop the pin where you want to start."
     : T.sentence(S.mode, outer, ringPlan(outer), bentNow, layout));
@@ -711,10 +718,15 @@ function updateLegend() {
   const layouts = Q.get("layouts") === "1" || V.LAYOUTS.includes(Q.get("layout"));
   show($("layout-chips"), offered && S.bent && layouts);
   show($("layout-note"), offered && S.bent && layouts);
-  setText($("layout-note"), T.LAYOUT_NOTES[S.layout]);
+  setText($("layout-note"), T.LAYOUT_NOTES[layoutNow()]);
+  if (layouts) checkRadio("layout", layoutNow());
   show($("direction-note"), offered && S.bent);
-  setText($("direction-note"), T.DIRECTION_NOTES[S.directions]);
-  show($("overlap-note"), S.bent && S.mode === "transit" && S.layout !== "squash");
+  setText($("direction-note"), T.directionNote(S.directions, layout));
+  show($("overlap-note"), S.bent && S.mode === "transit" && layoutNow() !== "squash");
+  // What squash gives up, for the view drawn (its own counts: a pending pin never relabels it).
+  const givesUp = bentNow && S.mesh && S.mesh.layout === "squash" && S.mesh.entry.json.mode === "transit";
+  show($("gives-up"), !!givesUp);
+  if (givesUp) setText($("gives-up"), T.givesUp(S.mesh.outer, S.mesh.layers && S.mesh.layers.ringCounts ? S.mesh.layers.ringCounts.pastRing : null));
   setText($("overlap-note"), T.OVERLAP_NOTE);
   show($("when-field"), S.mode === "transit" && S.transit.available);
 }
@@ -796,16 +808,7 @@ async function tapAt(px, py) {
     // Dismissed, tapped again or replaced meanwhile: this answer is for nothing on screen.
     if (seq !== S.tapSeq || S.mesh !== m || S.u <= 0.99) return [];
     const seen = new Set();
-    const items = [];
-    for (const s of sheets) {
-      // Distinct places keep distinct lines: a second sheet named after the same station is
-      // said by where it is instead.
-      let name = nameOf(m, s.x, s.y);
-      if (seen.has(name)) name = T.unnamedPlace(s.x, s.y);
-      if (seen.has(name)) continue;
-      seen.add(name);
-      items.push(`${name}: ${T.minutesText(s.minutes)}`);
-    }
+    const items = T.placeLines(sheets, (x, y) => nameOf(m, x, y), seen);
     // Every label candidate under the finger too, placed or not.
     if (tap) {
       for (const l of tap.index.query(px, py, TAP_PX)) {
@@ -1017,7 +1020,7 @@ function initControls() {
   for (const radio of document.querySelectorAll('input[name="layout"]')) {
     radio.addEventListener("change", () => {
       if (!radio.checked) return;
-      S.layout = radio.value;
+      S.layoutPick = { mode: S.mode, layout: radio.value };
       hideTapList();
       updateLegend();
       prepareMesh();
@@ -1227,7 +1230,7 @@ async function boot() {
   }
   if (HANDOFF.when) S.window = HANDOFF.when;
   checkRadio("mode", S.mode);
-  if (V.LAYOUTS.includes(Q.get("layout"))) { S.layout = Q.get("layout"); checkRadio("layout", S.layout); }
+  checkRadio("layout", layoutNow());
   pinEl.setAttribute("aria-label", `Starting point: ${S.origin.label}. Drag it, or use the arrow keys, to move it.`);
   await initMap([S.origin.lon, S.origin.lat], 14);
   if (ex) {

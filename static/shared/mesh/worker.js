@@ -8,7 +8,8 @@ import { createField, createTargetGrid, geometryField, sampleField } from "./fie
 import { censusTile, LINE_VERTS, packScene, spacingForZoom, tessellateTile, vectorTileFeatures } from "./pipeline.js";
 import { TILE_URL } from "./schema-streets-v8.js";
 import { meshSheetIndex } from "./hit.js";
-import { bentRings, squashLayout } from "./layouts.js";
+import { bentRings, cutMask, squashLayout } from "./layouts.js";
+import { ringShares } from "./diagnostics.js";
 import { makeEdgeTest, MAX_DEPTH, refineFills } from "./refine.js";
 import { createWarp, targetsFor } from "./warp.js";
 
@@ -313,8 +314,14 @@ function buildLayers(msg) {
     // over the cut (walled-off) patches.
     const lines = sq ? bentRings(sq.ringSource, warp, msg.levels) : null;
     t0 = tick("rings", t0);
+    // What the page states squash gives up (W-03): the places within the outer ring's minutes
+    // drawn past it, counted as the lab's checks count them (diagnostics.js ringShares).
+    const outerLine = lines ? lines.find((l) => l.minutes === msg.maxMinutes) : null;
+    const shares = outerLine ? ringShares(warp, f, msg.maxMinutes, outerLine, { cut: cutMask(f, sq) }) : null;
+    const ringCounts = shares ? { pastRing: shares.outside, slowInside: shares.slowInsideExCut, judged: shares.counts.judged } : null;
+    t0 = tick("shares", t0);
     const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped, reach, frame, lines, ms,
-                      angles: sq ? sq.spec.angles : null };
+                      angles: sq ? sq.spec.angles : null, ringCounts };
     // The index keeps pos and minutes, so the page gets copies.
     const copy = () => {
       const out = { pos: mesh.pos.slice(), minutes: mesh.minutes.slice(), index: mesh.index.slice(), targets: targets ? targets.slice() : null,

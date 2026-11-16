@@ -22,6 +22,18 @@ test("what a tap on the normal map says", () => {
   assert.equal(T.tapGeographic({ minutes: 12.4, filled: false }, "King's Cross"), "About 12 min from King's Cross.");
 });
 
+test("a tap lists every place under the finger, two places with one name included", () => {
+  const nameOf = (x) => (x < 2000 ? "Baker Street" : "Marylebone");
+  const sheets = [{ x: 100, y: 0, minutes: 4 }, { x: 1020, y: 0, minutes: 21 }, { x: 1040, y: 10, minutes: 33 },
+                  { x: 3000, y: 0, minutes: 12 }, { x: 3000, y: 0, minutes: 12 }];
+  const lines = T.placeLines(sheets, nameOf);
+  assert.equal(lines.length, 4, lines.join(" | "));       // the same sheet twice is one place
+  assert.equal(lines[0], "Baker Street: about 4 min");
+  assert.equal(lines[1], "1.0 km east of the pin: about 21 min");
+  assert.equal(lines[2], "1.0 km east of the pin: about 33 min");   // said the same, kept
+  assert.equal(lines[3], "Marylebone: about 12 min");
+});
+
 test("an unnamed place is said by distance and direction", () => {
   assert.equal(T.unnamedPlace(10, 10), "next to the pin");
   assert.equal(T.unnamedPlace(0, -800), "800 m north of the pin");
@@ -54,6 +66,26 @@ test("transit stays hidden on the bent map unless ?polar=1", () => {
   assert.equal(V.bendOffered("transit"), false);
   assert.equal(V.bendOffered("transit", "?polar=1"), true);
   assert.equal(V.DIRECTIONS[V.DEFAULT_DIRECTIONS], 0.5);
+});
+
+test("public transport bends with squash, every other mode with the fold; a pick wins", () => {
+  assert.equal(V.layoutFor("transit"), "squash");
+  for (const m of ["walking", "cycling", "driving"]) assert.equal(V.layoutFor(m), "fold");
+  assert.equal(V.layoutFor("transit", "fold"), "fold");
+  assert.equal(V.layoutFor("walking", "squash"), "squash");
+  assert.equal(V.layoutFor("transit", "nonsense"), "squash");
+});
+
+test("the time map says what squash gives up, with the share counted for the view drawn", () => {
+  assert.equal(T.givesUp(45, 0.364),
+    "Rings follow the main reach, not every place: 36% of the places within 45 minutes are drawn past the 45 min ring, mostly near stations. Colours and taps give each place's own time.");
+  assert.match(T.givesUp(45, 0.02), /^Rings follow the main reach, not every place: A few of the places/);
+  assert.match(T.givesUp(60, null), /: Some of the places within 60 minutes are drawn past the 60 min ring/);
+  assert.ok(!/0%/.test(T.givesUp(45, null)), "no number before it is counted");
+  // Squash doesn't keep distance as minutes, so its direction note doesn't promise it.
+  assert.match(T.directionNote("reach", "fold"), /Minutes stay exact/);
+  assert.ok(!/exact/i.test(T.directionNote("reach", "squash")));
+  assert.ok(!/wedges/.test(T.directionNote("compass", "squash")));
 });
 
 test("tables expire the day after valid_until, in London", () => {

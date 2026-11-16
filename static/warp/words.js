@@ -56,6 +56,26 @@ export const DIRECTION_NOTES = {
   compass: "True compass: every place keeps its direction from the pin. Fast lines squeeze into thin wedges.",
 };
 
+// Squash doesn't keep distance as minutes, so its notes don't promise that.
+export const SQUASH_DIRECTION_NOTES = {
+  reach: "By reach: directions with more places in reach get more room, so compass directions bend.",
+  compass: "True compass: every place keeps its direction from the pin.",
+};
+
+export function directionNote(directions, layout = "fold") {
+  return (layout === "squash" ? SQUASH_DIRECTION_NOTES : DIRECTION_NOTES)[directions];
+}
+
+// What squash gives up, in one line (W-03, #27): its rings follow the main reach, so places
+// quicker than a ring can be drawn past it. `share` is the share of the places within `outer`
+// minutes drawn past the outer ring (diagnostics.js ringShares, from the field worker), or null
+// while it is being counted.
+export function givesUp(outer, share) {
+  const n = share === null || share === undefined || !(share >= 0) ? "Some"
+    : share < 0.05 ? "A few" : `${Math.round(share * 100)}%`;
+  return `Rings follow the main reach, not every place: ${n} of the places within ${outer} minutes are drawn past the ${outer} min ring, mostly near stations. Colours and taps give each place's own time.`;
+}
+
 export const LAYOUT_NOTES = {
   fold: "Fold: every place sits at its own minutes. Where a fast line makes far places as quick as nearer ones, the map overlaps itself.",
   squash: "Squash: going outward, places almost never come back closer, so the map hardly overlaps. The middle is drawn as it is; further out, distance isn't minutes, and the rings bend to follow them. Colour is always each place's own time: many quicker places near stations are drawn beyond their ring, a few much slower patches that are hard to get into are drawn inside one, and patches the route data leaves out (behind tracks, say) are drawn small and left uncoloured. Zoom out to see the outer rings.",
@@ -81,6 +101,22 @@ export function tapGeographic(node, label) {
   if (node.filled) return "No street here (water or parkland).";
   if (node.minutes >= 1e4) return "More than 3 hours, or no route in the timetable.";
   return `${minutesText(node.minutes)[0].toUpperCase()}${minutesText(node.minutes).slice(1)} from ${label}.`;
+}
+
+// One line per place under the finger: "name: about N min". A second sheet named after the same
+// station is said by where it is instead; one still said the same (within 50 m, same direction)
+// keeps its own line. Only the same sheet twice is dropped. `seen` collects the names said.
+export function placeLines(sheets, nameOf, seen = new Set()) {
+  const at = new Set(), items = [];
+  for (const s of sheets) {
+    let name = nameOf(s.x, s.y);
+    if (seen.has(name)) name = unnamedPlace(s.x, s.y);
+    const here = `${Math.round(s.x)},${Math.round(s.y)}`;
+    if (at.has(here)) continue;
+    seen.add(name); at.add(here);
+    items.push(`${name}: ${minutesText(s.minutes)}`);
+  }
+  return items;
 }
 
 export function tapHeading(sheets) {

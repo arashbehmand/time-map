@@ -152,19 +152,13 @@ export function ringRadius(spec, { n = 1000, seed = 20261113 } = {}) {
 //   slowInside  share of the places drawn inside the T ring that are over half a minute slower
 //               than T (the ring is drawn with a quarter-minute allowance)
 // `ring` is {xy} in layout units; places in a direction the ring doesn't cover are left out of
-// outside and slowInside.
-export function layoutChecks(spec, field, T, ring, { step = 2, raster = 800, bins = 720 } = {}) {
+// outside and slowInside. The counts come from ringShares (below), which also gives
+// slowInsideExCut with `cut` (layouts.js cutMask), the counts themselves and the ring's bearings;
+// its shares are null when nothing was counted, and a check reads that as a fail.
+export function layoutChecks(spec, field, T, ring, { step = 2, raster = 800, bins = 720, cut = null } = {}) {
   const warp = createWarp(spec);
   const f = field, skip = notAPlace(f);
   const ok = (k) => f.minutes[k] >= 0 && f.minutes[k] <= T && !skip(k);
-  // The ring's radius by drawn bearing.
-  const ringR = new Float64Array(bins).fill(NaN);
-  for (let i = 0; i + 1 < ring.xy.length; i += 2) {
-    const x = ring.xy[i], y = ring.xy[i + 1];
-    if (Number.isNaN(x)) continue;
-    const b = ((Math.round((Math.atan2(y, x) / (2 * Math.PI)) * bins) % bins) + bins) % bins;
-    ringR[b] = Number.isNaN(ringR[b]) ? Math.hypot(x, y) : Math.max(ringR[b], Math.hypot(x, y));
-  }
   const max = spec.maxMinutes, px = (2 * max) / raster;
   const cover = new Uint16Array(raster * raster);
   const fill = (a, b, c) => {
@@ -200,7 +194,37 @@ export function layoutChecks(spec, field, T, ring, { step = 2, raster = 800, bin
   }
   let drawn = 0, twice = 0;
   for (const c of cover) { if (c >= 1) drawn++; if (c >= 2) twice++; }
-  let within = 0, omitted = 0, judged = 0, outside = 0, inside = 0, slowInside = 0;
+  const c = ringShares(warp, f, T, ring, { step, bins, cut });
+  stretch.sort((a, b) => a - b);
+  return {
+    T, cells, overlap: drawn ? twice / drawn : 0,
+    stretch: stretch.length ? stretch[stretch.length >> 1] : null,
+    omitted: c.omitted, outside: c.outside, slowInside: c.slowInside,
+    slowInsideExCut: c.slowInsideExCut, counts: c.counts, bearings: c.bearings,
+  };
+}
+
+// The node counts of layoutChecks, without the overlap raster or the stretch: cheap enough for
+// the page (the field worker states the share drawn past the ring from it, W-03's C4). `warp` is
+// the layout's warp, `ring` {xy} its ring for T. `cut` (optional, one flag per node): squash's cut
+// patches, counted apart so C3 can leave them out. Shares are null when nothing was counted.
+//   omitted          share of the places within T not placed at all
+//   outside          share of the places within T, judged against the ring, drawn beyond it
+//   slowInside       share of the places drawn inside the ring over half a minute slower than T
+//   slowInsideExCut  the same with the cut patches left out of both counts
+//   bearings         share of the ring's bearings it reaches
+export function ringShares(warp, f, T, ring, { step = 2, bins = 720, cut = null } = {}) {
+  const skip = notAPlace(f);
+  const ringR = new Float64Array(bins).fill(NaN);
+  for (let i = 0; i + 1 < ring.xy.length; i += 2) {
+    const x = ring.xy[i], y = ring.xy[i + 1];
+    if (Number.isNaN(x)) continue;
+    const b = ((Math.round((Math.atan2(y, x) / (2 * Math.PI)) * bins) % bins) + bins) % bins;
+    ringR[b] = Number.isNaN(ringR[b]) ? Math.hypot(x, y) : Math.max(ringR[b], Math.hypot(x, y));
+  }
+  let covered = 0;
+  for (const r of ringR) if (!Number.isNaN(r)) covered++;
+  let within = 0, omitted = 0, judged = 0, outside = 0, inside = 0, slowInside = 0, insideCut = 0, slowCut = 0;
   for (let j = 0; j < f.ny; j += step) {
     for (let i = 0; i < f.nx; i += step) {
       const k = j * f.nx + i, t = f.minutes[k];
@@ -212,16 +236,19 @@ export function layoutChecks(spec, field, T, ring, { step = 2, raster = 800, bin
       if (Number.isNaN(ringR[b])) continue;
       const isInside = Math.hypot(p[0], p[1]) <= ringR[b] + 0.25;
       if (t <= T) { judged++; if (!isInside) outside++; }
-      if (isInside) { inside++; if (t > T + 0.5) slowInside++; }    // past the ring's own width
+      if (isInside) {
+        const isCut = !!(cut && cut[k]), slow = t > T + 0.5;      // past the ring's own width
+        inside++; if (slow) slowInside++;
+        if (isCut) { insideCut++; if (slow) slowCut++; }
+      }
     }
   }
-  stretch.sort((a, b) => a - b);
+  const share = (a, b) => (b ? a / b : null);
   return {
-    T, cells, overlap: drawn ? twice / drawn : 0,
-    stretch: stretch.length ? stretch[stretch.length >> 1] : null,
-    omitted: within ? omitted / within : 0,
-    outside: judged ? outside / judged : 0,
-    slowInside: inside ? slowInside / inside : 0,
+    omitted: share(omitted, within), outside: share(outside, judged),
+    slowInside: share(slowInside, inside), slowInsideExCut: share(slowInside - slowCut, inside - insideCut),
+    bearings: covered / bins,
+    counts: { within, omitted, judged, outside, inside, slowInside, insideCut, slowCut },
   };
 }
 

@@ -2,8 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BEYOND, createField, fieldFromFunction, NO_DATA, sampleField } from "../../static/shared/mesh/field.js";
-import { foldDiagnostics, layoutChecks } from "../../static/shared/mesh/diagnostics.js";
-import { bentRings, CUT_MIN_DROP, cutPeaks, squashField, squashLayout, squashReach } from "../../static/shared/mesh/layouts.js";
+import { foldDiagnostics, LAYOUT_LIMITS, layoutChecks, ringShares } from "../../static/shared/mesh/diagnostics.js";
+import { bentRings, CUT_MIN_DROP, cutMask, cutPeaks, squashField, squashLayout, squashReach } from "../../static/shared/mesh/layouts.js";
 import { createWarp } from "../../static/shared/mesh/warp.js";
 
 const WALK = 4000 / 60;
@@ -185,4 +185,44 @@ test("the reader-facing checks: what each layout gets right and wrong about T mi
   assert.ok(fc.overlap > 0.02, JSON.stringify(fc));
   assert.ok(sc.overlap < fc.overlap / 5, JSON.stringify(sc));
   assert.ok(sc.outside > 0.05, "the pocket lies beyond the 30 ring");
+});
+
+test("W-03: the page's ring counts are the checks' counts, and cut patches are counted apart", () => {
+  // The pocket field: ringShares (what the page states) agrees with layoutChecks (what the lab
+  // gates) on the same warp and ring.
+  const sq = squashLayout(field, 30);
+  const warp = createWarp(sq.spec);
+  const [ring] = bentRings(sq.ringSource, warp, [30]);
+  const lc = layoutChecks(sq.spec, field, 30, ring);
+  const rs = ringShares(warp, field, 30, ring);
+  assert.equal(rs.outside, lc.outside);
+  assert.equal(rs.slowInside, lc.slowInside);
+  assert.equal(rs.omitted, lc.omitted);
+  assert.ok(rs.counts.judged > 100 && rs.bearings > 0.99, JSON.stringify(rs));
+  assert.ok(rs.outside > 0.05, "the pocket's quick places are past the ring");
+
+  // A 40-minute dome 300 m north of the pin (a station's platforms), walled off: squash cuts it,
+  // so it is drawn inside the 15 ring though slower. Counted as cut, it leaves C3's share.
+  const walk = (x, y) => Math.hypot(x, y) / WALK;
+  const f = fieldFromFunction({ origin, cell: 100, halfSize: 3000 },
+    (x, y) => (Math.hypot(x, y + 300) < 150 ? walk(x, y) + 40 : walk(x, y)));
+  const s2 = squashLayout(f, 30);
+  const w2 = createWarp(s2.spec);
+  const [r15] = bentRings(s2.ringSource, w2, [15]);
+  const cut = cutMask(f, s2);
+  assert.ok(cut.reduce((a, b) => a + b, 0) > 3, "the dome is flagged");
+  const c = ringShares(w2, f, 15, r15, { step: 1, cut });
+  assert.ok(c.counts.slowCut > 0 && c.counts.slowCut === c.counts.slowInside, JSON.stringify(c.counts));
+  assert.ok(c.slowInside > 0 && c.slowInsideExCut === 0);
+  assert.ok(c.counts.insideCut >= c.counts.slowCut);
+});
+
+test("W-03: nothing to count is no share, never a pass at 0%", () => {
+  const empty = fieldFromFunction({ origin, cell: 100, halfSize: 1000 }, () => NO_DATA);
+  const warp = createWarp({ kind: "polar", field, maxMinutes: 45 });
+  const rs = ringShares(warp, empty, 30, { xy: new Float32Array(0) });
+  assert.equal(rs.outside, null);
+  assert.equal(rs.slowInside, null);
+  assert.equal(rs.bearings, 0);
+  assert.deepEqual(LAYOUT_LIMITS, { overlap: 0.05, stretch: 4, slowInside: 0.01 });
 });

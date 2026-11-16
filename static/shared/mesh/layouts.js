@@ -238,13 +238,14 @@ export function groundScale(f, inner = 15) {
 // `frame`: the radius the view is framed on: the reach for `scale: "minutes"`; with the ground
 // scale, the median radius at which places two thirds of maxMinutes away are drawn (the outer
 // rings sit far out: zoom out for them). `spread`: directions by reach (warp.js angularSpread).
-export function squashLayout(f, maxMinutes, { minSlope, spread = 0, scale = "minutes" } = {}) {
+// `inner`: the ground scale's middle, drawn at its own minutes (15 by default).
+export function squashLayout(f, maxMinutes, { minSlope, spread = 0, scale = "minutes", inner = 15 } = {}) {
   const unsure = f.uncertain || null;
   const cut = cutPeaks(geometryField(f));
   let R = squashField(cut, minSlope > 0 ? { minSlope } : {});
   let reach = squashReach(f, R, maxMinutes), frame = reach;
   if (scale === "ground") {
-    const g = groundScale(f);
+    const g = groundScale(f, inner);
     const m = new Float32Array(R.minutes.length);
     for (let k = 0; k < m.length; k++) m[k] = known(R.minutes[k]) ? g(R.minutes[k]) : R.minutes[k];
     R = createField({ ...R, minutes: m });
@@ -265,4 +266,12 @@ export function squashLayout(f, maxMinutes, { minSlope, spread = 0, scale = "min
   }
   const ringSource = createField({ ...f, minutes: ringMinutes });
   return { R, reach, frame, cut, ringSource, spec: { kind: "polar", field: R, maxMinutes: reach, angles } };
+}
+
+// One flag per node: squash's cut patches (ground lowered by cutPeaks), the nodes its rings step
+// over. Uncertain patches aren't flagged: every check leaves them out already.
+export function cutMask(f, sq) {
+  const m = new Uint8Array(f.minutes.length), unsure = f.uncertain || null;
+  for (let k = 0; k < m.length; k++) m[k] = sq.cut.minutes[k] !== f.minutes[k] && !(unsure && unsure[k]) ? 1 : 0;
+  return m;
 }

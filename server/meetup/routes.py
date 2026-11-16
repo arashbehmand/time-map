@@ -6,12 +6,12 @@ from fastapi.responses import JSONResponse
 
 from server.errors import Busy, TransitUnavailableError
 from server.guard.guard import current_client, per_ip
+from server.local import is_local
 from server.meetup import stations
 from server.meetup.limits import SolveLimits, plan_solve, plan_stations, rate_bucket
 from server.meetup.models import DEFAULT_WINDOW, SolveRequest, SolveResponse
 from server.meetup.routing import MapboxMatrixRouter, SolveAllowance, solve_allowance
 from server.meetup.solver import solve
-from server.warp.routes import is_local
 
 router = APIRouter(tags=["meetup"])
 

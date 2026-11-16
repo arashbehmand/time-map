@@ -1,0 +1,59 @@
+// Whole city offline (#28). The service worker keeps the map's files after a view (sw.js,
+// cityData). Beside them the Whole city page keeps the status it was shown with, so an installed
+// app opens Whole city without the network: only while that build's own valid-until date hasn't
+// passed in London, and only the times of day whose files were kept. Online, the server decides
+// every time, and a refusal drops all of it (here, and in the service worker).
+import { expired } from "./transit.js";
+
+export const CITY_CACHE = "whole-city-data";      // the service worker's name too
+const KEPT_STATUS = "/api/whole-city/offline-status";
+
+// The kept status, as /api/transit/status's whole_city part, with only the kept windows and
+// `offline: true`; null when there is none, it has expired (then it is dropped), or there is no
+// Cache API (a page that isn't secure, or storage blocked).
+export async function keptCity() {
+  return (await keptCityWhy()).city;
+}
+
+// The same, with why there is none: "expired" (the kept build is out of date; dropped) or
+// "offline" (nothing kept).
+export async function keptCityWhy() {
+  const none = { city: null, reason: "offline" };
+  try {
+    if (!(await caches.has(CITY_CACHE))) return none;
+    const cache = await caches.open(CITY_CACHE);
+    const kept = await cache.match(KEPT_STATUS);
+    if (!kept) return none;
+    const c = await kept.json();
+    if (!c || !c.available || !Array.isArray(c.windows) || expired(c.valid_until)) {
+      await caches.delete(CITY_CACHE);
+      return { city: null, reason: c && c.valid_until && expired(c.valid_until) ? "expired" : "offline" };
+    }
+    const windows = [];
+    for (const w of c.windows) if (await cache.match(`/api/whole-city/${w.id}/timemap.json`)) windows.push(w);
+    return windows.length ? { city: { ...c, windows, offline: true }, reason: "" } : none;
+  } catch { return none; }
+}
+
+export async function keepCity(c) {
+  try {
+    const cache = await caches.open(CITY_CACHE);
+    await cache.put(KEPT_STATUS, new Response(JSON.stringify(c), { headers: { "Content-Type": "application/json" } }));
+  } catch { /* nothing kept: offline, the page says it can't be shown */ }
+}
+
+export async function forgetCity() {
+  try { await caches.delete(CITY_CACHE); } catch { /* nothing to forget */ }
+}
+
+// The status a page should go by: the server's, or, with no answer at all, the kept one
+// ({whole_city} only). Online, a Whole city the server refuses (not still loading) is forgotten.
+export async function cityOrKept(status) {
+  if (!status) {
+    const kept = await keptCity();
+    return kept ? { whole_city: kept } : null;
+  }
+  const c = status.whole_city;
+  if (c && !c.available && c.reason !== "loading") await forgetCity();
+  return status;
+}

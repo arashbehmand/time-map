@@ -5,21 +5,28 @@
 // average trip is shortest beside it when that is another place. A group can be shared as a
 // link (share.js) that finds a place for it when opened. Only the latest answer counts: a change to the group throws away an answer
 // still on its way, and if one was on its way, the newest group is solved instead.
+//
+// The page is Meet up (#28): the first person's start and way of travelling, and the time of
+// day, are handed on to From here and Whole city (/shared/handoff.js); a pin handed on from them
+// starts the group.
+import { esc, friendly, geocode, postJSON } from "/shared/api.js";
+import { readGroup, readHandoff, writeGroup, writeHandoff } from "/shared/handoff.js";
 import { createLatest } from "/shared/latest.js";
-import { esc, friendly, geocode, postJSON, savePref } from "/shared/api.js";
+import { locate, offerLocation } from "/shared/locate.js";
+import { updateSwitcher, watchCity } from "/shared/nav.js";
+import { MODE_LABEL } from "/shared/tools.js";
+import { expired, insideArea, windowOptions } from "/shared/transit.js";
+import { decodeGroup, encodeGroup, isGroupHash, linkAtLoad, reconcileGroup, STATE_KEY } from "./share.js";
 import {
   ALL_TIES_TEXT, altText, answerNotes, headline, isPlace, isVenue, journeyLink, journeyNote, meaning, mins,
   noPlaceSentence, OPEN_HOURS_HINT, placeHeadline, quickestText, SHARE_BAD_LINK, SHARE_COPIED, SHARE_FAILED,
   SHARE_LABEL, SHARE_RESTORED, SHARE_WAITING, shareChanged, stationAltText, TIE_TEXT, VENUE_WORD,
-} from "/meetup/words.js";
-import { decodeGroup, encodeGroup, isGroupHash, linkAtLoad, reconcileGroup, STATE_KEY } from "/meetup/share.js";
-import { expired, insideArea } from "/warp/views.js";
+} from "./words.js";
 
 const COLORS = ["#c62828", "#00796b", "#6a1b9a", "#1565c0", "#ef6c00", "#2e7d32", "#ad1457", "#4e342e"];
 // Public transport is offered only while the London tables are available, and only to people
 // who start inside the area they cover (GET /api/transit/status).
 const MODE_ING = { walking: "walking", cycling: "cycling", driving: "driving", transit: "by public transport" };
-const MODE_LABEL = { walking: "Walking", cycling: "Cycling", driving: "Driving", transit: "Public transport" };
 const DEFAULT_WINDOW = "wd19";     // weekday evening, as the server
 // Where a group with someone on public transport meets: a pub unless they pick otherwise
 // (the server's own default is a station). Only kinds the tables' build has are offered.
@@ -31,7 +38,7 @@ const MAX_REACH_MINUTES = 60;      // routing limit for "how far each person can
 // Reach is drawn by Mapbox's travel-time areas, not from the journeys the answer used.
 const REACH_LABEL = "Show how far each person gets in their trip time";
 const REACH_HINT = "These areas come from a different Mapbox service than the answer, so their edges are approximate.";
-const LOCATION_PREF = "timemap-location";
+const HANDOFF = readHandoff();     // what the last tool in this tab handed on
 const RESOLVE_DELAY_MS = 800;      // edits during a solve: wait for the edits to settle
 const TAP_DELAY_MS = 300;          // a second click inside this is a double-click zoom
 const ATTRIBUTION =
@@ -63,6 +70,7 @@ let windowId = DEFAULT_WINDOW;        // when the group meets (public transport 
 let venueId = DEFAULT_VENUE;          // where the group meets (public transport only)
 let venueKinds = [];                  // the venue kinds the tables' build has
 let statusRetryMs = 5000;
+let statusSeen = false;                // the tables' status has been read once
 let openSeq = 0;                      // shared links opened, and group edits: the newest wins
 let shareSeq = 0;                     // links made; a newer one, or a changed box, voids an older one
 // Settles the first time the tables' status is known (or failed to load): a shared group with
@@ -74,7 +82,12 @@ const transitSettled = new Promise((resolve) => { settleTransit = resolve; });
 const $ = (id) => document.getElementById(id);
 const nameInput = $("name-input");
 const locInput = $("loc-input");
-const modeSelect = $("mode-select");
+// The add form's way of travelling: a row of chips, the same control as in From here.
+const addMode = () => (document.querySelector('input[name="add-mode"]:checked') || { value: "walking" }).value;
+function setAddMode(mode) {
+  const r = document.querySelector(`input[name="add-mode"][value="${mode}"]`);
+  if (r) r.checked = true;
+}
 const addBtn = $("add-btn");
 const peopleList = $("people");
 const findBtn = $("find-btn");
@@ -178,7 +191,7 @@ function initMap() {
       const typed = nameInput.value.trim();
       const name = typed || defaultName();
       setAddStatus("");   // before adding: addPerson may say the person is walking instead
-      if (addPerson({ name, named: !!typed, lon: lng, lat, mode: modeSelect.value, label: "Picked on the map" })) {
+      if (addPerson({ name, named: !!typed, lon: lng, lat, mode: addMode(), label: "Picked on the map" })) {
         nameInput.value = "";
         showUndo(`Added ${name}.`);
       }
@@ -231,7 +244,6 @@ function updateTransitControls() {
   $("window-field").hidden = !on;
   $("venue-field").hidden = !on || venueKinds.length === 0;
   $("venue-hint").hidden = !on || !atVenue;
-  $("window-hint").hidden = !on;
   $("both-hint").hidden = on && atVenue;
 }
 
@@ -240,25 +252,22 @@ async function loadTransitStatus() {
   let status;
   try {
     const resp = await fetch("/api/transit/status");
-    if (!resp.ok) { settleTransit(); later(); return; }
+    if (!resp.ok) { settleTransit(); updateSwitcher(null); later(); return; }
     status = await resp.json();
-  } catch { settleTransit(); later(); return; }
+  } catch { settleTransit(); updateSwitcher(null); later(); return; }
   statusRetryMs = 5000;
+  updateSwitcher(status);
   if (status.loading) { setTimeout(loadTransitStatus, 3000); return; }
+  // Whole city may still be loading: the switcher asks alone, so this handler (and the people
+  // list it redraws) runs once.
+  if (!statusSeen) { statusSeen = true; watchCity(status); }
   transit = status.available && !expired(status.valid_until) ? status : { available: false };
-  const option = modeSelect.querySelector('option[value="transit"]');
-  if (transit.available && !option) {
-    modeSelect.append(new Option(MODE_LABEL.transit, "transit"));
-  } else if (!transit.available && option) {
-    if (modeSelect.value === "transit") modeSelect.value = "walking";
-    option.remove();
-  }
+  $("transit-chip").hidden = !transit.available;
+  if (!transit.available && addMode() === "transit") setAddMode("walking");
   if (transit.available) {
-    const sel = $("window-select");
     const ids = transit.windows.map((w) => w.id);
-    sel.replaceChildren(...transit.windows.map((w) => new Option(w.label[0].toUpperCase() + w.label.slice(1), w.id)));
     if (!ids.includes(windowId)) windowId = ids.includes(DEFAULT_WINDOW) ? DEFAULT_WINDOW : ids[0];
-    sel.value = windowId;
+    windowOptions($("window-select"), transit.windows, windowId);
     // Venue kinds the build has at least one of, then "Just a station".
     const counts = (transit.venues && transit.venues.kinds) || {};
     const kinds = Object.keys(VENUE_LABEL).filter((k) => Number(counts[k]) > 0);
@@ -283,6 +292,7 @@ async function loadTransitStatus() {
 
 $("window-select").addEventListener("change", (e) => {
   windowId = e.target.value;
+  writeHandoff({ when: windowId });
   groupChanged();
 });
 
@@ -333,6 +343,7 @@ function groupChanged() {
   touched = true;
   openSeq++;                     // a shared link still waiting for the tables is dropped
   forgetLink();
+  handOn();
   const wasSolving = solves.busy || resolveTimer !== null;
   const hadAnswer = lastAnswer !== null;
   solves.cancel();
@@ -358,6 +369,39 @@ function groupChanged() {
   }
 }
 
+// The first person in the group (not the saved example's) goes to the other tools: where they
+// start, how they travel and, when anyone is on public transport, when the group meets. An empty
+// group takes the pin (and its mode) back. The group itself is kept for this tab, so coming back
+// through the switcher finds it again (keepGroup).
+function handOn() {
+  const p = people.find((q) => !q.example);
+  if (p) {
+    writeHandoff({ pin: { lon: p.lon, lat: p.lat, label: p.label }, mode: p.mode,
+                   ...(anyTransit() ? { when: windowId } : {}) });
+  } else if (!people.length) {
+    writeHandoff({ pin: null });
+  }
+  keepGroup();
+}
+
+function keepGroup() {
+  if (!people.length) { writeGroup(null); return; }
+  if (people.every((p) => p.example)) return;         // the untouched example isn't kept
+  writeGroup({ people: people.map(({ name, named, lon, lat, mode, label, example }) =>
+                 ({ name, named, lon, lat, mode, label, example: example === true })),
+               window: windowId, venue: venueId });
+}
+
+// Each person's way of travelling: the same chips as the add form, smaller.
+function modeChips(p) {
+  const modes = Object.keys(MODE_LABEL).filter((m) => m !== "transit" || p.mode === "transit" || transitOk(p));
+  return `<fieldset class="chips compact p-mode">
+      <legend class="visually-hidden">How ${esc(p.name)} travels</legend>
+      ${modes.map((m) => `<label class="chip"><input type="radio" name="mode-${p.id}" value="${m}"${
+        p.mode === m ? " checked" : ""} /><span>${MODE_LABEL[m]}</span></label>`).join("")}
+    </fieldset>`;
+}
+
 function renderPeople() {
   peopleList.innerHTML = people.map((p, i) => `
     <li class="person" style="--color:${p.color}" data-id="${p.id}">
@@ -365,10 +409,7 @@ function renderPeople() {
       <input type="text" class="p-name" value="${esc(p.name)}" maxlength="40" aria-label="Name of person ${i + 1}" />
       <button type="button" class="remove" aria-label="Remove ${esc(p.name)}">×</button>
       <div class="where">
-        <select class="p-mode" aria-label="How ${esc(p.name)} travels">
-          ${Object.keys(MODE_LABEL).filter((m) => m !== "transit" || p.mode === "transit" || transitOk(p)).map((m) =>
-            `<option value="${m}"${p.mode === m ? " selected" : ""}>${MODE_LABEL[m]}</option>`).join("")}
-        </select>
+        ${modeChips(p)}
         <span>from ${esc(p.label)}</span>
       </div>
     </li>`).join("");
@@ -385,20 +426,23 @@ function renderPeople() {
       p.name = typed || defaultName();
       nameEl.value = p.name;
       li.querySelector(".remove").setAttribute("aria-label", `Remove ${p.name}`);
-      li.querySelector(".p-mode").setAttribute("aria-label", `How ${p.name} travels`);
+      li.querySelector(".p-mode legend").textContent = `How ${p.name} travels`;
       updateMarker(p);
       touched = true;
       renderShareChoices({ keep: true });
       hideShareUrl();               // a link shown for copying has the old name
       forgetLink();                 // and a reload must not bring the old name back
+      keepGroup();                  // but a trip to another tool and back does
       if (lastAnswer) renderAnswer();
     });
-    const modeEl = li.querySelector(".p-mode");
-    modeEl.addEventListener("change", () => {
-      p.mode = modeEl.value;
-      updateMarker(p);
-      groupChanged();
-    });
+    for (const radio of li.querySelectorAll(".p-mode input")) {
+      radio.addEventListener("change", () => {
+        if (!radio.checked) return;
+        p.mode = radio.value;
+        updateMarker(p);
+        groupChanged();
+      });
+    }
   }
   $("people-empty").hidden = people.length > 0;
   // Ticks are kept by person id; a change to the group (groupChanged) unticks them all.
@@ -436,6 +480,7 @@ function addMarker(p) {
     const { lng, lat } = marker.getLngLat();
     p.lon = lng; p.lat = lat;
     p.label = "Picked on the map";
+    p.example = false;            // moved by the visitor: theirs now
     const left = p.mode === "transit" && !transitOk(p);
     if (left) { p.mode = "walking"; updateMarker(p); }
     renderPeople();
@@ -454,15 +499,25 @@ function updateMarker(p) {
   marker.setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(popupHtml(p)));
 }
 
+// The part of the map you can see: on a phone the header covers its top and the sheet its
+// bottom (style.css).
+function mapPadding(px = 60) {
+  if (window.innerWidth > 640) return { top: px, bottom: px, left: px, right: px };
+  const top = $("top").getBoundingClientRect().bottom + 16;
+  const bottom = Math.max(16, window.innerHeight - $("panel").getBoundingClientRect().top + 16);
+  const free = window.innerHeight - top - bottom;
+  return free > 80 ? { top, bottom, left: 24, right: 24 } : { top: 16, bottom: 16, left: 24, right: 24 };
+}
+
 function fitTo(points, maxZoom = 14) {
   if (!points.length) return;
   if (points.length === 1) {
-    map.easeTo({ center: points[0], zoom: Math.max(map.getZoom(), 13) });
+    map.easeTo({ center: points[0], zoom: Math.max(map.getZoom(), 13), padding: mapPadding(0) });
     return;
   }
   const lngs = points.map((pt) => pt[0]), lats = points.map((pt) => pt[1]);
   map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-    { padding: 60, maxZoom, duration: 600 });
+    { padding: mapPadding(), maxZoom, duration: 600 });
 }
 
 // ── Adding by search or location ────────────────────────────────
@@ -475,7 +530,7 @@ function newAddition() {
 $("add-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   // Snapshot the form: a reply for these fields must not add someone else.
-  const form = { name: nameInput.value.trim(), q: locInput.value.trim(), mode: modeSelect.value };
+  const form = { name: nameInput.value.trim(), q: locInput.value.trim(), mode: addMode() };
   if (!form.q) {
     setAddStatus("Type where they start, or tap the map.", "error");
     locInput.focus();
@@ -510,35 +565,31 @@ $("add-form").addEventListener("submit", async (e) => {
   fitTo(people.map((pp) => [pp.lon, pp.lat]));
 });
 
-$("locate-btn").addEventListener("click", () => {
-  if (!navigator.geolocation) {
-    setAddStatus("This browser can't share your location. Search for a place or tap the map.", "error");
-    return;
-  }
-  const form = { name: nameInput.value.trim(), mode: modeSelect.value };
+// Add whoever is holding the phone, where they are. `replaceExample`: the location card's
+// answer, which starts the group from you instead of the example.
+function addMyLocation({ replaceExample = false } = {}) {
+  const form = { name: nameInput.value.trim(), mode: addMode() };
   const mine = newAddition();
   setAddStatus("Finding your location…", "busy");
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
+  locate({
+    onPlace: (lon, lat) => {
       if (mine !== addSeq) return;
       addSeq++;
-      savePref(LOCATION_PREF, "yes");
       setAddStatus("");
-      const p = addPerson({ name: form.name || defaultName(), named: !!form.name, lon: pos.coords.longitude,
-                            lat: pos.coords.latitude, mode: form.mode, label: "their location" });
+      if (replaceExample && !touched) clearGroup();
+      const p = addPerson({ name: form.name || defaultName(), named: !!form.name, lon, lat, mode: form.mode,
+                            label: replaceExample ? "your location" : "their location" });
       if (!p) return;
       if (nameInput.value.trim() === form.name) nameInput.value = "";
       fitTo(people.map((pp) => [pp.lon, pp.lat]));
     },
-    (err) => {
-      if (mine !== addSeq) return;
-      setAddStatus(err.code === 1
-        ? "Location is turned off for this site. Search for a place or tap the map."
-        : "We couldn't get your location. Search for a place or tap the map.", "error");
+    onError: (words) => {
+      if (mine === addSeq) setAddStatus(`${words} Search for a place or tap the map.`, "error");
     },
-    { timeout: 15000, maximumAge: 60000 },
-  );
-});
+  });
+}
+
+$("locate-btn").addEventListener("click", () => addMyLocation());
 
 $("new-group-btn").addEventListener("click", () => {
   newAddition();
@@ -680,7 +731,7 @@ function tripRows(place, snap, { links = true } = {}) {
     <ul class="bars" aria-label="Each person's trip">
       ${times.map(({ p, t }) => `
         <li class="bar-row" style="--color:${p.color}">
-          <span><strong>${esc(nameOf(p))}</strong> · ${mins(t)} min ${MODE_ING[p.mode] || p.mode}${t === longest && times.length > 1 ? " (longest)" : ""}${links ? `
+          <span><strong>${esc(nameOf(p))}</strong> · ${mins(t)} ${MODE_ING[p.mode] || p.mode}${t === longest && times.length > 1 ? " (longest)" : ""}${links ? `
             · <a href="${esc(journeyLink(p, place))}" target="_blank" rel="noopener noreferrer">Plan journey</a>` : ""}</span>
           <span class="track" aria-hidden="true"><span class="fill" style="width:${width(t)}%"></span></span>
         </li>`).join("")}
@@ -743,7 +794,7 @@ function renderAnswer() {
       <ul class="bars" aria-label="Each person's trip">
         ${times.map(({ p, t }) => `
           <li class="bar-row" style="--color:${p.color}">
-            <span><strong>${esc(nameOf(p))}</strong> · ${mins(t)} min ${MODE_ING[p.mode]}${t === longest && times.length > 1 ? " (longest)" : ""}</span>
+            <span><strong>${esc(nameOf(p))}</strong> · ${mins(t)} ${MODE_ING[p.mode]}${t === longest && times.length > 1 ? " (longest)" : ""}</span>
             <span class="track" aria-hidden="true"><span class="fill" style="width:${width(t)}%"></span></span>
           </li>`).join("")}
       </ul>
@@ -1006,6 +1057,7 @@ async function openShared(hash, { solveNow = true } = {}) {
   updateTransitControls();
   updateFind();
   fitTo(people.map((p) => [p.lon, p.lat]));
+  handOn();          // the group on screen is what the other tools get, and what comes back
   const changed = shareChanged(r.walkers.map((i) => added[i] && added[i].name).filter(Boolean),
                                r.windowGone, r.venueGone);
   if (changed) {
@@ -1039,6 +1091,7 @@ async function loadExample() {
   const added = ex.participants.map((q) =>
     addPerson({ name: q.name, lon: q.lon, lat: q.lat, mode: q.mode, label: q.label }, { quiet: true }));
   if (added.some((p) => !p)) return;
+  for (const p of added) p.example = true;      // never handed on to the other tools
   const snap = {
     objective: ex.objective,
     people: added.map(({ id, name, lon, lat, mode, color }) => ({ id, name, lon, lat, mode, color })),
@@ -1055,6 +1108,53 @@ async function loadExample() {
   exampleNote.hidden = false;
 }
 
+// ── A pin from another tool ─────────────────────────────────────
+// The pin becomes the group's first person, travelling the way they chose there. Public
+// transport waits for the tables' status (addPerson says when it can't be had there). No
+// solve: a group needs two people.
+async function startFromHandoff() {
+  touched = true;                       // the example must not land
+  const mine = openSeq;
+  if (HANDOFF.mode === "transit") await transitSettled;
+  if (mine !== openSeq || people.length) return;    // the visitor started something meanwhile
+  const { lon, lat, label } = HANDOFF.pin;
+  setAddStatus("");
+  const p = addPerson({ name: defaultName(), lon, lat, mode: HANDOFF.mode || "walking", label: label || "your pin" },
+                      { quiet: true });
+  if (!p) return;
+  updateFind();
+  updateTransitControls();
+  handOn();          // outside London a transit pin walks here: the other tools hear walking too
+  map.jumpTo({ center: [lon, lat], zoom: 13, padding: mapPadding(0) });
+  if (!addStatusEl.textContent) setAddStatus("We started the group from your pin. Add at least one more person.");
+}
+
+// ── The group, back from another tool ───────────────────────────
+// The group as it was when the visitor left for another tool in this tab: everyone, how they
+// travel, when and where. It wins over a pin handed on since (a group is never overwritten), and
+// waits for Find, as a shared group restored after a reload does.
+async function restoreGroup(saved) {
+  touched = true;
+  const mine = openSeq;
+  if (saved.people.some((q) => q.mode === "transit")) await transitSettled;
+  if (mine !== openSeq || people.length) return;
+  for (const q of saved.people) {
+    const p = addPerson({ name: q.name || defaultName(), named: q.named, lon: q.lon, lat: q.lat, mode: q.mode,
+                          label: q.label || "Picked on the map" }, { quiet: true });
+    if (p && q.example) p.example = true;
+  }
+  if (saved.window) windowId = saved.window;
+  if (saved.venue && (saved.venue === "station" || venueKinds.includes(saved.venue))) venueId = saved.venue;
+  if ([...$("window-select").options].some((o) => o.value === windowId)) $("window-select").value = windowId;
+  if ([...$("venue-select").options].some((o) => o.value === venueId)) $("venue-select").value = venueId;
+  renderPeople();
+  updateTransitControls();
+  updateFind();
+  handOn();
+  fitTo(people.map((p) => [p.lon, p.lat]));
+  setStatus(people.length >= 2 ? "Your group is back. Press Find to look for a place again." : "");
+}
+
 // ── Boot ────────────────────────────────────────────────────────
 if (typeof maplibregl === "undefined") {
   setStatus("The map couldn't load. Check your connection and reload the page.", "error");
@@ -1067,9 +1167,21 @@ if (typeof maplibregl === "undefined") {
   updateTransitControls();      // the hints for a page with no public transport, until the status says
   // A shared link opens its group instead of the example (a link opened before a reload comes
   // back without finding again); a broken one leaves the example.
+  if (HANDOFF.when) windowId = HANDOFF.when;
+  if (HANDOFF.mode && HANDOFF.mode !== "transit") setAddMode(HANDOFF.mode);
+  // Then the group this tab left for another tool comes back; failing that, a pin handed on from
+  // From here or Whole city starts the group; otherwise the example, and the offer to start from
+  // where you are.
   const link = linkAtLoad(location.hash, history.state);
-  if (link) openShared(link.hash, { solveNow: link.solve }).then((ok) => { if (!ok) loadExample(); });
-  else loadExample();
+  const fresh = () => {
+    const saved = readGroup();
+    if (saved) { restoreGroup(saved); return; }
+    if (HANDOFF.pin) { startFromHandoff(); return; }
+    loadExample();
+    offerLocation($("location-card"), { onYes: () => addMyLocation({ replaceExample: true }), onNo: () => locInput.focus() });
+  };
+  if (link) openShared(link.hash, { solveNow: link.solve }).then((ok) => { if (!ok) fresh(); });
+  else fresh();
   loadTransitStatus();
   // A link pasted into this tab changes only the fragment.
   window.addEventListener("hashchange", () => { if (isGroupHash(location.hash)) openShared(location.hash); });

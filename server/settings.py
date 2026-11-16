@@ -58,6 +58,7 @@ DEFAULT_PER_IP = {
     "isochrones": 20,
     "travel_time_field": 20,
     "transit_status": 60,
+    "whole_city": 120,          # one Whole city view fetches two to four files
     "geocode": 10,
     "tiles": 400,
     "glyphs": 300,
@@ -96,6 +97,9 @@ class Settings:
     transit_dir: str = ""
     transit_allow_uncleared: bool = False
     transit_block_startup: bool = False   # tests: load before the app answers
+    # Whole city (server/transit/whole_city.py): one build's time-map folder,
+    # transit/out/timemap/<build>/, served only under the tables' gate above.
+    timemap_dir: str = ""
     max_concurrent_fields: int = 2
 
     def daily(self, api: str) -> int:
@@ -137,4 +141,5 @@ class Settings:
             or cls.geocoder_user_agent,
             transit_dir=os.environ.get("TRANSIT_DIR", "").strip(),
             transit_allow_uncleared=os.environ.get("TRANSIT_ALLOW_UNCLEARED", "").strip() == "1",
+            timemap_dir=os.environ.get("TIMEMAP_DIR", "").strip(),
         )

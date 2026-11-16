@@ -3,26 +3,37 @@
 // the old one is deleted.
 const CACHE_NAME = "time-map-__BUILD__";
 
-// Same-origin app files only. Nothing from another site is ever cached here, and
-// /api/, /tiles/ and /glyphs/ are never touched (they always go to the network).
+// Same-origin app files only. Nothing from another site is ever cached here, and /api/,
+// /tiles/ and /glyphs/ go to the network, except Whole city's data, which is kept after a view
+// (cityData, below), never precached: a server without a build still installs.
 const APP_SHELL = [
   "/",
   "/manifest.json",
   "/shared/ui.css",
   "/shared/api.js",
   "/shared/latest.js",
-  "/meetup/",
-  "/meetup/style.css",
-  "/meetup/app.js",
-  "/meetup/words.js",
-  "/meetup/share.js",
-  "/meetup/example.json",
-  "/warp/",
-  "/warp/style.css",
-  "/warp/app.js",
-  "/warp/views.js",
-  "/warp/words.js",
-  "/warp/example-field.json",
+  "/shared/handoff.js",
+  "/shared/locate.js",
+  "/shared/nav.js",
+  "/shared/offline.js",
+  "/shared/tools.js",
+  "/shared/transit.js",
+  "/meet-up/",
+  "/meet-up/style.css",
+  "/meet-up/app.js",
+  "/meet-up/words.js",
+  "/meet-up/share.js",
+  "/meet-up/example.json",
+  "/from-here/",
+  "/from-here/style.css",
+  "/from-here/app.js",
+  "/from-here/views.js",
+  "/from-here/words.js",
+  "/from-here/example-field.json",
+  "/whole-city/",
+  "/whole-city/style.css",
+  "/whole-city/app.js",
+  "/whole-city/carry.js",
   // The mesh renderer the warp page bends the map with, its worker and their decoders.
   "/shared/mesh/caps.js",
   "/shared/mesh/contours.js",
@@ -82,10 +93,34 @@ async function networkFirst(request) {
   }
 }
 
+// Whole city's data (#28), kept for offline use once it has been viewed: the one tool that needs
+// nothing else from the network. Network first, so online the server's gate decides every time:
+// a refusal (the build expired, or its tables were withdrawn) drops everything kept. Offline, the
+// page checks the kept build's expiry date itself before drawing it (whole-city/app.js). Its own
+// cache name, so a new app build doesn't throw the map away.
+const CITY_CACHE = "whole-city-data";
+const CITY_DATA = "/api/whole-city/";
+
+async function cityData(request) {
+  const cache = await caches.open(CITY_CACHE);
+  let response;
+  try {
+    response = await fetch(request);
+  } catch (err) {
+    const kept = await cache.match(request);
+    if (kept) return kept;
+    throw err;
+  }
+  if (response.ok && response.type === "basic") await cache.put(request, response.clone());
+  else if (response.status === 404) await caches.delete(CITY_CACHE);
+  return response;
+}
+
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
   if (url.origin !== self.location.origin) return;   // other sites: not ours to cache
-  if (!SHELL.has(url.pathname)) return;               // API, tiles, glyphs, anything else
+  if (url.pathname.startsWith(CITY_DATA)) { e.respondWith(cityData(e.request)); return; }
+  if (!SHELL.has(url.pathname)) return;               // the rest of the API, tiles, glyphs
   e.respondWith(networkFirst(e.request));
 });

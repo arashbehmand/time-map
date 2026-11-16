@@ -8,7 +8,7 @@ export const MODES = {
   transit: { label: "Public transport", outer: [30, 45, 60, 90, 120], defaultOuter: 45 },
 };
 
-// The bent (time) view is experimental everywhere. For public transport it stays hidden
+// The time map (the bent view) is experimental everywhere. For public transport it stays hidden
 // until Direction 4's checks pass at all five test origins (docs/warp-time-polar.md);
 // ?polar=1 shows it anyway, for the comprehension test.
 export const TIME_POLAR = { walking: "experimental", cycling: "experimental", driving: "experimental", transit: "hidden" };
@@ -26,17 +26,8 @@ export const DEFAULT_DIRECTIONS = "reach";
 export const LAYOUTS = ["fold", "squash"];
 export const DEFAULT_LAYOUT = "fold";
 
-export const WINDOWS = ["wd08", "wd13", "wd19", "sa13"];
-
-// The timetable window nearest the time in London now (the server's default too).
-export function defaultWindow(date = new Date()) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", weekday: "short", hour: "2-digit", hourCycle: "h23",
-  }).formatToParts(date).map((p) => [p.type, p.value]));
-  if (parts.weekday === "Sat" || parts.weekday === "Sun") return "sa13";
-  const h = Number(parts.hour) % 24;                // some engines say 24 for midnight
-  return h < 11 ? "wd08" : h < 16 ? "wd13" : "wd19";
-}
+// The windows, expiry and coverage helpers every page shares live in /shared/transit.js (#28).
+export { WINDOWS, defaultWindow, expired, insideArea } from "../shared/transit.js";
 
 export const MORPH_MS = 1800;     // ordinary → bent
 export const FADE_MS = 300;       // the ordinary map dissolves into the mesh before it moves
@@ -50,28 +41,6 @@ export const BENT_ZOOM_IN = 2;
 export const REFINE_ZOOM_IN = 1;
 export function refineEps(kFit) {
   return 0.5 / (kFit * 2 ** REFINE_ZOOM_IN);
-}
-
-// The day after `validUntil` (YYYY-MM-DD), in London, the tables are expired.
-export function expired(validUntil, date = new Date()) {
-  if (!validUntil) return false;
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(date);
-  return today > validUntil;
-}
-
-// Is (lon, lat) inside a GeoJSON Polygon or MultiPolygon (lon/lat)?
-export function insideArea(geom, lon, lat) {
-  if (!geom) return false;
-  const polys = geom.type === "Polygon" ? [geom.coordinates] : geom.type === "MultiPolygon" ? geom.coordinates : [];
-  const inRing = (ring) => {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const [xi, yi] = ring[i], [xj, yj] = ring[j];
-      if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
-    }
-    return inside;
-  };
-  return polys.some((p) => inRing(p[0]) && !p.slice(1).some(inRing));
 }
 
 export const fieldKey = (lon, lat, mode, window) =>

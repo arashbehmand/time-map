@@ -437,9 +437,10 @@ def report_md(rep: dict) -> str:
     else:
         out += ["## Land", "", f"Not drawn in this run (--no-land). Page {rep['page_gzip_bytes'] / 1e6:.2f} MB gzipped.", ""]
     out += ["## Files", "",
-            "`index.html`, `app.js`, `app.css`, `carry.js` and `mesh/` (W-01's renderer, copied as committed): the "
-            "page. Serve the folder (`python -m http.server -d <this folder>`) and open it: ES modules don't load "
-            "from file://. `timemap.json` and `land.bin`: what it draws. `report.json`, `shepard.svg`, `panels.svg`.",
+            "`timemap.json` and `land.bin`: what the app's Whole city page draws (`static/whole-city/`). Run the "
+            "app with `TIMEMAP_DIR` set to this build's folder (the one above this window's) and open "
+            "`/whole-city/`; it is shown only while the tables it was made from may be. `report.json`, "
+            "`shepard.svg`, `panels.svg`: this report's data and figures.",
             "", "Credits: " + "; ".join(rep["attribution"]) + ".", ""]
     return "\n".join(out)
 
@@ -702,7 +703,6 @@ def write(out: Path, *, b, pairs, mesh, links, model, frames, cells, pick, check
                         checks, f"London by travel time on a spring grid that can't fold, build {doc['build']} {b.window}")
 
     out.mkdir(parents=True, exist_ok=True)
-    tm.copy_page(out)
     (out / "timemap.json").write_text(text + "\n", encoding="utf-8")
     (out / "land.bin").write_bytes(blob)
     (out / "report.json").write_text(json.dumps(rep, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

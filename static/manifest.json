@@ -1,8 +1,13 @@
 {
-  "name": "Time-Map",
-  "short_name": "Time-Map",
-  "description": "How far can you get from here, and where should a group meet? Travel-time maps for a city.",
+  "name": "Minutes Away",
+  "short_name": "Minutes Away",
+  "description": "Three travel-time tools: From here (how far can I get from here?), Meet up (where should we meet?) and Whole city (what does London look like when distance means travel time?).",
   "start_url": "/",
+  "shortcuts": [
+    { "name": "From here", "description": "How far can I get from here?", "url": "/from-here/" },
+    { "name": "Meet up", "description": "Where should we meet?", "url": "/meet-up/" },
+    { "name": "Whole city", "description": "What does London look like when distance means travel time?", "url": "/whole-city/" }
+  ],
   "display": "standalone",
   "background_color": "#f6f5f2",
   "theme_color": "#f6f5f2",

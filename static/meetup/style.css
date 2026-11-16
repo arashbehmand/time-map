@@ -10,7 +10,7 @@ body { display: flex; flex-direction: row-reverse; height: 100vh; height: 100dvh
   display: flex; flex-direction: column; gap: 18px; padding: 16px 18px 24px;
 }
 #panel header { display: flex; flex-direction: column; gap: 6px; }
-#panel h1 { font-size: 22px; line-height: 1.2; }
+#panel h1.question { font-size: 20px; line-height: 1.25; }
 #panel h2 { font-size: 16px; }
 #panel section { display: flex; flex-direction: column; gap: 10px; }
 #add-form { display: flex; flex-direction: column; gap: 10px; }
@@ -50,7 +50,7 @@ body { display: flex; flex-direction: row-reverse; height: 100vh; height: 100dvh
 }
 .person .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--color); }
 .person input[type="text"] { min-height: 36px; padding: 4px 8px; font-weight: 600; }
-.person select { min-height: 36px; padding: 4px 8px; width: auto; }
+.person .chips { flex: 1 1 100%; }
 .person .where { grid-column: 2 / 4; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
   font-size: 13px; color: var(--text-2); }
 .person .remove {
@@ -105,12 +105,20 @@ body { display: flex; flex-direction: row-reverse; height: 100vh; height: 100dvh
 .mapbox-logo { display: block; width: 80px; height: 20px; line-height: 0; margin: 0 0 8px 10px; }
 .mapbox-logo img { width: 80px; height: 20px; }
 
-/* Phones: the map on top, the panel below it; the page scrolls. */
-@media (max-width: 720px) {
-  body { display: block; height: auto; overflow: auto; }
-  /* The map stays in view while the panel scrolls under it, so the alternatives
-     and reach buttons act on a map you can see. */
-  #map { height: 45vh; height: 45dvh; position: sticky; top: 0; z-index: 2; }
-  #panel { width: auto; box-shadow: none; overflow: visible; padding: 14px 16px 28px; }
-  #panel h1 { font-size: 20px; }
+/* Phones: the same pattern as the other tools. The map fills the screen under a short header,
+   and the panel is the bottom sheet (ui.css .sheet), scrolling inside itself, so the
+   alternatives and reach buttons act on a map you can see. */
+@media (max-width: 640px) {
+  body { display: block; }
+  #map { position: fixed; inset: 0; }
+  #panel {
+    width: auto; gap: 14px; padding: 12px 14px 18px;
+    border-radius: var(--radius); box-shadow: var(--shadow); bottom: 30px;
+  }
+  /* The header stays at the top of the screen; the sheet scrolls under it. */
+  #panel header {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 11; gap: 2px;
+    padding: 6px 10px 8px; background: rgba(255, 255, 255, 0.95); box-shadow: var(--shadow);
+  }
+  #panel header .lede { display: none; }
 }

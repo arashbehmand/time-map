@@ -101,13 +101,17 @@ def headlines(frames: list[dict], lines_at: dict, restart: dict, pairs, labels_a
 
 
 def notice(manifest: dict, lane: str = "L-01") -> str:
-    """Local use only is #6's rule for its layouts; the licence part comes from the build's own
-    manifest."""
+    """Local use only is #6's rule for the stations-only layout. The full time map (L-02) is
+    published by the app as Whole city (#28), under the tables' own gate. The licence part comes
+    from the build's own manifest."""
     if manifest.get("licences_cleared"):
         on = manifest.get("licences_cleared_on")
         lic = f"cleared for publication on {on}" if on else "cleared for publication"
     else:
         lic = "not cleared for publication"
+    if lane == "L-02":
+        return ("Derived from the transit tables and kept out of git. The app shows it as Whole city only while "
+                f"those tables may be served: unexpired, with their licences cleared. This build's tables: {lic}.")
     return f"Local use only (#6, {lane}): kept out of git and off the site. This build's tables: {lic}."
 
 

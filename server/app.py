@@ -11,7 +11,7 @@ import httpx
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi import Path as PathParam
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from server.cache import BoundedTTLCache
@@ -28,10 +28,12 @@ from server.meetup.routing import build_router as build_meetup_router
 from server.middleware import BodyLimit
 from server.settings import DEFAULT_USAGE_DB_PATH, Settings, on_railway
 from server.transit.provider import TransitHolder
+from server.transit.whole_city import WholeCityHolder
 from server.upstream import fail, mapbox_send
 from server.warp.mapbox_client import MapboxClient
 from server.warp.routes import router as warp_router
 from server.warp.travel_field import DEGRADED_TTL_S, TravelFieldService
+from server.whole_city.routes import router as whole_city_router
 
 # ── Logging ──────────────────────────────────────────────────────────
 set_secrets(SECRETS)
@@ -140,8 +142,39 @@ class AppFiles(StaticFiles):
 
 
 @page_router.get("/")
-def portfolio():
+def home():
     return FileResponse(_ROOT / "static" / "portfolio" / "index.html", headers=APP_CACHE)
+
+
+# The three tools (#28): their public paths and the static/ folders that hold them. The folders
+# keep their first names; only the URLs follow the tools' names.
+TOOL_PATHS = {"from-here": "warp", "meet-up": "meetup", "whole-city": "whole-city"}
+# Old paths, still in shared links and bookmarks: redirected with the rest of the path and the
+# query. The Location has no fragment, so the browser keeps a meetup link's #g=… group.
+OLD_PATHS = {"warp": "from-here", "meetup": "meet-up"}
+
+
+def _moved(request: Request, new: str, rest: str = "") -> RedirectResponse:
+    query = request.url.query
+    return RedirectResponse(f"/{new}/{rest}" + (f"?{query}" if query else ""), status_code=308)
+
+
+def _redirect(new: str, tail: bool):
+    # The tail is a path parameter only on the tail route; on the bare one there is no
+    # parameter at all, so ?rest= in a query stays part of the query.
+    if tail:
+        def redirect(request: Request, rest: str):
+            return _moved(request, new, rest)
+    else:
+        def redirect(request: Request):
+            return _moved(request, new)
+    return redirect
+
+
+for _old, _new in OLD_PATHS.items():
+    page_router.add_api_route(f"/{_old}", _redirect(_new, False), methods=["GET", "HEAD"], include_in_schema=False)
+    page_router.add_api_route(f"/{_old}/{{rest:path}}", _redirect(_new, True), methods=["GET", "HEAD"],
+                              include_in_schema=False)
 
 
 @page_router.get("/manifest.json")
@@ -179,6 +212,9 @@ def pwa_service_worker(request: Request):
 
 # ── App factory ──────────────────────────────────────────────────────
 def _startup_warnings(settings: Settings) -> None:
+    if settings.timemap_dir and not settings.transit_dir:
+        log.warning("TIMEMAP_DIR is set without TRANSIT_DIR: Whole city is served only with the tables "
+                    "it was made from, so it won't be shown")
     workers = os.environ.get("WEB_CONCURRENCY", "").strip()
     if workers.isdigit() and int(workers) > 1:
         # The start commands pass --workers 1, which wins over this variable; warn only.
@@ -245,6 +281,14 @@ def create_app(
                 await asyncio.to_thread(load)
             else:
                 state.transit_task = asyncio.create_task(asyncio.to_thread(load))
+        # Whole city: a few MB read into memory, served only under the tables' gate.
+        state.whole_city = WholeCityHolder(bool(settings.timemap_dir))
+        if settings.timemap_dir:
+            load_city = functools.partial(state.whole_city.load, settings.timemap_dir)
+            if settings.transit_block_startup:
+                await asyncio.to_thread(load_city)
+            else:
+                state.whole_city_task = asyncio.create_task(asyncio.to_thread(load_city))
         # The field's own isochrone client: it keeps walking replies only (walk and transit at
         # one pin share them); the field cache keeps every built field.
         state.field_isochrones = MapboxClient(
@@ -266,7 +310,7 @@ def create_app(
         await state.http_client.aclose()
         state.usage.close()
 
-    app = FastAPI(title="Time-Map", lifespan=lifespan)
+    app = FastAPI(title="Minutes Away", lifespan=lifespan)
     app.state.build_id = static_build_id(_ROOT / "static")
     install_error_handlers(app)
     app.add_middleware(GZipMiddleware, minimum_size=500)
@@ -277,15 +321,14 @@ def create_app(
     app.include_router(warp_router, prefix="/api")
     app.include_router(meetup_router, prefix="/api/meetup")
     app.include_router(geocode_router, prefix="/api")
+    app.include_router(whole_city_router, prefix="/api")
     app.include_router(proxy_router)
     app.include_router(page_router)
 
     app.mount("/icons", AppFiles(directory=str(_ROOT / "static" / "icons")), name="icons")
     app.mount("/shared", AppFiles(directory=str(_ROOT / "static" / "shared")), name="shared")
-    app.mount("/meetup", AppFiles(directory=str(_ROOT / "static" / "meetup"), html=True),
-              name="meetup")
-    app.mount("/warp", AppFiles(directory=str(_ROOT / "static" / "warp"), html=True),
-              name="warp")
+    for path, folder in TOOL_PATHS.items():
+        app.mount(f"/{path}", AppFiles(directory=str(_ROOT / "static" / folder), html=True), name=path)
     return app
 
 

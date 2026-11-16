@@ -1,31 +1,52 @@
-# Time-Map
+# Minutes Away
 
-Interactive tools for visualising travel time and finding fair meeting points, built with **FastAPI**, **MapLibre GL JS**, and **WebGL2**.
+Three tools for seeing a city by travel time, built with **FastAPI**, **MapLibre GL JS**, and **WebGL2**.
 
 Powered by [Mapbox](https://www.mapbox.com/) — this project relies on several Mapbox APIs for its core functionality:
 
-- **[Mapbox Isochrone API](https://docs.mapbox.com/api/navigation/isochrone/)** — travel-time and walking-distance contours the warp map turns into a travel-time field
-- **[Mapbox Directions Matrix API](https://docs.mapbox.com/api/navigation/matrix/)** — computes real network travel times between participants and candidate meeting points in the meetup tool
+- **[Mapbox Isochrone API](https://docs.mapbox.com/api/navigation/isochrone/)** — travel-time and walking-distance contours From here turns into a travel-time field
+- **[Mapbox Directions Matrix API](https://docs.mapbox.com/api/navigation/matrix/)** — computes real network travel times between participants and candidate meeting points in Meet up
 - **[Mapbox Vector Tiles](https://docs.mapbox.com/api/maps/vector-tiles/)** — provides the base map geometry (roads, buildings, labels) rendered via MapLibre GL
 - **[Mapbox Fonts / Glyphs](https://docs.mapbox.com/api/maps/fonts/)** — serves font glyphs for map label rendering
 
 | Tool | Question | What it shows |
 |------|----------|---------------|
-| **Warp map** (`/warp/`) | How far can I get from here? | A pin and travel-time bands around it on the normal map (walk, cycle, drive, and public transport in London when the tables are installed). "Bend the map" (experimental) bends it so the bands become circles: distance from the pin means travel time. |
-| **Meetup** (`/meetup/`) | Where should we meet? | Where everyone starts, the place that keeps the longest trip shortest ("Fairest"), and the place with the shortest average trip ("Quickest on average") when that is another place, with each person's minutes. A group can be shared as a link. |
+| **From here** (`/from-here/`) | How far can I get from here? | A pin and travel-time bands around it on the real map (walk, cycle, drive, and public transport in London when the tables are installed). "Time map" (experimental) bends it so the bands become circles: distance from the pin means travel time. |
+| **Meet up** (`/meet-up/`) | Where should we meet? | Where everyone starts, the place that keeps the longest trip shortest ("Fairest"), and the place with the shortest average trip ("Quickest on average") when that is another place, with each person's minutes. A group can be shared as a link. |
+| **Whole city** (`/whole-city/`) | What does London look like when distance means travel time? | London's land and stations moving from the real map to the time map, where a fast line pulls places together (#6, L-02). Only on a server with a time-map build whose tables may be served (see [Whole city](#whole-city)). |
 
-Both open on a saved London example, so the first view makes no routing request.
+From here and Meet up open on a saved London example, so the first view makes no routing
+request; Whole city makes none at all. Every tool's header links the other two. The old paths
+`/warp/` and `/meetup/` redirect (308) to `/from-here/` and `/meet-up/`, keeping the rest of the
+path and the query; the browser keeps a share link's `#g=…` group.
+
+The two maps have one name each in every tool: the **real map** (the ordinary one) and the
+**time map** (bent, so distance means travel time).
 
 ### Built with
 
-- **Warp map:** a travel-time field built on the server (Mapbox isochrones near the pin, the
+- **From here:** a travel-time field built on the server (Mapbox isochrones near the pin, the
   London transit tables farther out), drawn as bands on the MapLibre map and bent by a WebGL2
   mesh renderer that moves the map's own geometry.
-- **Meetup:** candidate points on an H3 hexagonal grid, travel times from the Mapbox
+- **Meet up:** candidate points on an H3 hexagonal grid, travel times from the Mapbox
   Directions Matrix API, and a minimax (fairest) answer with the quickest-on-average place
   beside it, from the places already checked. The API also accepts `sum` and a `hybrid`
   blend as the objective, which the page doesn't offer.
-- **Both:** FastAPI, MapLibre GL JS, vanilla JavaScript modules with no build step.
+- **Whole city:** the full London time map of `transit/layout` (a spring grid that can't fold),
+  drawn by the same mesh renderer from a data folder the server serves under the tables' gate.
+- **All three:** FastAPI, MapLibre GL JS, vanilla JavaScript modules with no build step, and
+  shared modules in `static/shared/` for the header switcher, the travel-mode chips, the "When?"
+  control, asking for a location, and what one tool hands the next.
+
+### From one tool to the next
+
+From here's pin, way of travelling and time of day go with you to Meet up (the pin becomes the
+group's first person) and back, through Whole city too. Meet up's group is kept too, so going to
+another tool and back through the switcher finds it again, and it wins over a pin brought back
+since. Both records live in this tab's `sessionStorage` (`/shared/handoff.js`), the pin rounded to
+about 11 m; the records themselves are never sent anywhere (a tool then uses the pin as if you
+had placed it, e.g. From here asks the server for its travel times). A shared Meet up link always
+wins over both, and the saved examples are never handed on. A new tab starts fresh.
 
 ## Prerequisites
 
@@ -68,9 +89,57 @@ Open [http://localhost:8000](http://localhost:8000) in your browser for the land
 
 | Route | App |
 |-------|-----|
-| `/` | Landing page |
-| `/warp/` | How far can I get? (warp map) |
-| `/meetup/` | Where should we meet? (meetup) |
+| `/` | Home: the three tools |
+| `/from-here/` | From here: how far can I get from here? (`static/warp/`) |
+| `/meet-up/` | Meet up: where should we meet? (`static/meetup/`) |
+| `/whole-city/` | Whole city: London by travel time (`static/whole-city/`) |
+| `/warp/…`, `/meetup/…` | Old paths: redirect to the two above |
+
+The folders keep their first names (`static/warp/`, `static/meetup/`, `server/warp/`); only the
+public paths follow the tools' names (`TOOL_PATHS` in `server/app.py`).
+
+## Whole city
+
+`python -m transit.layout.timemap --build <id>` writes one folder per timetable window,
+`transit/out/timemap/<build>/<window>/`: `timemap.json` and `land.bin` (what the page draws) and
+the build's report (`report.md`, `report.json`, `shepard.svg`, `panels.svg`). It is derived from
+the transit tables, so it stays out of git (`tests/test_no_data_in_git.py`), and the job refuses
+to write into `static/` or `server/`. The page is the app's own code (`static/whole-city/`).
+
+Point the app at one build's folder with `TIMEMAP_DIR`. It reads every window it holds at start-up
+(about 2.8 MB each for build 2026-11-12, plus a gzip copy made once) and serves what the page uses (`timemap.json`,
+`land.bin`, `report.md`, `shepard.svg`; not `report.json` or `panels.svg`) from
+`/api/whole-city/<window>/<file>`, never from a static folder. A window left out against the
+loaded tables is logged once, with why. A window is served only while **the loaded
+tables may be served to the same request** (unexpired; `licences_cleared`, or
+`TRANSIT_ALLOW_UNCLEARED=1` for this machine only, never on Railway) and only if it was made from
+exactly those tables: the same build id and the same table file (`table_sha256`). Withdrawing or
+expiring the tables withdraws Whole city with them. A new folder needs a restart.
+
+When there is no usable build, the home card and the switcher say so in plain words and link
+nowhere, and `/whole-city/` itself (from a bookmark or the installed app's shortcut) says the same
+and points to the other two tools. The page links its build's report and Shepard plot under
+"How this map was checked" (#6).
+
+**Offline.** Whole city works offline once it has been opened online (the owner's choice,
+2026-11-16). The service worker keeps its files after a view, in their own cache
+(`whole-city-data`, network first, `static/sw.js`), and the page keeps the status it was shown
+with beside them (`static/shared/offline.js`). With no network, the page, the home card and the
+switcher use that copy, only while the build's own valid-until date hasn't passed in London, and
+only for the times of day that were opened. Online the server's gate decides every time: a refusal
+(404) or a status saying Whole city isn't available drops everything kept. A licence withdrawn
+while a device stays offline is only seen there once it is back online; expiry is seen offline.
+Nothing is precached at install, so a server without a build still installs the app.
+
+On a local machine, with the tables of build 2026-11-12:
+
+```bash
+TRANSIT_DIR=transit/out/2026-11-12 TIMEMAP_DIR=transit/out/timemap/2026-11-12 \
+  TRANSIT_ALLOW_UNCLEARED=1 uvicorn server.app:app
+```
+
+then open <http://127.0.0.1:8000/whole-city/>. The override is refused on Railway and serves only
+requests from this machine through no proxy, as for the tables.
 
 ## Project Structure
 
@@ -85,13 +154,16 @@ server/                          # FastAPI backend
 ├── middleware.py                # Request body size limit
 ├── cache.py                     # Bounded LRU cache with TTL
 ├── guard/                       # Budget, rate, in-flight and per-IP controls
-├── warp/                        # The warp map's travel-time field
+├── local.py                     # Is a request from this machine (the uncleared-build override)
+├── whole_city/routes.py         # GET /api/whole-city/<window>/<file>: Whole city's data, behind the tables' gate
+├── warp/                        # From here's travel-time field
 │   ├── routes.py                # POST /api/travel-time-field, GET /api/transit/status, POST /api/isochrones
 │   ├── travel_field.py          # One field per (pin, mode, window): cache, coalescing, the transit merge
 │   ├── field.py                 # Contours → minutes on a grid, frames, the wire format
 │   ├── models.py                # Request models
 │   ├── mapbox_client.py         # Mapbox Isochrone fetching (minutes or metres), bounded cache
-├── transit/                     # The London tables at runtime: validation, composition, coverage, venues
+├── transit/                     # The London tables at runtime: validation, composition, coverage, venues;
+│                                #   whole_city.py: the full time map, served under the tables' gate
 └── meetup/                      # Meetup optimizer module
     ├── routes.py                # POST /api/meetup/solve
     ├── models.py                # Pydantic request/response models
@@ -101,13 +173,16 @@ server/                          # FastAPI backend
     ├── stations.py              # Groups on public transport: stations, or pubs, bars, cafés, restaurants, parks
     └── solver.py                # Scoring, refinement, snapped and named answers
 static/                          # Frontend assets (vanilla JS modules, no build step)
-├── shared/                      # ui.css, api.js (errors, search), latest.js (latest answer only)
+├── shared/                      # ui.css, api.js (errors, search), latest.js (latest answer only),
+│   │                            #   tools.js (names, words), transit.js (windows, expiry, status),
+│   │                            #   nav.js (switcher), locate.js (location), handoff.js (tool to tool)
 │   ├── mesh/                    # Mesh renderer: warp, tiles → mesh worker, WebGL2 renderer, bands, overlaps
 │   └── vendor/                  # pbf, @mapbox/vector-tile, point-geometry, earcut (ES modules)
-├── warp/                        # Warp map — app.js, views.js (choices), words.js (sentences), example-field.json
-│   └── lab/                     # /warp/lab/: renderer lab (unlinked, synthetic travel times)
-├── meetup/                      # Meetup — app.js, words.js (its sentences), share.js (share links), example.json
-├── portfolio/                   # Landing page
+├── warp/                        # From here (/from-here/) — app.js, views.js (choices), words.js (sentences), example-field.json
+│   └── lab/                     # /from-here/lab/: renderer lab (unlinked, synthetic travel times)
+├── meetup/                      # Meet up (/meet-up/) — app.js, words.js (its sentences), share.js (share links), example.json
+├── whole-city/                  # Whole city (/whole-city/) — app.js, carry.js (the land through the mesh); its data is TIMEMAP_DIR
+├── portfolio/                   # Home page
 ├── manifest.json                # PWA manifest
 ├── sw.js                        # Service worker (versioned per deploy, network first)
 └── icons/                       # PWA icons
@@ -177,7 +252,9 @@ The saved meetup example was made before answers carried street names, so it ope
 `/sw.js` is served with its cache name set to a hash of the files under `static/`, so every
 deploy that changes them gets a new cache and the old one is deleted. It caches only this
 site's own app files, fetched network first (the cache is used only offline). It never
-touches `/api/`, `/tiles/`, `/glyphs/` or any other site, MapLibre's CDN included.
+touches `/tiles/`, `/glyphs/`, the rest of `/api/` or any other site, MapLibre's CDN included.
+The one exception is Whole city's data (`/api/whole-city/`), kept after a view for offline use in
+a cache of its own (see [Whole city](#whole-city)).
 
 ## How the Warp Works
 
@@ -194,14 +271,15 @@ regular grid in metres around the pin (`POST /api/travel-time-field`, `server/wa
 
 The page draws the field two ways (`static/warp/app.js`):
 
-- **The normal map** (always): MapLibre with travel-time bands under the labels, contoured in
+- **The real map** (always): MapLibre with travel-time bands under the labels, contoured in
   the browser (`static/shared/mesh/contours.js`). A tap gives the minutes at that spot.
-- **The bent map** (experimental): the mesh renderer below. Each place sits at a distance from
+- **The time map** (experimental): the mesh renderer below. Each place sits at a distance from
   the pin proportional to its minutes, in its own direction (by reach, the default, or true
-  compass), so the rings are exact circles. "Bend the map" dissolves the normal map into the
-  mesh, then morphs it. A tap lists every place drawn under the finger, folds included. For
-  public transport the bent map stays hidden (`?polar=1` shows it) because it fails Direction 4's
-  checks at all five test origins: see [docs/warp-time-polar.md](docs/warp-time-polar.md).
+  compass), so the rings are exact circles. The "Time map" button (pressed or not, its label
+  never changes) dissolves the real map into the mesh, then morphs it. A tap lists every place
+  drawn under the finger, folds included. For public transport the time map stays hidden
+  (`?polar=1` shows it) because it fails Direction 4's checks at all five test origins: see
+  [docs/warp-time-polar.md](docs/warp-time-polar.md).
 
 Panning, zooming and resizing never send a request; a new pin, mode or window sends one, and
 the old picture stays up until the new one is ready.
@@ -215,9 +293,9 @@ extruded in screen pixels after the warp, so they stay sharp, and a place 20 km 
 drawn next to the pin. `warp.js` holds the `lon/lat → screen` function and its GLSL twin. A
 worker fetches and tessellates tiles once per tile, and per origin refines edges where the field
 bends them (`refine.js`); the morph only changes a uniform. It needs WebGL2 and no
-float-texture extension. `/warp/lab/` (not linked from anywhere) runs the checks: on synthetic
+float-texture extension. `/from-here/lab/` (not linked from anywhere) runs the checks: on synthetic
 travel times by default, or on the page's own fields with `?field=real`.
-`scripts/lab_headless.mjs` drives the lab or `/warp/` in a headless Chrome. W-01's results are in
+`scripts/lab_headless.mjs` drives the lab or `/from-here/` in a headless Chrome. W-01's results are in
 [docs/warp-renderer-spike.md](docs/warp-renderer-spike.md).
 
 ### The London time map (stations, spike)
@@ -231,7 +309,8 @@ See [transit/README.md](transit/README.md#stations-only-layout-6-l-01).
 `python -m transit.layout.timemap` (#6, L-02) draws the whole of London that way: every station
 and 300 points between them on a triangle mesh of springs that can't fold, the Thames, parks,
 rail lines and borough outlines carried on the same mesh, drawn with the mesh renderer above.
-It writes a page, a report and three panels into the git-ignored `transit/out/timemap/`.
+It writes the map's data, a report and three panels into the git-ignored `transit/out/timemap/`,
+and the app shows the map as [Whole city](#whole-city).
 See [transit/README.md](transit/README.md#full-london-time-map-6-l-02).
 
 ## How the Meetup Works
@@ -469,6 +548,8 @@ Requests are capped before any work starts:
 - 1–4 travel times of at most 60 minutes (`/api/isochrones`);
 - a travel-time field: two isochrone requests per new pin and mode (5-minute cache), 20 a minute
   per client (`PER_IP_TRAVEL_TIME_FIELD_PER_MIN`);
+- Whole city's files: 120 a minute per client (`PER_IP_WHOLE_CITY_PER_MIN`), served from memory,
+  gzipped once at start-up;
 - API bodies of at most 16 KiB.
 
 A meetup search is then *sized to fit*. The candidate count starts at `max_candidates`
@@ -511,9 +592,11 @@ Deploy checklist (the app logs a warning at startup for each item it can detect)
   flag, so use the next monthly build. Never set `TRANSIT_ALLOW_UNCLEARED` on a server anyone
   else can reach: a tunnel or a proxy on the same machine that adds no forwarding header
   makes every visitor look local.
+- For Whole city, `TIMEMAP_DIR` pointing at the time-map folder made from that same build
+  (`transit/out/timemap/<build>/`); a folder made from other tables is never served.
 - The RSP clause 3.3.2 notice settled (`[publication] rsp_notice` in `transit/sources.toml`; until
   then `transit.build publish` refuses), and shown with the transit credits if RSP asks for it.
-- Mapbox's terms for drawing Streets tiles with our own renderer (the bent map) confirmed
+- Mapbox's terms for drawing Streets tiles with our own renderer (the time map) confirmed
   (`docs/provider-terms.md`).
 - No CORS origin to configure: the API is same-origin only, so there is no allow-list.
 
@@ -532,6 +615,12 @@ Participant locations are often people's homes.
   then sent to Nominatim. The pages say so next to the search box.
 - Travel-time fields are POSTed too. The server keeps each one in memory for 5 minutes, keyed
   by the pin rounded to about 11 m, and writes nothing to disk.
+- What one tool hands the next (From here's pin, Meet up's first person, the way of travelling
+  and the time of day) and Meet up's group, kept for the trip back (`static/shared/handoff.js`),
+  stay in the browser: this tab's `sessionStorage`, the pin rounded to about 11 m, never in a URL.
+  The records themselves are never sent to our server; a tool that opens with a handed-on pin
+  uses it as if it were placed there (From here POSTs it for a travel-time field, as above). They
+  go when the tab closes.
 - A station answer's "Plan journey" links go to Google Maps directions (the owner's choice,
   2026-11-15). The page builds them; the server never contacts Google. A link sends that
   person's start point and the station to Google only when it is clicked, and the answer

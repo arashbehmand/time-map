@@ -6,52 +6,68 @@
   <meta name="theme-color" content="#f6f5f2" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <title>Time-Map</title>
+  <title>Minutes Away</title>
   <link rel="stylesheet" href="/shared/ui.css" />
   <style>
     body { min-height: 100vh; display: flex; flex-direction: column; }
-    header { max-width: 900px; width: 100%; margin: 0 auto; padding: 48px 20px 28px; }
+    header { max-width: 1080px; width: 100%; margin: 0 auto; padding: 48px 20px 28px; }
     header h1 { font-size: 34px; letter-spacing: -0.5px; }
     header p { margin-top: 10px; font-size: 17px; color: var(--text-2); max-width: 560px; }
 
     .tools {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;
-      max-width: 900px; width: 100%; margin: 0 auto; padding: 0 20px 56px;
+      max-width: 1080px; width: 100%; margin: 0 auto; padding: 0 20px 56px;
     }
     .tool {
-      display: flex; flex-direction: column; gap: 12px; padding: 22px;
+      display: flex; flex-direction: column; gap: 10px; padding: 22px;
       background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
       color: inherit; text-decoration: none;
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
-    .tool:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+    a.tool:hover { border-color: var(--accent); box-shadow: var(--shadow); }
     .tool:focus-visible { border-radius: 16px; }
     .tool h2 { font-size: 22px; line-height: 1.25; }
-    .tool p { color: var(--text-2); font-size: 16px; flex: 1; }
-    .tool p.transit-line { flex: 0 0 auto; font-size: 15px; }
+    .tool .q { font-weight: 600; font-size: 16px; color: var(--text); }
+    .tool p { color: var(--text-2); font-size: 16px; }
+    .tool p.say { flex: 1; }
+    .tool p.transit-line { font-size: 15px; }
     .transit-line[hidden] { display: none; }
     .tool .go { color: var(--accent); font-weight: 700; }
+    /* Whole city until the server says its map can be shown: an <a> with no href is not a link. */
+    a.tool:not([href]) { cursor: default; }
+    a.tool:not([href]):hover { border-color: var(--line); box-shadow: none; }
+    a.tool:not([href]) .go { color: var(--text-2); font-weight: 600; }
     .tool svg { width: 100%; height: auto; max-height: 190px; background: #f0ede9; border-radius: 10px; }
 
     /* Each animation plays once, in under 5 seconds, and stops on its last frame. */
-    /* Warp: a lumpy travel-time line around a pin settles into a circle. */
+    /* From here: a lumpy travel-time line around a pin settles into a circle. */
     .blob { fill: none; stroke: #2a5fbf; stroke-width: 3; transform-origin: 160px 95px; }
     .blob-a { animation: blob-out 3s ease-in-out 0.6s 1 both; }
     .blob-b { opacity: 0; animation: blob-in 3s ease-in-out 0.6s 1 both; }
     @keyframes blob-out { 0%, 25% { opacity: 1; } 75%, 100% { opacity: 0; } }
     @keyframes blob-in  { 0%, 25% { opacity: 0; } 75%, 100% { opacity: 1; } }
 
-    /* Meetup: three people, lines drawing to the meeting point. */
+    /* Meet up: three people, lines drawing to the meeting point. */
     .route { stroke-width: 3; fill: none; stroke-dasharray: 160; stroke-dashoffset: 160;
              animation: draw 2.5s ease-out 0.4s 1 both; }
     .route:nth-of-type(2) { animation-delay: 0.65s; }
     .route:nth-of-type(3) { animation-delay: 0.9s; }
     @keyframes draw { 0% { stroke-dashoffset: 160; } 60%, 100% { stroke-dashoffset: 0; } }
 
+    /* Whole city: a grid of places; a fast line pulls its two ends together and the grid
+       bunches around them. */
+    .grid-a { animation: grid-out 3s ease-in-out 0.6s 1 both; }
+    .grid-b { opacity: 0; animation: grid-in 3s ease-in-out 0.6s 1 both; }
+    @keyframes grid-out { 0%, 25% { opacity: 1; } 75%, 100% { opacity: 0; } }
+    @keyframes grid-in  { 0%, 25% { opacity: 0; } 75%, 100% { opacity: 1; } }
+    .grid circle { fill: #4a4a5a; }
+    .grid line { stroke: #9b0056; stroke-width: 4; stroke-linecap: round; }
+    .grid .end { fill: #9b0056; stroke: #fff; stroke-width: 2; }
+
     /* Reduced motion: show the end of each animation, still. */
     @media (prefers-reduced-motion: reduce) {
-      .blob-a { animation: none; opacity: 0; }
-      .blob-b { animation: none; opacity: 1; }
+      .blob-a, .grid-a { animation: none; opacity: 0; }
+      .blob-b, .grid-b { animation: none; opacity: 1; }
       .route { animation: none; stroke-dashoffset: 0; }
     }
 
@@ -60,25 +76,26 @@
 </head>
 <body>
   <header>
-    <h1>Time-Map</h1>
-    <p>Maps that answer two questions about getting around a city.</p>
+    <h1>Minutes Away</h1>
+    <p>Three ways to see a city in minutes, not miles.</p>
   </header>
 
   <main class="tools">
-    <a href="/warp/" class="tool">
+    <a href="/from-here/" class="tool">
       <svg viewBox="0 0 320 190" role="img" aria-label="A wobbly travel-time line around a pin turns into a circle">
         <path class="blob blob-a" d="M160 30 C 215 22, 262 60, 248 98 C 238 132, 200 168, 160 160 C 120 168, 70 150, 78 108 C 86 62, 112 36, 160 30 Z" />
         <circle class="blob blob-b" cx="160" cy="95" r="66" />
         <circle cx="160" cy="95" r="9" fill="#c2185b" stroke="#fff" stroke-width="3" />
       </svg>
-      <h2>How far can I get from here?</h2>
-      <p>Coloured bands show where you can get to in a set time. You can also bend the map so
-        travel time becomes distance.</p>
+      <h2>From here</h2>
+      <p class="q">How far can I get from here?</p>
+      <p class="say">Coloured bands show where you can get to in a set time, on the real map or on the time map,
+        where distance means minutes.</p>
       <p class="transit-line" hidden>In London, public transport too, for the time of day you pick.</p>
-      <span class="go">Open the map →</span>
+      <span class="go">Open From here →</span>
     </a>
 
-    <a href="/meetup/" class="tool">
+    <a href="/meet-up/" class="tool">
       <svg viewBox="0 0 320 190" role="img" aria-label="Three people's routes meet at one star">
         <path class="route" stroke="#c62828" d="M60 40 L 170 100" />
         <path class="route" stroke="#00796b" d="M270 60 L 170 100" />
@@ -89,10 +106,34 @@
         <circle cx="170" cy="100" r="15" fill="#b45309" stroke="#fff" stroke-width="3" />
         <text x="170" y="106" text-anchor="middle" font-size="17" fill="#fff" font-family="system-ui, sans-serif">★</text>
       </svg>
-      <h2>Where should we meet?</h2>
-      <p>Add where everyone starts and get the fairest place, and the one with the quickest average trip.</p>
+      <h2>Meet up</h2>
+      <p class="q">Where should we meet?</p>
+      <p class="say">Add where everyone starts and get the fairest place, and the one with the quickest average trip.</p>
       <p class="transit-line" hidden>In London, people can come by public transport, and you pick when you meet.</p>
-      <span class="go">Find a place →</span>
+      <span class="go">Open Meet up →</span>
+    </a>
+
+    <a class="tool" id="city-card">
+      <svg viewBox="0 0 320 190" role="img" aria-label="A grid of places bunches up where a fast line joins two of them">
+        <g class="grid grid-a">
+          <circle cx="70" cy="45" r="5" /><circle cx="130" cy="45" r="5" /><circle cx="190" cy="45" r="5" /><circle cx="250" cy="45" r="5" />
+          <circle cx="70" cy="95" r="5" /><circle cx="130" cy="95" r="5" /><circle cx="190" cy="95" r="5" /><circle cx="250" cy="95" r="5" />
+          <circle cx="70" cy="145" r="5" /><circle cx="130" cy="145" r="5" /><circle cx="190" cy="145" r="5" /><circle cx="250" cy="145" r="5" />
+          <line x1="70" y1="95" x2="250" y2="95" />
+          <circle class="end" cx="70" cy="95" r="9" /><circle class="end" cx="250" cy="95" r="9" />
+        </g>
+        <g class="grid grid-b">
+          <circle cx="95" cy="40" r="5" /><circle cx="140" cy="55" r="5" /><circle cx="180" cy="55" r="5" /><circle cx="225" cy="40" r="5" />
+          <circle cx="115" cy="95" r="5" /><circle cx="150" cy="95" r="5" /><circle cx="170" cy="95" r="5" /><circle cx="205" cy="95" r="5" />
+          <circle cx="95" cy="150" r="5" /><circle cx="140" cy="135" r="5" /><circle cx="180" cy="135" r="5" /><circle cx="225" cy="150" r="5" />
+          <line x1="115" y1="95" x2="205" y2="95" />
+          <circle class="end" cx="115" cy="95" r="9" /><circle class="end" cx="205" cy="95" r="9" />
+        </g>
+      </svg>
+      <h2>Whole city</h2>
+      <p class="q">What does London look like when distance means travel time?</p>
+      <p class="say">London's land and stations, placed by public transport time, so a fast line pulls places together.</p>
+      <span class="go" id="city-go">Checking for Whole city…</span>
     </a>
   </main>
 
@@ -100,21 +141,29 @@
     © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a></footer>
   <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
   <script type="module">
-    // Public transport is mentioned only while this server has London's tables, unexpired
-    // (the same rule as the two tools). Right after a deploy the server may still be loading
-    // them: ask again a few times.
-    import { expired } from "/warp/views.js";
-    for (let tries = 0; tries < 10; tries++) {
-      let s;
-      try {
-        const resp = await fetch("/api/transit/status");
-        s = resp.ok ? await resp.json() : {};
-      } catch { break; /* no line, no error */ }
-      if (s.loading) { await new Promise((r) => setTimeout(r, 3000)); continue; }
-      if (s.available && !expired(s.valid_until)) {
-        for (const el of document.querySelectorAll(".transit-line")) el.hidden = false;
-      }
-      break;
+    // Public transport is mentioned only while this server has London's tables, unexpired (the
+    // same rule as the tools), and Whole city is a link only while its map can be shown here.
+    // Right after a deploy the server may still be loading them: pollStatus asks again, and
+    // while Whole city is still loading the card keeps asking. The card is an <a> from the start
+    // and only gains its href, so its animation isn't restarted.
+    // Offline, a Whole city kept from an earlier visit (and not expired) is still a link.
+    import { cityOrKept } from "/shared/offline.js";
+    import { cityUnavailable } from "/shared/tools.js";
+    import { expired, pollStatus, statusLoading } from "/shared/transit.js";
+    let s = await pollStatus();
+    if (s && s.available && !expired(s.valid_until)) {
+      for (const el of document.querySelectorAll(".transit-line")) el.hidden = false;
+    }
+    for (let round = 0; statusLoading(s) && round < 6; round++) s = await pollStatus();
+    s = await cityOrKept(s);
+    const city = s && s.whole_city;
+    if (city && city.available) {
+      document.getElementById("city-card").href = "/whole-city/";
+      document.getElementById("city-go").textContent = "Open Whole city →";
+    } else {
+      const reason = city ? city.reason : "";
+      document.getElementById("city-go").textContent = reason === "loading"
+        ? "Whole city is still getting ready. Reload in a moment." : cityUnavailable(reason);
     }
   </script>
 </body>

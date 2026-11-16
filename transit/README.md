@@ -341,19 +341,22 @@ the build's own manifest.
 ## Full London time map (#6, L-02)
 
 `transit/layout/timemap.py` lays the whole of London out by travel time on a spring grid that
-can't fold, carries the land along, and writes a page drawn with the mesh renderer
-(`static/shared/mesh/`). It runs in this folder's environment (shapely 2.1 or later and the
-`osmium` tool for the land; the solve itself is numpy only) and needs no Java and no routing:
+can't fold, carries the land along, and writes what the app's Whole city page (#28,
+`static/whole-city/`) draws with the mesh renderer (`static/shared/mesh/`). It runs in this
+folder's environment (shapely 2.1 or later and the `osmium` tool for the land; the solve itself is
+numpy only) and needs no Java and no routing:
 
 ```bash
 TRANSIT_OUT=<folder holding the build> TRANSIT_DATA=<its data folder> \
   transit/.venv/bin/python -m transit.layout.timemap --build 2026-11-12    # --window wd13, --no-land
-python -m http.server -d transit/out/timemap/2026-11-12/wd13               # then open the printed address
+TRANSIT_DIR=transit/out/2026-11-12 TIMEMAP_DIR=transit/out/timemap/2026-11-12 \
+  TRANSIT_ALLOW_UNCLEARED=1 uvicorn server.app:app                         # then open /whole-city/
 ```
 
-The page is ES modules, which browsers don't load from `file://`, so serve the folder. It loads
-only its own files. After a rebuild, reload without the browser's cache (the server sends no cache
-headers, so a browser may keep an old module).
+The app serves the folder's files from `/api/whole-city/<window>/<file>` only while the tables it
+was made from may be served to the same request (the build id and the window's table sha256 must
+match the loaded `TRANSIT_DIR`; see the main README's "Whole city"). The page makes no routing and
+no tile requests.
 
 It reads what the stations-only job reads, plus, from `$TRANSIT_DATA/work/<build>/`, the prepared
 rail feed `gbt.gtfs.zip` (which stations trains join) and the OSM clip `london.osm.pbf` (the
@@ -376,14 +379,14 @@ It stops with exit code 2, having written nothing, when:
 - any triangle of any slider position is flipped, or the guard ring has moved, in the coordinates
   as shipped (whole decimetres) or in their Float32 image; or any mesh triangle folds anywhere along a
   blend between neighbouring keyframes;
-- the page would be over 2 MB gzipped at every rung of the land ladder;
+- the page would be over 2 MB gzipped at every rung of the land ladder (the data with the app's
+  Whole city page and every module it loads: what a visitor downloads);
 - the output folder is under `static/` or `server/`, inside the repo where git would track a file
   written, or holds a symlink where a file would go.
 
 | File | What it is |
 |---|---|
-| `index.html`, `app.js`, `app.css`, `carry.js`, `mesh/` | The page: the land through the mesh renderer (cpu back-end, a target per vertex), the stations, names and the Metropolitan line (carried through the mesh like the land) on a canvas above, a slider that runs continuously through every blend, and a button that plays the move. `mesh/` is the renderer copied as committed |
-| `timemap.json`, `land.bin` | What the page draws: the nodes, the mesh, the train links, every position in whole decimetres with its measures, the in-between keyframes (`motion`); the land cut along the mesh |
+| `timemap.json`, `land.bin` | What the app's Whole city page draws: the nodes, the mesh, the train links, every position in whole decimetres with its measures, the in-between keyframes (`motion`); the land cut along the mesh. The page (`static/whole-city/`) draws the land through the mesh renderer (cpu back-end, a target per vertex), the stations, names and the Metropolitan line (carried through the mesh like the land) on a canvas above, a slider that runs continuously through every blend, and a "Time map" button that plays the move |
 | `report.md`, `report.json` | The verdicts first, then the stations-only layout beside it, what shapes Wembley Park, and one row per position |
 | `shepard.svg` | Map distance against travel time: the real map, the stations-only time map and this map's end |
 | `panels.svg` | Three panels, north up at one scale: the real map, the first position where Wembley Park passes (or the closest), the end. Triangles shaded by area against the real map, the water and borough outlines, the stations and the Metropolitan line |
@@ -437,9 +440,10 @@ It stops with exit code 2, having written nothing, when:
   before writing and refuses if one folds or the keyframes are out of order. With train springs
   that only pull, build 2026-11-12 needs none of this: no step folds part way, so the keyframes
   are the 25 solved positions. The slider runs continuously from the real map to the end; solved
-  positions sit at whole steps, in-between ones at their log ρ. "Bend by travel time" plays the
-  whole move in about 4.5 s at an even pace of map movement (easing in and out), "Back to the
-  real map" plays it back, and pressed mid-move it turns round. Dragging the slider stops the
+  positions sit at whole steps, in-between ones at their log ρ. "Time map" plays the
+  whole move in about 4.5 s at an even pace of map movement (easing in and out), pressed again
+  it plays it back, and pressed mid-move it turns round; its label never changes, only its
+  pressed state. Dragging the slider stops the
   play. The arrow and page keys glide to the next or previous solved position from where the map
   is (or on from a glide already under way), taking their share of the 4.5 s and at least 450 ms;
   a key held down steps on as each glide ends. Home and End play to the ends. With reduced
@@ -505,5 +509,7 @@ It stops with exit code 2, having written nothing, when:
   Its fold counts (on its own station triangulation) are shown on this map too; here they come from
   bending, not folding.
 
-**Local use only**, like the stations-only layout: everything it writes is derived from the
-tables, so it stays in the git-ignored output folder.
+Everything it writes is derived from the tables, so it stays in the git-ignored output folder
+and never goes into git or `static/`. Unlike the stations-only layout, it is published: the app
+shows it as Whole city (#28), from `TIMEMAP_DIR`, under the tables' own expiry and licence gate.
+Its report and Shepard plot are linked from the page.

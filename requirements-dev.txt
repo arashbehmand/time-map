@@ -1,3 +1,4 @@
 pytest>=8,<10
 ruff>=0.6,<1.0
 pandas>=2.2,<4.0  # tests/test_transit.py (the app image does not need it)
+shapely>=2.1,<3.0  # constrained_delaunay_triangles: transit/layout/land.py and its tests (the app needs 2.0)

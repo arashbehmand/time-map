@@ -113,7 +113,7 @@ static/                          # Frontend assets (vanilla JS modules, no build
 └── icons/                       # PWA icons
 transit/                         # London public-transport tables (offline build; the app imports only transit/tables.py)
 ├── venues.py                    # Meetup venues from the OSM clip (#19): python -m transit.venues
-└── layout/                      # Stations-only London time map (#6, L-01): weighted SMACOF, report, local viewer
+└── layout/                      # London time map (#6): stations only by SMACOF (L-01); the full map as a spring grid that can't fold (L-02)
 scripts/make_examples.py         # Regenerates the two saved examples
 scripts/try_solves.py            # Runs fixed meetup groups against a server (timings, diagnostics)
 tests/js/                        # node --test: warp maths, mesh renderer, latest-answer helper, meetup sentences
@@ -227,6 +227,12 @@ travel time, from the transit tables above, by weighted SMACOF with a slider fro
 to the pure time map. It writes a report and a local viewer into the git-ignored
 `transit/out/layout/`, and nothing it makes goes into git or onto the site.
 See [transit/README.md](transit/README.md#stations-only-layout-6-l-01).
+
+`python -m transit.layout.timemap` (#6, L-02) draws the whole of London that way: every station
+and 300 points between them on a triangle mesh of springs that can't fold, the Thames, parks,
+rail lines and borough outlines carried on the same mesh, drawn with the mesh renderer above.
+It writes a page, a report and three panels into the git-ignored `transit/out/timemap/`.
+See [transit/README.md](transit/README.md#full-london-time-map-6-l-02).
 
 ## How the Meetup Works
 

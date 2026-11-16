@@ -337,3 +337,173 @@ It stops with exit code 2, having written nothing, when:
 git-ignored output folder: never in git, never under `static/`, never on the site. That is #6
 L-01's rule whatever the build's licence; the report and the viewer show the licence status from
 the build's own manifest.
+
+## Full London time map (#6, L-02)
+
+`transit/layout/timemap.py` lays the whole of London out by travel time on a spring grid that
+can't fold, carries the land along, and writes a page drawn with the mesh renderer
+(`static/shared/mesh/`). It runs in this folder's environment (shapely 2.1 or later and the
+`osmium` tool for the land; the solve itself is numpy only) and needs no Java and no routing:
+
+```bash
+TRANSIT_OUT=<folder holding the build> TRANSIT_DATA=<its data folder> \
+  transit/.venv/bin/python -m transit.layout.timemap --build 2026-11-12    # --window wd13, --no-land
+python -m http.server -d transit/out/timemap/2026-11-12/wd13               # then open the printed address
+```
+
+The page is ES modules, which browsers don't load from `file://`, so serve the folder. It loads
+only its own files. After a rebuild, reload without the browser's cache (the server sends no cache
+headers, so a browser may keep an old module).
+
+It reads what the stations-only job reads, plus, from `$TRANSIT_DATA/work/<build>/`, the prepared
+rail feed `gbt.gtfs.zip` (which stations trains join) and the OSM clip `london.osm.pbf` (the
+land), each checked against the manifest's sha256. Nothing is rebuilt. It writes to
+`transit/out/timemap/<build>/<window>/` in this checkout. The train links are read for the
+window's own service date and hour, so any window runs; weekday 13:00 (wd13) is the one built
+and reviewed.
+
+It stops with exit code 2, having written nothing, when:
+
+- any of the stations-only job's input checks fails, or the feed or the clip is missing or not the
+  file the manifest describes;
+- the checks file isn't shaped like `checks.toml` (its `[[ratio]]` and `[[required_link]]` tables
+  included), a `[[required_link]]` names a station that isn't in the layout, or isn't in the feed
+  (stops joined to stations wrongly);
+- the clip lacks one of London's 33 boroughs, or `osmium` isn't installed (`--no-land` skips the
+  land);
+- a solve doesn't converge, or raises its energy, or the stations-only layout solved again for the
+  comparison fails the same way (its own job would refuse it);
+- any triangle of any slider position is flipped, or the guard ring has moved, in the coordinates
+  as shipped (whole decimetres) or in their Float32 image; or any mesh triangle folds anywhere along a
+  blend between neighbouring keyframes;
+- the page would be over 2 MB gzipped at every rung of the land ladder;
+- the output folder is under `static/` or `server/`, inside the repo where git would track a file
+  written, or holds a symlink where a file would go.
+
+| File | What it is |
+|---|---|
+| `index.html`, `app.js`, `app.css`, `carry.js`, `mesh/` | The page: the land through the mesh renderer (cpu back-end, a target per vertex), the stations, names and the Metropolitan line (carried through the mesh like the land) on a canvas above, a slider that runs continuously through every blend, and a button that plays the move. `mesh/` is the renderer copied as committed |
+| `timemap.json`, `land.bin` | What the page draws: the nodes, the mesh, the train links, every position in whole decimetres with its measures, the in-between keyframes (`motion`); the land cut along the mesh |
+| `report.md`, `report.json` | The verdicts first, then the stations-only layout beside it, what shapes Wembley Park, and one row per position |
+| `shepard.svg` | Map distance against travel time: the real map, the stations-only time map and this map's end |
+| `panels.svg` | Three panels, north up at one scale: the real map, the first position where Wembley Park passes (or the closest), the end. Triangles shaded by area against the real map, the water and borough outlines, the stations and the Metropolitan line |
+
+**How it is computed.**
+
+- **Nodes** (`mesh.py`): the stations-only job's station nodes; 300 H3 cell centres from
+  `points.csv` (any routing flag: they are geometry), picked by farthest-point sampling from the
+  stations, none within 50 m of one, ties to the lowest index; and 40 fixed guard nodes on a circle
+  8 km outside them, which carry no land and are never drawn.
+- **Mesh:** the Delaunay triangulation of the stations' and cells' real positions (rounded to whole
+  decimetres), and an annulus of triangles joining its convex hull to the guard ring, never changed.
+  A fixed simple outer boundary plus every triangle keeping a positive signed area makes the map
+  from the real map to a layout one to one; the guard ring is that boundary. The annulus keeps the
+  ring's triangles outside the hull, so the land (clipped to the hull) lies in station-and-cell
+  triangles only.
+- **Train links** (`links.py`): unordered pairs of stops that a rail, tube, DLR or tram trip running
+  on the build's weekday serves one after the other (`stop_sequence` one apart, so a stop the clip
+  removed never joins its neighbours), the train leaving the first in the table's window, mapped to
+  stations through `parent_station`. One link per pair of nodes. Its rest length is s·t: the
+  stations-only layout's scale times the table's time between them (mean of both ways, floored at
+  0.5 min). Read with the standard library only.
+- **Energy** (`springs.py`): [Σ a·ψ(l/l₀) + ρ·Σ b·ψ₊(l/(s·t)) + Σ A₀·(κ·φ(J) + κs·μ(F))] ÷ (ΣA₀ /
+  free nodes), with ψ(λ) = ½(λ² − 1) − ln λ on every grid spring (each mesh edge, rest length its
+  real length, weight a third of the real area of its triangles), ψ₊ (ψ when stretched past its
+  rest length, 0 when shorter) on every train spring (weight its real length × the median mesh
+  edge); on each triangle φ(J) = ½(J + 1/J) − 1 of its area ratio J,
+  which resists shrinking, and μ(F) = ‖F‖²/J − 2 of its map F from the real map, which resists
+  going thin and is zero for any rotation or uniform scaling; κ = κs = 1. All three are zero and
+  flat at rest and infinite at collapse, so no grid spring or triangle can be squashed flat or
+  turned over: the grid bunches up instead.
+- **Train springs only pull.** A train link says its stations are at most s·t apart. A table time
+  between neighbouring stations includes reaching the platform and waiting, and the scale is the
+  all-pairs one, so s·t is longer than the real hop for most links (89% on build 2026-11-12,
+  median twice the real length). Springs that pushed would make chains of those links buckle
+  into zigzags (a line can't grow to twice its length inside the grid), so they act only if their
+  stations end up further apart than s·t; the fast links pull places together. The report gives
+  the share every build, and how many links end up past their s·t.
+- **Slider:** ρ, the train springs' strength against the grid: the real map (ρ = 0, every spring at
+  rest), then 24 values from 0.01 to 100, each solved from the one before.
+- **Motion:** the page moves smoothly. Between two neighbouring keyframes it draws their straight
+  blend; the renderer holds one layout as positions and the next as targets and mixes them on the
+  GPU. A blend of two unfolded layouts can still fold on the way, so the sweep checks every step
+  exactly: along a blend each triangle's doubled area is a quadratic in the blend fraction, and
+  its minimum is computed in exact integers on whole decimetres (`mesh.blend_min_area`). A step
+  whose blend would fold is split at its geometric middle: the middle is solved, then the step's
+  target is solved again from the middle (so it can differ from a direct solve; the restart check's
+  other ladders measure that), up to six times. A step that still folds is a jump in the solution,
+  and there the page follows the solver's own steps, each cut short of zero area, kept as
+  settling keyframes; a mark under the slider shows where. The job checks every blend again
+  before writing and refuses if one folds or the keyframes are out of order. With train springs
+  that only pull, build 2026-11-12 needs none of this: no step folds part way, so the keyframes
+  are the 25 solved positions. The slider runs continuously from the real map to the end; solved
+  positions sit at whole steps, in-between ones at their log ρ. "Bend by travel time" plays the
+  whole move in about 4.5 s at an even pace of map movement (easing in and out), "Back to the
+  real map" plays it back, and pressed mid-move it turns round. Dragging the slider stops the
+  play. The arrow and page keys glide to the next or previous solved position from where the map
+  is (or on from a glide already under way), taking their share of the 4.5 s and at least 450 ms;
+  a key held down steps on as each glide ends. Home and End play to the ends. With reduced
+  motion, the button and keys jump. One animation-frame callback drives every move
+  (`carry.js` `createMotion`, tested with a fake clock). The readout names the two keyframes
+  being blended; station colours blend between the solved positions either side, and the tooltip
+  gives both values. The live region stays quiet while the map moves or the slider is dragged,
+  and the slider's spoken value changes only when its text does. Faint rings and dashed lines
+  show where the named stations really are.
+- **Lines on the page:** rail, borough outlines and the Metropolitan line get thinner where the
+  map squeezes the ground across them: each segment lies in one mesh triangle, whose linear map F
+  is exact, and its width is det F ÷ |F·d| of the real width (d its direction), never wider and
+  never under 30%. The renderer takes that as an optional width factor per line segment, at both
+  ends of the morph (`wf`; without it, as for every other scene, lines keep their width).
+  "Smooth lines" (on by default) rounds off the bends lines take where they cross a mesh edge:
+  the pieces `land.py` cut are joined back into whole lines, and each line's displacement from
+  the real map is averaged along it over ±200 m (real), three times, with the window narrowing to
+  zero at line ends, junctions and mesh nodes. The real map is untouched and the blend of two
+  smoothed keyframes is the smoothed blend. Water, parks and the mesh keep the exact map, so a
+  smoothed line can sit off it: on build 2026-11-12 at the end of the slider, 1% of line points
+  move more than 149 m (at most 479 m), and kinks over 10° where a straight line crosses a mesh
+  edge drop from 26% to 5%.
+- **Solve:** Levenberg–Marquardt Newton on the exact Hessian. Each trial step is cut to 0.9 of the
+  first point at which any triangle's area would reach zero along it (the area is a quadratic in
+  the step length), so no point on any step is folded; a step that doesn't lower the energy isn't
+  taken. Converged at |gradient| ≤ 1e-6; a position that won't converge is reached again through
+  up to three levels of sub-steps, then refused. The report says whether the Hessian is positive
+  definite at each solution (a strict local minimum). The ring is fixed, so there is no rotation to
+  align. A restart check tests whether the first pass and the end depend on how the continuation
+  got there. It solves the sweep again from the real map nudged by up to 0.5 m on every free node
+  (two seeds, the same steps: a test of the start), and through other ladders of ρ (every other
+  step, and straight from the real map in one step: a test of the step size). It reports how far
+  Wembley Park, σ₁ and the Metropolitan order move, and the largest shift of any node from the
+  shipped layout. On build 2026-11-12 no node moves more than 0.2 m.
+- **Land** (`land.py`): water (`natural=water`, `waterway=riverbank`, reservoirs, basins), parks
+  (parks, commons, nature reserves, golf courses, recreation grounds, cemeteries, woods, heath;
+  water cut out of them), rail (`railway=rail`, `subway`, `light_rail`, `tram` without
+  `service=*`; `tunnel=yes` as a tunnel) and the 33 boroughs (`ref:gss` E09000001 to E09000033,
+  every part of each, their outlines merged so a shared border is drawn once), from the clip
+  through `osmium` and shapely. Water and parks are dissolved before the size floor, then
+  simplified, clipped to the hull of stations and cells, and cut along the mesh so every piece lies
+  inside one triangle. Every vertex is stored as three mesh nodes and two weights (a point on a
+  mesh edge by that edge alone, the same way in every piece that shares it), so its place on any
+  layout is the mesh's own piecewise-linear map, and neighbouring pieces meet exactly: a mesh that
+  doesn't fold draws land that doesn't fold or crack. The page draws each fill triangle from the
+  Float32 positions of the two keyframes it is between, mixed by the shader; along that mix the
+  triangle's doubled area is a quadratic, and the build checks its exact minimum over the whole
+  blend, on every keyframe and every blend, with a margin of 1 cm a vertex for the shader's own
+  rounding (`land.blend_slivers`). Slivers that don't pass (far under a pixel) are left out and
+  counted.
+  Simplification goes 20, 40, 80 m, then the smallest water and park 2, 5, 10 ha, until the page
+  fits in 2 MB gzipped; no layer is dropped.
+- **Report:** at every position, on the station nodes, the stations-only job's measures (σ₁,
+  trustworthiness and continuity at k = 10, the Wembley Park rule, every `[[ratio]]` row by the
+  same rule, the Metropolitan line's order); flipped triangles (always 0); the smallest area ratio
+  to the real map and where; how thin triangles get (larger over smaller scale) and where; the
+  links past their s·t; the energy's four terms; how far nodes still move from one position to the
+  next. Triangle statistics cover the triangles inside the hull, never the guard ring's. Each
+  Wembley row also says pass or fail against the stations-only pure time map's σ₁, and the report
+  says what shapes Wembley Park (the chain of links to Baker Street, its bend, the triangles between
+  them) and why a station no train joins to its reference can end too close to it. The
+  stations-only layout is solved again in the same run so both columns come from the same tables.
+  Its fold counts (on its own station triangulation) are shown on this map too; here they come from
+  bending, not folding.
+
+**Local use only**, like the stations-only layout: everything it writes is derived from the
+tables, so it stays in the git-ignored output folder.

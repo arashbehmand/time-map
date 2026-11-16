@@ -100,14 +100,15 @@ def headlines(frames: list[dict], lines_at: dict, restart: dict, pairs, labels_a
     }
 
 
-def notice(manifest: dict) -> str:
-    """Local use only is #6 L-01's rule; the licence part comes from the build's own manifest."""
+def notice(manifest: dict, lane: str = "L-01") -> str:
+    """Local use only is #6's rule for its layouts; the licence part comes from the build's own
+    manifest."""
     if manifest.get("licences_cleared"):
         on = manifest.get("licences_cleared_on")
         lic = f"cleared for publication on {on}" if on else "cleared for publication"
     else:
         lic = "not cleared for publication"
-    return f"Local use only (#6, L-01): kept out of git and off the site. This build's tables: {lic}."
+    return f"Local use only (#6, {lane}): kept out of git and off the site. This build's tables: {lic}."
 
 
 def layout_doc(b, pairs, frames, tri, checks, code, checks_sha256=None) -> tuple[dict, list[str]]:
@@ -162,16 +163,20 @@ def _blue(v: float) -> str:
     return "#%02x%02x%02x" % tuple(c)
 
 
-def shepard_svg(bins: dict, title: str) -> str:
+SHEPARD_PANELS = (("real", "Real map"), ("time", "Pure time map (λ = 0)"))
+
+
+def shepard_svg(bins: dict, title: str, panels=SHEPARD_PANELS) -> str:
+    """One panel per (key of `bins`, name), side by side, on one shared scale."""
     size, pad_l, pad_t, gap = 300, 56, 44, 70
-    width = pad_l + 2 * size + gap + 20
+    width = pad_l + len(panels) * size + (len(panels) - 1) * gap + 20
     height = pad_t + size + 50
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
              f'viewBox="0 0 {width} {height}" font-family="system-ui, sans-serif" font-size="11">',
              f'<rect width="{width}" height="{height}" fill="#ffffff"/>',
              f'<text x="{pad_l}" y="18" font-size="13" font-weight="600">{title}</text>']
-    top = max(b["top"] for b in bins.values())
-    for k, (key, name) in enumerate((("real", "Real map"), ("time", "Pure time map (λ = 0)"))):
+    top = max(bins[key]["top"] for key, _ in panels)
+    for k, (key, name) in enumerate(panels):
         b = bins[key]
         ox = pad_l + k * (size + gap)
         px = size / top

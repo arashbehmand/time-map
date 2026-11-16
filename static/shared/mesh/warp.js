@@ -7,6 +7,10 @@
 //          puts the place at a distance proportional to its travel time (exact at every vertex).
 //   grid   target = bilinear target positions from a grid: any layout, e.g. the London
 //          map's (#6), rasterised into a grid of positions.
+//   mesh   target = piecewise linear over a triangle mesh: inside each real triangle, the same
+//          barycentric blend of its three corners' layout positions (the London time map, #6
+//          L-02). Exact, so a mesh whose triangles all keep their orientation maps one to one.
+//          Outside the mesh it is unknown. The renderer draws it on the cpu back-end only.
 // Where target() is unknown it fades out as u → 1, and it still moves, so a triangle or a
 // segment with one known and one unknown corner stays short instead of streaking:
 //   polar  no data, or past maxMinutes: it moves onto the outer ring along its own bearing
@@ -54,6 +58,16 @@ export function createWarp(spec) {
   } else if (kind === "grid") {
     const g = spec.grid;
     target = (x, y) => sampleGrid(g, x, y);
+  } else if (kind === "mesh") {
+    const { real, tri, nodes } = spec.mesh;
+    const find = meshLocator(real, tri);
+    target = (x, y) => {
+      const h = find(x, y);
+      if (!h) return null;
+      const a = tri[3 * h.t], b = tri[3 * h.t + 1], c = tri[3 * h.t + 2];
+      return [h.w0 * nodes[2 * a] + h.w1 * nodes[2 * b] + h.w2 * nodes[2 * c],
+        h.w0 * nodes[2 * a + 1] + h.w1 * nodes[2 * b + 1] + h.w2 * nodes[2 * c + 1]];
+    };
   } else {
     target = () => null;
   }
@@ -118,14 +132,84 @@ export function createWarp(spec) {
   }
 
   // ∂target/∂x and ∂target/∂y at p as [a, c, b, d] (layout units per metre), or null where
-  // the target is unknown nearby. Mirrors fieldJacobian() in WARP_GLSL.
+  // the target is unknown nearby. Mirrors fieldJacobian() in WARP_GLSL. A mesh warp gives the
+  // exact affine map of the triangle that holds p instead of a finite difference.
+  const meshJac = kind === "mesh" ? meshJacobian(spec.mesh) : null;
   function targetJacobian(x, y, h = JAC_H) {
+    if (meshJac) return meshJac(x, y);
     const px = target(x + h, y), mx = target(x - h, y), py = target(x, y + h), my = target(x, y - h);
     if (!px || !mx || !py || !my) return null;
     return [(px[0] - mx[0]) / (2 * h), (px[1] - mx[1]) / (2 * h), (py[0] - my[0]) / (2 * h), (py[1] - my[1]) / (2 * h)];
   }
 
   return { kind, spec, frame, target, placement, screenOfLocal, toScreen, jacobian, screenJacobian, targetJacobian };
+}
+
+// The triangle of a mesh that holds (x, y), and its barycentric weights: {t, w0, w1, w2}, or
+// null outside. real: corner positions (x, y per node), tri: three node indices per triangle.
+// A uniform grid of buckets, each listing the triangles whose bounding box meets it, keeps a
+// lookup to a few triangles. A point on a shared edge goes to the lowest triangle index.
+export function meshLocator(real, tri, eps = 1e-9) {
+  const nt = tri.length / 3;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < real.length; i += 2) {
+    x0 = Math.min(x0, real[i]); x1 = Math.max(x1, real[i]);
+    y0 = Math.min(y0, real[i + 1]); y1 = Math.max(y1, real[i + 1]);
+  }
+  const side = Math.max(1, Math.ceil(Math.sqrt(nt)));
+  const cw = Math.max((x1 - x0) / side, 1e-9), ch = Math.max((y1 - y0) / side, 1e-9);
+  const buckets = Array.from({ length: side * side }, () => []);
+  const cellOf = (v, lo, c) => Math.min(side - 1, Math.max(0, Math.floor((v - lo) / c)));
+  for (let t = 0; t < nt; t++) {
+    const xs = [real[2 * tri[3 * t]], real[2 * tri[3 * t + 1]], real[2 * tri[3 * t + 2]]];
+    const ys = [real[2 * tri[3 * t] + 1], real[2 * tri[3 * t + 1] + 1], real[2 * tri[3 * t + 2] + 1]];
+    const i0 = cellOf(Math.min(...xs), x0, cw), i1 = cellOf(Math.max(...xs), x0, cw);
+    const j0 = cellOf(Math.min(...ys), y0, ch), j1 = cellOf(Math.max(...ys), y0, ch);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) buckets[j * side + i].push(t);
+  }
+  return (x, y) => {
+    if (!(x >= x0 && x <= x1 && y >= y0 && y <= y1)) return null;
+    for (const t of buckets[cellOf(y, y0, ch) * side + cellOf(x, x0, cw)]) {
+      const w = barycentric(real, tri, t, x, y);
+      if (w[0] >= -eps && w[1] >= -eps && w[2] >= -eps) return { t, w0: w[0], w1: w[1], w2: w[2] };
+    }
+    return null;
+  };
+}
+
+// Barycentric weights of (x, y) in triangle t of a mesh (any sign: outside, one is negative).
+export function barycentric(real, tri, t, x, y) {
+  const a = tri[3 * t], b = tri[3 * t + 1], c = tri[3 * t + 2];
+  const ax = real[2 * a], ay = real[2 * a + 1];
+  const bx = real[2 * b] - ax, by = real[2 * b + 1] - ay, cx = real[2 * c] - ax, cy = real[2 * c + 1] - ay;
+  const det = bx * cy - by * cx;
+  const px = x - ax, py = y - ay;
+  const w1 = (px * cy - py * cx) / det, w2 = (bx * py - by * px) / det;
+  return [1 - w1 - w2, w1, w2];
+}
+
+// The exact local scale of a mesh warp at (x, y): the affine map of the triangle that holds it,
+// as targetJacobian's [∂tx/∂x, ∂ty/∂x, ∂tx/∂y, ∂ty/∂y], or null outside the mesh.
+export function meshJacobian({ real, tri, nodes }) {
+  const find = meshLocator(real, tri);
+  return (x, y) => {
+    const h = find(x, y);
+    return h ? triangleJacobian(real, nodes, tri, h.t) : null;
+  };
+}
+
+// Triangle t's affine map from real (corner positions `real`) to layout (`nodes`).
+export function triangleJacobian(real, nodes, tri, t) {
+  const a = tri[3 * t], b = tri[3 * t + 1], c = tri[3 * t + 2];
+  const e1x = real[2 * b] - real[2 * a], e1y = real[2 * b + 1] - real[2 * a + 1];
+  const e2x = real[2 * c] - real[2 * a], e2y = real[2 * c + 1] - real[2 * a + 1];
+  const f1x = nodes[2 * b] - nodes[2 * a], f1y = nodes[2 * b + 1] - nodes[2 * a + 1];
+  const f2x = nodes[2 * c] - nodes[2 * a], f2y = nodes[2 * c + 1] - nodes[2 * a + 1];
+  const det = e1x * e2y - e2x * e1y;
+  // F = [f1 f2] · [e1 e2]⁻¹, with [e1 e2]⁻¹ = [[e2y, -e2x], [-e1y, e1x]] / det.
+  const fxx = (f1x * e2y - f2x * e1y) / det, fxy = (-f1x * e2x + f2x * e1x) / det;
+  const fyx = (f1y * e2y - f2y * e1y) / det, fyy = (-f1y * e2x + f2y * e1x) / det;
+  return [fxx, fyx, fxy, fyy];
 }
 
 // The bent direction of a place at local (x, y) reached in t minutes, as a unit vector (zero

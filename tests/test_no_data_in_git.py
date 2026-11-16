@@ -47,16 +47,21 @@ def test_no_data_or_large_file_is_tracked():
                                   # the stations-only layout's outputs (#6, L-01)
                                   "transit/out/layout/2026-11-12/wd13/layout.json",
                                   "transit/out/layout/2026-11-12/wd13/layout.js",
-                                  "transit/out/layout/2026-11-12/wd13/index.html"])
+                                  "transit/out/layout/2026-11-12/wd13/index.html",
+                                  # the full time map's outputs (#6, L-02)
+                                  "transit/out/timemap/2026-11-12/wd13/timemap.json",
+                                  "transit/out/timemap/2026-11-12/wd13/land.bin",
+                                  "transit/out/timemap/2026-11-12/wd13/panels.svg",
+                                  "transit/out/timemap/2026-11-12/wd13/mesh/renderer.js"])
 def test_data_files_are_ignored_anywhere(path):
     if _git("rev-parse", "--git-dir").returncode:
         pytest.skip("not a git checkout")
     assert _git("check-ignore", "-q", "--no-index", path).returncode == 0, f"{path} is not ignored"
 
 
-# The stations-only layout's outputs are derived from the tables, so not even a copy of one may be
-# tracked: copied into static/, it would ship with the app (#6, L-01).
-LAYOUT_OUTPUTS = {"layout.js", "layout.json", "shepard.svg"}
+# The layouts' outputs are derived from the tables, so not even a copy of one may be tracked:
+# copied into static/, it would ship with the app (#6, L-01 and L-02).
+LAYOUT_OUTPUTS = {"layout.js", "layout.json", "shepard.svg", "timemap.json", "land.bin", "panels.svg"}
 
 
 def test_no_layout_output_is_tracked():

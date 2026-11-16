@@ -76,6 +76,7 @@ in float a_style;
 in vec3 a_ta;
 in vec3 a_tb;
 in vec4 a_jac;         // the warp's local scale at the midpoint, from the worker
+in vec2 a_wf;          // a width factor at u = 0 and at u = 1 (default 1, 1)
 #endif
 out vec2 v_seg;        // along, across: device px from a, in the segment's own frame
 out float v_len;
@@ -95,6 +96,9 @@ void main() {
 #endif
   vec2 emph = u_adaptive ? lineEmphasis(jt, a_b - a_a) : vec2(1.0);
   float hw = 0.5 * u_width[int(a_style)] * u_dpr * emph.x;
+#ifdef CPU_TARGETS
+  hw *= mix(a_wf.x, a_wf.y, u_u);
+#endif
   float m = hw + 1.0;                           // room for the anti-aliased edge
   vec2 d = pb - pa;
   float len = length(d);
@@ -176,7 +180,7 @@ void main() {
 
 const FILL_ATTRIBS = ["a_pos", "a_style", "a_t"];
 const BAND_ATTRIBS = ["a_pos", "a_min", "a_t"];
-const LINE_ATTRIBS = ["a_corner", "a_a", "a_b", "a_style", "a_ta", "a_tb", "a_jac"];
+const LINE_ATTRIBS = ["a_corner", "a_a", "a_b", "a_style", "a_ta", "a_tb", "a_jac", "a_wf"];
 const BENT = new Float32Array(STYLES.map((s) => s.bent ?? 1));
 
 // A directions-by-reach table (warp.js angularSpread) as the shader's vec4 array.
@@ -256,6 +260,8 @@ export function createMeshRenderer(canvas, opts = {}) {
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 1, 1, 0, -1, 1, 1, 0, 1]), gl.STATIC_DRAW);
     // a_jac when a line buffer carries none: zero means "no local scale", not WebGL's (0,0,0,1).
     gl.vertexAttrib4f(LINE_ATTRIBS.indexOf("a_jac"), 0, 0, 0, 0);
+    // a_wf when a line buffer carries none: full width at both ends of the morph.
+    gl.vertexAttrib2f(LINE_ATTRIBS.indexOf("a_wf"), 1, 1);
   }
   try {
     init();
@@ -337,7 +343,9 @@ export function createMeshRenderer(canvas, opts = {}) {
     return { vao, buffers, count: s.index.length, kind: "fill" };
   }
 
-  // scene: packScene() output (from the worker), with the origin it was packed around.
+  // scene: packScene() output (from the worker), with the origin it was packed around. In the
+  // cpu back-end a line pass may also carry `wf`: two floats per segment, its width factor at
+  // u = 0 and at u = 1 (mixed by u like the targets); without it every line keeps its width.
   function setScene(scene) {
     if (lost) return 0;
     const t0 = performance.now();
@@ -361,6 +369,7 @@ export function createMeshRenderer(canvas, opts = {}) {
           attrib(4, tb, 3, 24, 0, 1);
           attrib(5, tb, 3, 24, 12, 1);
           if (s.jac) { const jb = upload(s.jac); buffers.push(jb); attrib(6, jb, 4, 0, 0, 1); }
+          if (s.wf) { const wb = upload(s.wf); buffers.push(wb); attrib(7, wb, 2, 0, 0, 1); }
         }
       }
       gl.bindVertexArray(null);
@@ -385,17 +394,22 @@ export function createMeshRenderer(canvas, opts = {}) {
     if (mesh && mesh.index.length) band = fillVao({ pos: mesh.pos, style: mesh.minutes, index: mesh.index, targets: mesh.targets });
   }
 
-  // warp: {kind: "polar", field, maxMinutes} | {kind: "grid", grid} | null. In the gpu
-  // back-end the field (or grid) becomes a float texture; in cpu the worker has it.
+  // warp: {kind: "polar", field, maxMinutes} | {kind: "grid", grid} | {kind: "mesh", origin}
+  // | null. In the gpu back-end the field (or grid) becomes a float texture; in cpu the worker
+  // has it. A mesh warp (the London time map, #6 L-02) is cpu only: the page sends a target per
+  // vertex with each scene, worked out exactly inside the mesh triangle that holds it.
   function setWarp(warp) {
     if (lost) return 0;
+    if (warp && warp.kind === "mesh" && mode === "gpu") {
+      throw new Error("a mesh warp needs the cpu back-end: its targets come per vertex with the scene");
+    }
     const t0 = performance.now();
     if (warpTex) { gl.deleteTexture(warpTex.texture); warpTex = null; }
     freeFold();
     freeBand();
     warpKind = warp ? warp.kind : "none";
-    const src = warp ? (warp.kind === "polar" ? warp.field : warp.grid) : null;
-    warpOrigin = src ? src.origin : null;
+    const src = warp ? (warp.kind === "polar" ? warp.field : warp.kind === "grid" ? warp.grid : warp) : null;
+    warpOrigin = src ? src.origin || null : null;
     if (mode === "gpu" && warp) {
       const src = warp.kind === "polar" ? warp.field : warp.grid;
       const data = warp.kind === "polar" ? src.minutes : src.xy;
@@ -559,7 +573,7 @@ export function createMeshRenderer(canvas, opts = {}) {
   // Draw line segments alone, in white, into an offscreen target and read back a rectangle
   // of it (device px, y down): the checks measure widths and positions from these pixels.
   // lines: {seg: Float32Array (ax, ay, bx, by per segment, local metres), style: Float32Array,
-  // targets?, jac?: Float32Array (cpu back-end)}. rect: [x, y, w, h] in device px.
+  // targets?, jac?, wf?: Float32Array (cpu back-end)}. rect: [x, y, w, h] in device px.
   function renderLines(cam, u, lines, rect, { adaptive = true } = {}) {
     const dpr = sizeCanvas(cam);
     const fb = gl.createFramebuffer(), rb = gl.createRenderbuffer();
@@ -585,6 +599,7 @@ export function createMeshRenderer(canvas, opts = {}) {
       attrib(4, bufs[2], 3, 24, 0, 1);
       attrib(5, bufs[2], 3, 24, 12, 1);
       if (lines.jac) { bufs.push(upload(lines.jac)); attrib(6, bufs[3], 4, 0, 0, 1); }
+      if (lines.wf) { const wb = upload(lines.wf); bufs.push(wb); attrib(7, wb, 2, 0, 0, 1); }
     }
     const prog = program("line");
     gl.useProgram(prog.p);

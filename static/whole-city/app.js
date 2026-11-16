@@ -120,7 +120,7 @@ try {
   doc = null;
 }
 if (!doc) await unavailable(offline ? "offline" : "load_failed");
-if (!offline) keepCity(city);       // for the next time there is no network
+if (!offline) keepCity(city, win);  // for the next time there is no network
 status.textContent = "";
 $("controls").hidden = false;
 for (const el of document.querySelectorAll(".details-only")) el.hidden = !DETAILS;

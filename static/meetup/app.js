@@ -384,9 +384,10 @@ function handOn() {
   keepGroup();
 }
 
+// Called only after the visitor has changed something (the example loads quietly), so an edited
+// example is kept too; its people keep their example flag, so they still aren't handed on.
 function keepGroup() {
   if (!people.length) { writeGroup(null); return; }
-  if (people.every((p) => p.example)) return;         // the untouched example isn't kept
   writeGroup({ people: people.map(({ name, named, lon, lat, mode, label, example }) =>
                  ({ name, named, lon, lat, mode, label, example: example === true })),
                window: windowId, venue: venueId });

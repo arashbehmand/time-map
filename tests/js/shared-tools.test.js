@@ -6,6 +6,7 @@ import {
 } from "../../static/shared/handoff.js";
 import { APP_NAME, cityShort, cityUnavailable, MAP_WORDS, MODE_LABEL, minutesText, TOOLS } from "../../static/shared/tools.js";
 import { mins } from "../../static/meetup/words.js";
+import { CITY_CACHE, cityOrKept, keepCity, keptCity, keptCityWhy } from "../../static/shared/offline.js";
 import * as W from "../../static/warp/words.js";
 import { defaultWindow, expired, pollStatus, WINDOWS, windowText } from "../../static/shared/transit.js";
 import * as V from "../../static/warp/views.js";
@@ -151,6 +152,57 @@ test("the status is asked for again while loading or after an error, but not for
     assert.equal(calls(), 3);
   } finally {
     globalThis.fetch = real;
+  }
+});
+
+// A Cache API in memory: enough of caches.open/has/delete and Cache.match/put/delete/keys.
+function fakeCaches() {
+  const stores = new Map();
+  const key = (r) => (typeof r === "string" ? r : r.url);
+  const cacheOf = (m) => ({
+    match: async (r) => (m.has(key(r)) ? m.get(key(r)).clone() : undefined),
+    put: async (r, resp) => { m.set(key(r), resp); },
+    delete: async (r) => m.delete(key(r)),
+    keys: async () => [...m.keys()],
+  });
+  return {
+    has: async (n) => stores.has(n),
+    open: async (n) => { if (!stores.has(n)) stores.set(n, new Map()); return cacheOf(stores.get(n)); },
+    delete: async (n) => stores.delete(n),
+  };
+}
+
+test("offline, Whole city offers only windows viewed under the kept build, until it expires", async () => {
+  const real = globalThis.caches;
+  globalThis.caches = fakeCaches();
+  try {
+    const file = async (w, build) => (await caches.open(CITY_CACHE)).put(`/api/whole-city/${w}/timemap.json`,
+                                                                        new Response(JSON.stringify({ build })));
+    const status = (build, valid_until) => ({ available: true, build, valid_until,
+                                              windows: [{ id: "wd08", label: "a" }, { id: "wd13", label: "b" }] });
+    assert.deepEqual(await keptCityWhy(), { city: null, reason: "offline" });
+    // Build A: both windows viewed.
+    await file("wd08", "A"); await keepCity(status("A", "2099-01-01"), "wd08");
+    await file("wd13", "A"); await keepCity(status("A", "2099-01-01"), "wd13");
+    assert.deepEqual((await keptCity()).windows.map((w) => w.id), ["wd08", "wd13"]);
+    // Build B: only wd13 viewed. A's wd08 must not be offered with B's dates, and is dropped.
+    await file("wd13", "B"); await keepCity(status("B", "2099-02-01"), "wd13");
+    const kept = await keptCity();
+    assert.deepEqual(kept.windows.map((w) => w.id), ["wd13"]);
+    assert.equal(kept.build, "B");
+    assert.equal(kept.offline, true);
+    assert.equal(await (await caches.open(CITY_CACHE)).match("/api/whole-city/wd08/timemap.json"), undefined);
+    // An expired kept build is dropped, and says so.
+    await keepCity(status("B", "2000-01-01"), "wd13");
+    assert.deepEqual(await keptCityWhy(), { city: null, reason: "expired" });
+    assert.equal(await caches.has(CITY_CACHE), false);
+    // Online, a server that refuses Whole city makes it forget; no answer means the kept copy.
+    await file("wd13", "C"); await keepCity(status("C", "2099-01-01"), "wd13");
+    assert.equal((await cityOrKept(null)).whole_city.build, "C");
+    await cityOrKept({ whole_city: { available: false, reason: "expired" } });
+    assert.equal(await cityOrKept(null), null);
+  } finally {
+    globalThis.caches = real;
   }
 });
 

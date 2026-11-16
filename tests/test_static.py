@@ -347,6 +347,8 @@ def test_meet_up_keeps_its_group_for_the_trip_back():
     js = (ROOT / "meetup/app.js").read_text()
     # Saved on every change and after a shared link; restored ahead of a handed-on pin.
     assert "keepGroup();" in js.split("function handOn")[1].split("\n}\n")[0]
+    # An edited example is kept too (its people keep their example flag, so aren't handed on).
+    assert "every((p) => p.example)" not in js.split("function keepGroup")[1].split("\n}\n")[0]
     assert "handOn();" in js.split("async function openShared")[1].split("\n}\n")[0]
     fresh = js.split("const fresh = () => {")[1].split("};")[0]
     assert fresh.index("readGroup()") < fresh.index("HANDOFF.pin")
@@ -443,7 +445,9 @@ def test_whole_city_offline_only_until_its_build_expires():
     gate = off.split("export async function cityOrKept")[1].split("\n}\n")[0]
     assert "if (!status)" in gate and 'c.reason !== "loading") await forgetCity()' in gate
     js = (ROOT / "whole-city/app.js").read_text()
-    assert "({ city: offline, reason: noNetwork } = await keptCityWhy())" in js and "if (!offline) keepCity(city)" in js
+    assert "({ city: offline, reason: noNetwork } = await keptCityWhy())" in js and "if (!offline) keepCity(city, win)" in js
+    # Windows are offered offline only if viewed under the kept build (tests/js/shared-tools.test.js).
+    assert "viewed.includes(w.id)" in kept
     assert "await forgetCity()" in js
     # The home card and the switcher go by the same rule.
     assert "await cityOrKept(s)" in (ROOT / "portfolio/index.html").read_text()

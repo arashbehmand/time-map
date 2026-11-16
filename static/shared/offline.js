@@ -29,16 +29,37 @@ export async function keptCityWhy() {
       await caches.delete(CITY_CACHE);
       return { city: null, reason: c && c.valid_until && expired(c.valid_until) ? "expired" : "offline" };
     }
+    // Only the windows viewed under this build: a window kept from an older build is never
+    // offered with this build's dates.
+    const viewed = Array.isArray(c.viewed) ? c.viewed : [];
     const windows = [];
-    for (const w of c.windows) if (await cache.match(`/api/whole-city/${w.id}/timemap.json`)) windows.push(w);
+    for (const w of c.windows) {
+      if (viewed.includes(w.id) && await cache.match(`/api/whole-city/${w.id}/timemap.json`)) windows.push(w);
+    }
     return windows.length ? { city: { ...c, windows, offline: true }, reason: "" } : none;
   } catch { return none; }
 }
 
-export async function keepCity(c) {
+const FILES = ["timemap.json", "land.bin", "report.md", "shepard.svg"];
+
+// Keep the status a window was shown with (`win`, its files just fetched through the service
+// worker). Windows viewed earlier under the same build stay offered; when the build has
+// changed, the other windows' files are from the old build, so they are dropped.
+export async function keepCity(c, win) {
   try {
     const cache = await caches.open(CITY_CACHE);
-    await cache.put(KEPT_STATUS, new Response(JSON.stringify(c), { headers: { "Content-Type": "application/json" } }));
+    const old = await cache.match(KEPT_STATUS);
+    const prev = old ? await old.json() : null;
+    const same = prev && prev.build === c.build && Array.isArray(prev.viewed);
+    if (prev && !same) {
+      for (const w of prev.viewed || c.windows.map((x) => x.id)) {
+        if (w === win) continue;
+        for (const f of FILES) await cache.delete(`/api/whole-city/${w}/${f}`);
+      }
+    }
+    const viewed = [...new Set([...(same ? prev.viewed : []), win])];
+    await cache.put(KEPT_STATUS, new Response(JSON.stringify({ ...c, viewed }),
+                                              { headers: { "Content-Type": "application/json" } }));
   } catch { /* nothing kept: offline, the page says it can't be shown */ }
 }
 

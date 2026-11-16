@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f6f5f2" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <title>Where should we meet? · Time-Map</title>
+  <title>Meet up · Minutes Away</title>
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"
         integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous" />
   <link rel="stylesheet" href="/shared/ui.css" />
@@ -15,12 +15,28 @@
 <body>
   <div id="map" role="region" aria-label="Map. Tap it to add a person where you tap."></div>
 
-  <main id="panel">
-    <header>
-      <a href="/" class="back-link">← Time-Map</a>
-      <h1>Where should we meet?</h1>
-      <p>Add where everyone starts. We find the place that's fairest for all of you.</p>
+  <main id="panel" class="sheet">
+    <header id="top" class="app-header">
+      <div class="app-line">
+        <a href="/" class="back-link">← Minutes Away</a>
+        <nav class="switcher" aria-label="Tools">
+          <a href="/from-here/" data-tool="from-here">From here</a>
+          <a href="/meet-up/" data-tool="meet-up" aria-current="page">Meet up</a>
+          <span data-tool="whole-city" class="off">Whole city</span>
+        </nav>
+      </div>
+      <p class="tool-name">Meet up</p>
+      <h1 class="question">Where should we meet?</h1>
+      <p class="lede">Add where everyone starts. We find the place that's fairest for all of you.</p>
     </header>
+
+    <div id="location-card" class="card location-card" hidden>
+      <p>Start the group from where you are? Your location is only used to place you and work out travel times.</p>
+      <div class="row">
+        <button class="btn primary" type="button" data-yes>Use my location</button>
+        <button class="btn" type="button" data-no>Keep the example</button>
+      </div>
+    </div>
 
     <div id="example-note" class="note" hidden>
       <p>Example: three friends in London. Change anything to make it yours.</p>
@@ -46,13 +62,13 @@
         <label class="field"><span>Where do they start?</span>
           <input id="loc-input" type="search" placeholder="A street, station or area" autocomplete="off" enterkeyhint="go" />
         </label>
-        <label class="field"><span>How do they travel?</span>
-          <select id="mode-select">
-            <option value="walking">Walking</option>
-            <option value="cycling">Cycling</option>
-            <option value="driving">Driving</option>
-          </select>
-        </label>
+        <fieldset class="chips" id="mode-chips">
+          <legend class="label">How do they travel?</legend>
+          <label class="chip"><input type="radio" name="add-mode" value="walking" checked /><span>Walk</span></label>
+          <label class="chip"><input type="radio" name="add-mode" value="cycling" /><span>Cycle</span></label>
+          <label class="chip"><input type="radio" name="add-mode" value="driving" /><span>Drive</span></label>
+          <label class="chip" id="transit-chip" hidden><input type="radio" name="add-mode" value="transit" /><span>Public transport</span></label>
+        </fieldset>
         <div class="row">
           <button id="add-btn" class="btn" type="submit">Add person</button>
           <button id="locate-btn" class="btn" type="button">Use my location</button>
@@ -68,11 +84,12 @@
 
     <section aria-labelledby="choice-heading">
       <h2 id="choice-heading">Find a place</h2>
-      <label class="field" id="window-field" hidden><span>When do you meet?</span>
+      <div class="when-field" id="window-field" hidden>
+        <label class="label" for="window-select">When?</label>
         <select id="window-select"></select>
-      </label>
-      <p class="hint" id="window-hint" hidden>Public transport times are for a typical hour on that day,
-        so trips can take a few minutes more or less.</p>
+        <p class="hint" id="window-hint">Public transport times are for a typical hour on that day, so trips can
+          take a few minutes more or less.</p>
+      </div>
       <label class="field" id="venue-field" hidden><span>Where?</span>
         <select id="venue-select"></select>
       </label>

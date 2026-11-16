@@ -8,11 +8,18 @@
 //             the pin (by reach or true compass) and sits at a distance proportional to its
 //             minutes, so the rings are exact circles. Experimental; for public transport
 //             it stays hidden until Direction 4's checks pass (views.js).
-// "Bend the map" dissolves the normal map into the unbent mesh, then morphs it. Pan, zoom
+// "Time map" dissolves the real map into the unbent mesh, then morphs it. Pan, zoom
 // and resize never fetch; a new pin, mode or window fetches one field, and the old picture
 // stays up until the new one is ready.
+//
+// The page is From here (#28): the pin, the way of travelling and the time of day are handed on
+// to Meet up and Whole city (/shared/handoff.js), and picked up from them.
+import { readHandoff, writeHandoff } from "/shared/handoff.js";
 import { createLatest } from "/shared/latest.js";
-import { friendly, geocode, loadPref, postJSON, prefersReducedMotion, savePref } from "/shared/api.js";
+import { locate as findMe, offerLocation } from "/shared/locate.js";
+import { updateSwitcher, watchCity } from "/shared/nav.js";
+import { windowOptions } from "/shared/transit.js";
+import { friendly, geocode, postJSON, prefersReducedMotion } from "/shared/api.js";
 import { bandPolygons } from "/shared/mesh/contours.js";
 import { tileCover } from "/shared/mesh/cover.js";
 import { decodeField, geometryField, knownMinutes, nodeAt } from "/shared/mesh/field.js";
@@ -31,8 +38,8 @@ import * as T from "./words.js";
 const Q = new URLSearchParams(location.search);
 const FALLBACK_ORIGIN = { lon: -0.1233, lat: 51.5308, label: "King's Cross", example: true };
 const FIELD_CACHE = 8;
-const LOCATION_PREF = "timemap-location";
 const TAP_PX = 12;
+const HANDOFF = readHandoff();         // what the last tool in this tab handed on
 
 const S = {
   origin: { ...FALLBACK_ORIGIN },
@@ -95,6 +102,8 @@ function show(el, on) { if (el.hidden === on) el.hidden = !on; }
 function measureBox() {
   const w = mapContainer.clientWidth, h = mapContainer.clientHeight;
   const top = Math.min(topEl.getBoundingClientRect().bottom, h / 2);
+  // The cards under the header (location, back to the pin, the tap list) sit just below it.
+  document.documentElement.style.setProperty("--top-h", `${Math.round(topEl.getBoundingClientRect().bottom)}px`);
   const narrow = w <= 640;
   const bottom = narrow ? Math.max(legendEl.getBoundingClientRect().top, top + 120) : h;
   box = { w, top, bottom, h: bottom - top };
@@ -695,8 +704,9 @@ function updateLegend() {
   show($("beyond"), S.bent || bentNow);    // on the normal map, further places are shown, uncoloured
   const offered = !!bendOffered();
   show(toggleBtn, offered);
-  setText(toggleBtn, S.bent ? T.BEND_LABEL.on : T.BEND_LABEL.off);
+  // One label, "Time map"; the state is aria-pressed alone, so a screen reader says it once.
   if (toggleBtn.getAttribute("aria-pressed") !== String(S.bent)) toggleBtn.setAttribute("aria-pressed", String(S.bent));
+  show($("time-map-note"), offered && S.bent);
   show($("direction-chips"), offered && S.bent);
   const layouts = Q.get("layouts") === "1" || V.LAYOUTS.includes(Q.get("layout"));
   show($("layout-chips"), offered && S.bent && layouts);
@@ -706,7 +716,7 @@ function updateLegend() {
   setText($("direction-note"), T.DIRECTION_NOTES[S.directions]);
   show($("overlap-note"), S.bent && S.mode === "transit" && S.layout !== "squash");
   setText($("overlap-note"), T.OVERLAP_NOTE);
-  show($("more-options"), S.mode === "transit" && S.transit.available);
+  show($("when-field"), S.mode === "transit" && S.transit.available);
 }
 
 function updateCredits() {
@@ -827,6 +837,15 @@ function setOrigin(lon, lat, label) {
   pinEl.setAttribute("aria-label", `Starting point: ${label}. Drag it, or use the arrow keys, to move it.`);
   hideTapList();
   checkTransitCoverage();
+  handOn();
+}
+
+// What goes to the other tools: the pin (never the example), how you travel there, and for
+// public transport the time of day.
+function handOn() {
+  if (S.origin.example) return;
+  const { lon, lat, label } = S.origin;
+  writeHandoff({ pin: { lon, lat, label }, mode: S.mode, ...(S.mode === "transit" ? { when: S.window } : {}) });
 }
 
 function supersedeLookups() { searches.cancel(); locateSeq++; }
@@ -839,7 +858,10 @@ function checkTransitCoverage() {
   const inside = S.transit.available && V.insideArea(S.transit.coverage, S.origin.lon, S.origin.lat);
   input.disabled = S.transit.available && !inside;
   chip.title = input.disabled ? T.LONDON_ONLY : "";
-  if (S.mode === "transit" && S.transit.available && !inside) toWalking(T.LONDON_ONLY);
+  if (S.mode === "transit" && S.transit.available && !inside) {
+    toWalking(T.LONDON_ONLY);
+    handOn();          // outside London: walking is what this pin gets, in the other tools too
+  }
 }
 
 function initPin() {
@@ -934,28 +956,20 @@ function initSearch() {
 }
 
 function locate() {
-  if (!navigator.geolocation) { setStatus("This browser can't share your location. Search for a place or drag the pin.", "error"); return; }
   searches.cancel();
   const mine = ++locateSeq;
   setStatus("Finding your location…", "busy");
-  navigator.geolocation.getCurrentPosition(
-    (p) => { if (mine !== locateSeq) return; savePref(LOCATION_PREF, "yes"); moveTo(p.coords.longitude, p.coords.latitude, "your location"); },
-    (err) => {
-      if (mine !== locateSeq) return;
-      setStatus(err.code === 1 ? "Location is turned off for this site. Search for a place or drag the pin instead."
-        : "We couldn't get your location. Search for a place or drag the pin instead.", "error");
-    },
-    { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
-  );
+  findMe({
+    onPlace: (lon, lat) => { if (mine === locateSeq) moveTo(lon, lat, "your location"); },
+    onError: (words) => { if (mine === locateSeq) setStatus(`${words} Search for a place or drag the pin instead.`, "error"); },
+  });
 }
 
 function initLocation() {
   $("locate-btn").addEventListener("click", locate);
-  const card = $("location-card");
-  if (!navigator.geolocation || loadPref(LOCATION_PREF) !== null) return;
-  card.hidden = false;
-  $("location-yes").addEventListener("click", () => { card.hidden = true; savePref(LOCATION_PREF, "yes"); locate(); });
-  $("location-no").addEventListener("click", () => { card.hidden = true; savePref(LOCATION_PREF, "no"); toggleBtn.focus(); });
+  // A pin handed on from another tool is where to start: no need to ask.
+  if (HANDOFF.pin) return;
+  offerLocation($("location-card"), { onYes: locate, onNo: () => toggleBtn.focus() });
 }
 
 // ── Controls ─────────────────────────────────────────────────────────
@@ -993,6 +1007,7 @@ function initControls() {
       S.mode = radio.value;
       S.outer = V.MODES[S.mode].defaultOuter;
       S.notice = "";
+      handOn();
       buildOuterChips();
       hideTapList();
       if (!bendOffered() && S.bent) { S.bent = false; S.pendingMesh = null; flatNow(); }
@@ -1015,7 +1030,13 @@ function initControls() {
       prepareMesh();
     });
   }
-  $("window-select").addEventListener("change", (e) => { S.window = e.target.value; S.notice = ""; requestField(); });
+  $("window-select").addEventListener("change", (e) => {
+    S.window = e.target.value;
+    S.notice = "";
+    writeHandoff({ when: S.window });       // a time picked here goes with you, pin or not
+    handOn();
+    requestField();
+  });
   // A tab left open: check the tables again when it comes back (they may have expired).
   document.addEventListener("visibilitychange", () => { if (!document.hidden) loadTransitStatus(); });
   // And while it stays open and in view: the tables can expire at midnight in London.
@@ -1041,24 +1062,32 @@ async function loadTransitStatus() {
     const resp = await fetch("/api/transit/status");
     if (!resp.ok) { later(); return; }
     S.transit = await resp.json();
-  } catch { later(); return; }
+  } catch { updateSwitcher(null); later(); return; }
   statusRetryMs = 5000;
+  updateSwitcher(S.transit);
   if (S.transit.loading) { setTimeout(loadTransitStatus, 3000); return; }
+  if (!S.statusSeen) watchCity(S.transit);    // Whole city may still be loading: the switcher asks alone
+  // Public transport asked for by the link (?mode=transit), or handed on with a pin by another
+  // tool (a mode alone, without its pin, would turn the example into a public transport request).
+  const wantTransit = Q.get("mode") ? Q.get("mode") === "transit" : Boolean(HANDOFF.pin) && HANDOFF.mode === "transit";
   if (!S.transit.available || V.expired(S.transit.valid_until)) {
     show($("transit-chip"), false);
     for (const k of [...fields.keys()]) if (k.includes(",transit,")) fields.delete(k);
-    if (S.mode === "transit") toWalking(S.transit.reason === "expired" ? T.EXPIRED : T.NO_TRANSIT);
+    const why = S.transit.reason === "expired" ? T.EXPIRED : T.NO_TRANSIT;
+    if (S.mode === "transit") toWalking(why);
+    else if (!S.statusSeen && wantTransit) { S.notice = why; updateLegend(); }
+    S.statusSeen = true;
     return;
   }
   show($("transit-chip"), true);
-  const sel = $("window-select");
-  sel.replaceChildren(...S.transit.windows.map((w) => new Option(w.label[0].toUpperCase() + w.label.slice(1), w.id)));
+  windowOptions($("window-select"), S.transit.windows, S.window);
   if (!S.statusSeen && V.WINDOWS.includes(Q.get("window"))) S.window = Q.get("window");
-  sel.value = S.window;
+  $("window-select").value = S.window;
   checkTransitCoverage();
   const first = !S.statusSeen;
   S.statusSeen = true;
-  if (first && Q.get("mode") === "transit" && !transitInput().disabled) {
+  if (first && wantTransit && S.mode !== "transit") {
+    if (transitInput().disabled) { toWalking(T.LONDON_ONLY); handOn(); return; }
     S.mode = "transit";
     checkRadio("mode", "transit");
     S.outer = V.MODES.transit.defaultOuter;
@@ -1180,12 +1209,23 @@ async function boot() {
   measureBox();
   initRenderer();
   let ex = null;
-  try { ex = await loadExample(); } catch { setStatus("The example didn't load. Search for a place or drag the pin.", "error"); }
+  if (HANDOFF.pin) {
+    // Handed on by Meet up or Whole city: start there, with their way of travelling (public
+    // transport waits for the tables' status) and their time of day. The link's own ?mode and
+    // ?window still win.
+    const p = HANDOFF.pin;
+    S.origin = { lon: p.lon, lat: p.lat, label: p.label || "your pin", example: false };
+    const mode = Q.get("mode") || HANDOFF.mode;
+    if (mode && mode !== "transit" && V.MODES[mode]) { S.mode = mode; S.outer = V.MODES[mode].defaultOuter; }
+  } else {
+    try { ex = await loadExample(); } catch { setStatus("The example didn't load. Search for a place or drag the pin.", "error"); }
+  }
   if (ex) {
     S.origin = { lon: ex.origin.lon, lat: ex.origin.lat, label: ex.origin.label || FALLBACK_ORIGIN.label, example: true };
     S.mode = ex.mode;
     S.outer = V.MODES[ex.mode].defaultOuter;
   }
+  if (HANDOFF.when) S.window = HANDOFF.when;
   checkRadio("mode", S.mode);
   if (V.LAYOUTS.includes(Q.get("layout"))) { S.layout = Q.get("layout"); checkRadio("layout", S.layout); }
   pinEl.setAttribute("aria-label", `Starting point: ${S.origin.label}. Drag it, or use the arrow keys, to move it.`);
@@ -1196,6 +1236,8 @@ async function boot() {
     remember(key, entry);
     S.frameWhenReady = true;
     activate(key, entry);
+  } else if (HANDOFF.pin) {
+    requestField({ frame: true });
   }
   initPin();
   initSearch();

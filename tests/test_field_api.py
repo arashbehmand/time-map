@@ -107,8 +107,9 @@ def test_without_tables_transit_is_unavailable(mapbox, client):
     resp = client.post(FIELD, json={"longitude": A[0], "latitude": A[1], "mode": "transit"})
     assert resp.status_code == 503 and resp.json()["code"] == "transit_unavailable"
     assert resp.json()["reason"] == "not_configured"
-    assert client.get("/api/transit/status").json() == {"available": False, "loading": False,
-                                                        "reason": "not_configured"}
+    assert client.get("/api/transit/status").json() == {
+        "available": False, "loading": False, "reason": "not_configured",
+        "whole_city": {"available": False, "reason": "not_configured"}}
     assert mapbox.count() == 0
 
 
@@ -213,8 +214,9 @@ def test_an_uncleared_build_is_served_to_this_machine_only(dev_app):
     remote = TestClient(dev_app)                                  # client host "testclient"
     resp = remote.post(FIELD, json=pin)
     assert resp.status_code == 503 and resp.json()["reason"] == "development_only"
-    assert remote.get("/api/transit/status").json() == {"available": False, "loading": False,
-                                                         "reason": "development_only"}
+    assert remote.get("/api/transit/status").json() == {
+        "available": False, "loading": False, "reason": "development_only",
+        "whole_city": {"available": False, "reason": "not_configured"}}
     local = _local(dev_app)
     assert local.get("/api/transit/status").json()["development_only"] is True
     assert local.post(FIELD, json=pin).status_code == 200

@@ -3,7 +3,7 @@
 // Start points are rounded to 3 decimals (about 100 m) unless that person opted in to an
 // exact point (5 decimals). A name goes in only if someone typed it. Search labels, answers
 // and ids never go in. Pure, so tests/js/meetup-share.test.js reads the same rules.
-import { WINDOWS } from "../warp/views.js";
+import { WINDOWS } from "../shared/transit.js";
 
 export const VERSION = "1";
 export const MAX_PEOPLE = 8;         // server cap (server/meetup/models.py)

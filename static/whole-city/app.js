@@ -1,21 +1,28 @@
-// The full London time map (#6, L-02): the page. It draws the land with W-01's mesh renderer
-// (cpu back-end, a target per vertex) and the stations, names and the Metropolitan line (carried
-// through the mesh like the land) on a 2-D canvas above it.
+// Whole city (#28): the full London time map of #6 (L-02), in the app. It draws the land with the
+// app's mesh renderer (/shared/mesh/, cpu back-end, a target per vertex) and the stations, names
+// and the Metropolitan line (carried through the mesh like the land) on a 2-D canvas above it.
+//
+// Its data is one build of `python -m transit.layout.timemap`, which the server serves only
+// under the transit tables' own gate (server/transit/whole_city.py): GET /api/transit/status says
+// whether it can be shown here, and for which times of day. When it can't, the page says so and
+// fetches nothing else. It makes no routing and no tile requests.
 //
 // The map moves smoothly. The slider runs continuously from the real map to the last solved
 // position; between two neighbouring keyframes the page draws their straight blend, which the
 // build checked never folds (timemap.py, motion_keyframes), and the renderer's morph does the
-// mixing on the GPU. "Bend by travel time" plays the whole move at an even pace and "Back to the
-// real map" plays it back; with reduced motion they jump. Faint rings mark where the named
-// stations really are, so the move can be followed.
+// mixing on the GPU. "Time map" plays the whole move at an even pace, and pressed again plays it
+// back; with reduced motion they jump. Faint rings mark where the named stations really are.
 //
 // Lines (rail, borough outlines, the Metropolitan line) get thinner where the map squeezes the
-// ground across them, and "Smooth lines" rounds off the small bends they take where they cross
-// a mesh edge (carry.js says how; water, parks and the mesh keep the exact map). It loads only
-// its own files and runs no routing.
-import { createMeshRenderer } from "./mesh/renderer.js";
-import { localFrame, makeCamera } from "./mesh/frame.js";
-import { STYLE_ID } from "./mesh/schema-streets-v8.js";
+// ground across them, and smooth lines round off the small bends they take where they cross a
+// mesh edge (carry.js says how). ?details=1 shows the build's own numbers as well.
+import { readHandoff, writeHandoff } from "/shared/handoff.js";
+import { createMeshRenderer } from "/shared/mesh/renderer.js";
+import { localFrame, makeCamera } from "/shared/mesh/frame.js";
+import { STYLE_ID } from "/shared/mesh/schema-streets-v8.js";
+import { cityUnavailable } from "/shared/tools.js";
+import { forgetCity, keepCity, keptCityWhy } from "/shared/offline.js";
+import { defaultWindow, pollStatus, statusLoading, windowText } from "/shared/transit.js";
 import {
   blend, buildLand, createMotion, createPlacer, decodeLand, keyframes, loadSegment, pathLengths, placeLine,
   segmentAt, segmentTriangles, smoothLine, triangleMaps, widthFactors,
@@ -24,24 +31,99 @@ import {
 const $ = (id) => document.getElementById(id);
 const glCanvas = $("map"), overlay = $("overlay"), tip = $("tip"), status = $("status");
 const slider = $("frame"), readout = $("readout"), toggle = $("bend");
+const DETAILS = new URLSearchParams(location.search).get("details") === "1";
 const TAP_PX = 5;            // a press that moves less than this is a tap, not a drag
 const PLAY_MS = 4500;        // the whole move, real map to the end; a part of it takes its share
 const STEP_MS = 450;         // the shortest glide with the arrow keys
+const HANDOFF = readHandoff();
 
-async function load(name, kind) {
-  const r = await fetch(name);
-  if (!r.ok) throw new Error(`${name}: ${r.status} ${r.statusText}`);
+// Say why there's no map here, and stop: nothing below runs (an unsettled await, not an error,
+// so the console stays clean).
+async function unavailable(reason) {
+  status.textContent = "";
+  $("unavailable-text").textContent = cityUnavailable(reason);
+  $("unavailable").hidden = false;
+  $("controls").hidden = true;
+  await new Promise(() => {});
+}
+
+async function load(url, kind) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(String(r.status));
   return kind === "json" ? r.json() : r.arrayBuffer();
 }
 
-let doc, landBuf;
+// ── which build, which time of day ──────────────────────────────────
+// One quick question first: no network at all means the map kept from the last visit, if there
+// is one and its build hasn't expired (/shared/offline.js). Otherwise,
+// right after a deploy the server may still be loading the tables or this map: keep asking for a
+// couple of minutes, saying so, before giving up.
+let state = null, offline = null, noNetwork = "";
 try {
-  doc = await load("timemap.json", "json");
-  landBuf = doc.land ? await load(doc.land.file, "bin") : null;
-} catch (e) {
-  status.textContent = `This page's data didn't load (${e.message}). Serve this folder over http (python -m http.server) and reload.`;
-  throw e;
+  const resp = await fetch("/api/transit/status");
+  if (resp.ok) state = await resp.json();
+} catch {
+  ({ city: offline, reason: noNetwork } = await keptCityWhy());
 }
+if (!offline && (!state || statusLoading(state))) state = await pollStatus();
+for (let round = 0; !offline && statusLoading(state) && round < 6; round++) {
+  status.textContent = "Whole city is still getting ready…";
+  state = await pollStatus();
+}
+if (!offline && !state && !noNetwork) ({ city: offline, reason: noNetwork } = await keptCityWhy());   // never answered
+const city = offline || (state && state.whole_city);
+if (!offline && city && !city.available && city.reason !== "loading") await forgetCity();
+if (!city || !city.available) {
+  if (city && city.reason === "loading") {
+    status.textContent = "";
+    $("unavailable-text").textContent = "Whole city is still getting ready. Reload the page in a moment.";
+    $("unavailable").hidden = false;
+    await new Promise(() => {});
+  }
+  await unavailable(city ? city.reason : noNetwork);   // "expired", "offline", or "" (no answer, nothing kept)
+}
+const built = city.windows.map((w) => w.id);
+const label = Object.fromEntries(city.windows.map((w) => [w.id, w.label]));
+// The time of day: one picked here (?window=, so it works with storage blocked too), else the
+// one handed on by From here or Meet up, if it's built. A fallback (the time in London now, else
+// the first built) doesn't overwrite what they asked for; a choice made here does.
+const asked = new URLSearchParams(location.search).get("window");
+const chosenHere = built.includes(asked) ? asked : null;
+const wanted = chosenHere || HANDOFF.when;
+const now = defaultWindow();
+const win = wanted && built.includes(wanted) ? wanted : built.includes(now) ? now : built[0];
+if (wanted && wanted !== win) {
+  $("window-note").textContent = `That time of day isn't built yet. Showing ${label[win]}.`;
+  $("window-note").hidden = false;
+}
+if (built.length > 1) {
+  const sel = $("window-select");
+  sel.replaceChildren(...city.windows.map((w) => new Option(windowText(w.label), w.id)));
+  sel.value = win;
+  sel.hidden = $("when-label").hidden = false;
+  sel.addEventListener("change", () => {
+    writeHandoff({ when: sel.value });
+    const q = new URLSearchParams(location.search);
+    q.set("window", sel.value);
+    location.search = q.toString();
+  });
+  if (chosenHere) sel.focus();      // back where the keyboard was before the page reloaded
+} else {
+  $("when-line").textContent = `When: ${label[win]}.`;
+}
+
+let doc = null, landBuf = null;
+try {
+  doc = await load(`/api/whole-city/${win}/timemap.json`, "json");
+  landBuf = doc.land ? await load(`/api/whole-city/${win}/land.bin`, "bin") : null;
+} catch {
+  doc = null;
+}
+if (!doc) await unavailable(offline ? "offline" : "load_failed");
+if (!offline) keepCity(city, win);  // for the next time there is no network
+status.textContent = "";
+$("controls").hidden = false;
+for (const el of document.querySelectorAll(".details-only")) el.hidden = !DETAILS;
 
 const frame = localFrame({ lon: doc.frame.origin[0], lat: doc.frame.origin[1] });
 const kinds = doc.nodes.kind;
@@ -54,19 +136,29 @@ const inner = kinds.map((k, i) => (k !== 2 ? i : -1)).filter((i) => i >= 0);
 const cum = pathLengths(keys, inner);
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-$("notice").textContent = doc.notice;
-$("credits").textContent = "Credits: " + doc.attribution.join("; ") + ".";
+// A public page's line about where this comes from (the build's own notice is for its report).
+$("notice").textContent = `Made from London's public transport timetables for ${label[win]}: typical times, ` +
+  `not live ones. Valid until ${city.valid_until}.` +
+  (city.development_only ? " Shown on this computer only: this build's licences aren't cleared." : "") +
+  (offline ? " You're offline: this is the map from your last visit." : "");
+const credits = [...new Set((Array.isArray(doc.attribution) ? doc.attribution : []).map((c) => String(c).replace("(c)", "©")))];
+$("credits").textContent = credits.length ? "Credits: " + credits.join("; ") + "." : "";
+if (city.report && city.report[win]) {
+  $("report-link").href = `/api/whole-city/${win}/report.md`;
+  $("shepard-link").href = `/api/whole-city/${win}/shepard.svg`;
+  $("checked").hidden = false;
+}
 slider.max = String(last);
 
 // ── renderer ────────────────────────────────────────────────────────
 const renderer = createMeshRenderer(glCanvas, {
   backend: "cpu",
-  onLost: () => { status.textContent = "The graphics context was lost; the land comes back when it is restored."; draw(); },
+  onLost: () => { status.textContent = "The land went missing for a moment. It comes back by itself."; draw(); },
   onRestored: () => { status.textContent = ""; renderer.setWarp({ kind: "mesh", origin: frame.origin }); uploaded = -1; moveTo(motion.v); },
 });
 let scene = null;
 if (!renderer.supported) {
-  status.textContent = "This browser has no WebGL2, so the land isn't drawn; the stations still are.";
+  status.textContent = "This browser can't draw the land, so only the stations show.";
 } else {
   renderer.setWarp({ kind: "mesh", origin: frame.origin });
   if (landBuf) scene = buildLand(decodeLand(landBuf, doc.land), doc.land, real, STYLE_ID);
@@ -96,6 +188,7 @@ let v = 0;                   // where the map is drawn: 0 the real map … last 
 let uploaded = -1;           // the blend whose layouts the renderer holds
 let seg = { k: 0, s: 0 };
 let dragging = false;        // the slider is being dragged (the readout stays quiet until it is let go)
+let picked = -1;             // the station "Show a station" picked: ringed until the map moves
 // One move at a time, driven by one animation-frame callback (carry.js createMotion).
 const motion = createMotion({
   keys, cum, last, playMs: PLAY_MS, stepMs: STEP_MS, reduceMotion,
@@ -114,12 +207,21 @@ function bbox() {
   return [x0, y0, x1, y1];
 }
 
-// One fixed view for the whole move, so nothing but the map moves.
+// How much of the map the controls cover at the bottom: on a phone they are a sheet over it.
+function covered() {
+  const c = $("controls"), stage = glCanvas.parentElement;
+  if (c.hidden || getComputedStyle(c).position !== "fixed") return 0;
+  return Math.max(0, stage.getBoundingClientRect().bottom - c.getBoundingClientRect().top);
+}
+
+// One fixed view for the whole move, so nothing but the map moves; framed in the part of the
+// map that the controls leave in view.
 function fit() {
   const [x0, y0, x1, y1] = bbox();
+  const cover = Math.min(covered(), view.h * 0.6);
+  const ppm = 0.94 * Math.min(view.w / (x1 - x0), (view.h - cover) / (y1 - y0));
   view.cx = (x0 + x1) / 2;
-  view.cy = (y0 + y1) / 2;
-  const ppm = 0.94 * Math.min(view.w / (x1 - x0), view.h / (y1 - y0));
+  view.cy = (y0 + y1) / 2 + cover / 2 / ppm;
   view.zoom = Math.log2((ppm * frame.m) / 512);
 }
 
@@ -198,11 +300,15 @@ function onMain() {
 // ρ to three significant figures, so neighbouring keyframes read apart (44.9 and 45.2).
 const fmt = (rho) => String(Number(rho.toPrecision(3)));
 
-// Where the map is, from the two keyframes being blended (solved positions, positions solved in
-// between, or the solver's own steps after a jump).
+// Where the map is, in plain words; with ?details=1, in the build's own terms (the train
+// springs' strength, and where the layout jumps).
 function where() {
   const i = onMain();
   if (i === 0) return "The real map";
+  if (!DETAILS) {
+    if (i === last) return "The time map";
+    return `On the way to the time map, ${Math.round((100 * v) / last)}% of the way`;
+  }
   if (i !== null) return `Train springs ${fmt(doc.frames[i].rho)} times the grid's strength`;
   const a = keys[seg.k], b = keys[Math.min(seg.k + 1, keys.length - 1)];
   if (a.settling || b.settling || a.rho === b.rho) {
@@ -221,6 +327,13 @@ function stressAt(i) {
   return f < 1e-9 ? a : a + (b - a) * f;
 }
 
+// The same in words, for the tip: how well the station's distances match its travel times.
+function fitWords(x) {
+  const t = x / doc.stress_scale[1];
+  return t < 1 / 3 ? "its distances match its travel times closely"
+    : t < 2 / 3 ? "its distances are somewhat off its travel times" : "its distances are far off its travel times";
+}
+
 // ── drawing ─────────────────────────────────────────────────────────
 function stressColour(x) {
   const t = Math.max(0, Math.min(1, x / doc.stress_scale[1]));
@@ -229,9 +342,9 @@ function stressColour(x) {
   return `rgb(${p.map((y, k) => Math.round(y + (q[k] - y) * s)).join(",")})`;
 }
 
-// The map itself stays light in either page theme (the renderer's background and land colours),
-// so what is drawn on it keeps the light map's colours too.
-const MAP = { met: "#9b0056", dotEdge: "#ffffff", halo: "rgba(255,255,255,0.85)", text: "#1b1b1f", ghost: "#4a4458" };
+// The map itself stays light (the renderer's background and land colours), so what is drawn on
+// it keeps the light map's colours too.
+const MAP = { met: "#9b0056", dotEdge: "#ffffff", halo: "rgba(255,255,255,0.85)", text: "#1b1b1f", ghost: "#4a4458", pick: "#2f4fd8" };
 
 function draw() {
   tip.hidden = true;           // whatever it pointed at has moved
@@ -299,11 +412,17 @@ function draw() {
     g.strokeStyle = MAP.dotEdge;
     g.stroke();
   }
+  if (picked >= 0) {
+    const [x, y] = at(picked);
+    g.lineWidth = 3;
+    g.strokeStyle = MAP.pick;
+    g.beginPath(); g.arc(x, y, r + 6, 0, 2 * Math.PI); g.stroke();
+  }
   if ($("labels").checked) {
     g.font = "12px system-ui, sans-serif";
     g.textBaseline = "middle";
     const boxes = [];
-    for (const i of doc.labels) {
+    for (const i of picked >= 0 ? [picked, ...doc.labels] : doc.labels) {
       const [x, y] = at(i);
       const text = doc.nodes.label[i];
       const w = g.measureText(text).width;
@@ -323,23 +442,26 @@ function km(i, j, xy) {
   return Math.hypot(xy[2 * i] - xy[2 * j], xy[2 * i + 1] - xy[2 * j + 1]) / 1000;
 }
 
-// The full readout, for a map at rest: what this position is, and each checked pair.
+const pairText = (r, now, was) => `${r.name}: ${now.toFixed(1)} km apart here, ${was.toFixed(1)} km really`;
+
+// The full readout, for a map at rest: where the map is, and the distance between each checked
+// pair of stations here and really. ?details=1 adds the build's checks.
 function showReadout() {
   const i = onMain();
   const m = i !== null ? doc.frames[i].metrics : null;
   const lines = [];
-  if (i === 0) lines.push("The real map. Every triangle at its real size; 0 flipped.");
+  if (!DETAILS) lines.push(`${where()}.`);
+  else if (i === 0) lines.push("The real map. Every triangle at its real size; 0 flipped.");
   else if (m) {
     lines.push(`${where()}. ${m.flipped} flipped triangles; the most squeezed keeps ` +
       `${(m.area_ratio_min * 100).toFixed(1)}% of its area${m.squeezed_near ? ` (near ${m.squeezed_near})` : ""}.`);
   } else lines.push(`${where()}. No triangle turns over anywhere on the way: every step was checked.`);
   for (const r of doc.ratios) {
-    if (r.station === null || r.reference === null) { lines.push(`${r.name}: absent`); continue; }
+    if (r.station === null || r.reference === null) { if (DETAILS) lines.push(`${r.name}: absent`); continue; }
     const now = km(r.station, r.reference, nodes), was = km(r.station, r.reference, real);
-    const val = m && m.ratios[r.key];
+    const val = DETAILS && m && m.ratios[r.key];
     lines.push(val && val.ratio != null
-      ? `${r.name}: ${now.toFixed(2)} km (${was.toFixed(2)} km really), ${val.ratio.toFixed(2)}× the median (${val.status})`
-      : `${r.name}: ${now.toFixed(2)} km (${was.toFixed(2)} km really)`);
+      ? `${pairText(r, now, was)}, ${val.ratio.toFixed(2)}× the median (${val.status})` : pairText(r, now, was));
   }
   readout.replaceChildren(...lines.map((t) => Object.assign(document.createElement("div"), { textContent: t })));
   holdReadout();
@@ -347,13 +469,13 @@ function showReadout() {
 
 // While the map moves, only the distances change: they update in place, so nothing jumps.
 function showLive() {
+  const shown = doc.ratios.filter((r) => DETAILS || (r.station !== null && r.reference !== null));
   const divs = readout.children;
-  if (divs.length !== doc.ratios.length + 1) { showReadout(); return; }
+  if (divs.length !== shown.length + 1) { showReadout(); return; }
   divs[0].textContent = `${where()}…`;
-  doc.ratios.forEach((r, k) => {
+  shown.forEach((r, k) => {
     if (r.station === null || r.reference === null) return;
-    divs[k + 1].textContent = `${r.name}: ${km(r.station, r.reference, nodes).toFixed(2)} km ` +
-      `(${km(r.station, r.reference, real).toFixed(2)} km really)`;
+    divs[k + 1].textContent = pairText(r, km(r.station, r.reference, nodes), km(r.station, r.reference, real));
   });
   holdReadout();
 }
@@ -381,11 +503,12 @@ function settled() {
   updateToggle();
 }
 
-// The one button names what it does: bend all the way, or go back, from wherever the map is;
-// pressed mid-move it turns round.
+// One button, always called "Time map": pressed while the map is at the time map or heading
+// there, so its state is said once (aria-pressed), never in its name. Pressed mid-move it turns
+// round.
 function updateToggle() {
-  const text = motion.back ? "Back to the real map" : "Bend by travel time";
-  if (toggle.textContent !== text) toggle.textContent = text;
+  const pressed = String(motion.back);
+  if (toggle.getAttribute("aria-pressed") !== pressed) toggle.setAttribute("aria-pressed", pressed);
 }
 
 toggle.addEventListener("click", () => motion.toggle());
@@ -406,7 +529,13 @@ slider.addEventListener("keydown", (e) => {
   if (motion.key(e.key, e.repeat)) e.preventDefault();
 });
 
-$("fit").addEventListener("click", () => { fit(); draw(); });
+function zoomBy(dz) {
+  view.zoom += dz;
+  draw();
+}
+$("fit").addEventListener("click", () => { picked = -1; fit(); draw(); });
+$("zoom-in").addEventListener("click", () => zoomBy(0.5));
+$("zoom-out").addEventListener("click", () => zoomBy(-0.5));
 for (const id of ["labels", "line", "mesh", "ghosts"]) $(id).addEventListener("change", draw);
 smoothBox.addEventListener("change", () => {
   if (placer) placer.setSmooth(smoothBox.checked);
@@ -414,8 +543,22 @@ smoothBox.addEventListener("change", () => {
   moveTo(motion.v);
 });
 
-// Marks under the slider: the first solved position where Wembley Park passes its check against
-// Baker Street, and any place where the layout jumps.
+// "Show a station": what a tap on a dot shows, for the keyboard too. It centres the station,
+// rings it and says how well it fits.
+const stationSel = $("station-select");
+const byName = [...Array(nStation).keys()].sort((a, b) => doc.nodes.label[a].localeCompare(doc.nodes.label[b]));
+stationSel.append(...byName.map((i) => new Option(doc.nodes.label[i], String(i))));
+stationSel.addEventListener("change", () => {
+  if (stationSel.value === "") { picked = -1; draw(); return; }
+  picked = Number(stationSel.value);
+  view.cx = nodes[2 * picked];
+  view.cy = nodes[2 * picked + 1] + covered() / 2 / camera().ppm;
+  draw();
+  showTip(picked);
+});
+
+// Marks under the slider (?details=1): the first solved position where Wembley Park passes its
+// check against Baker Street, and any place where the layout jumps.
 function markSlider() {
   const add = (at, text, title, cls) => {
     const m = document.createElement("span");
@@ -488,6 +631,23 @@ overlay.addEventListener("wheel", (e) => {
   draw();
 }, { passive: false });
 
+function showTip(i) {
+  const [sx, sy] = toScreen(camera(), nodes[2 * i], nodes[2 * i + 1]);
+  const k = onMain();
+  if (!DETAILS) {
+    tip.textContent = `${doc.nodes.label[i]}: ${fitWords(stressAt(i))}.`;
+  } else {
+    tip.textContent = k !== null
+      ? `${doc.nodes.label[i]}: leftover stress ${doc.frames[k].stress[i].toFixed(2)}`
+      : `${doc.nodes.label[i]}: leftover stress ${doc.frames[Math.floor(v)].stress[i].toFixed(2)} at ` +
+        `${fmt(doc.frames[Math.floor(v)].rho)}, ${doc.frames[Math.ceil(v)].stress[i].toFixed(2)} at ` +
+        `${fmt(doc.frames[Math.ceil(v)].rho)} times the grid's strength (the solved positions either side)`;
+  }
+  tip.hidden = false;
+  tip.style.left = `${Math.max(0, Math.min(view.w - 220, sx + 10))}px`;
+  tip.style.top = `${Math.max(0, sy - 30)}px`;
+}
+
 function hover(x, y) {
   if (motion.moving) return;
   const cam = camera();
@@ -498,18 +658,14 @@ function hover(x, y) {
     if (d < bd) { bd = d; best = i; }
   }
   if (best < 0) { tip.hidden = true; return; }
-  const [sx, sy] = toScreen(cam, nodes[2 * best], nodes[2 * best + 1]);
-  const i = onMain();
-  tip.textContent = i !== null
-    ? `${doc.nodes.label[best]}: leftover stress ${doc.frames[i].stress[best].toFixed(2)}`
-    : `${doc.nodes.label[best]}: leftover stress ${doc.frames[Math.floor(v)].stress[best].toFixed(2)} at ` +
-      `${fmt(doc.frames[Math.floor(v)].rho)}, ${doc.frames[Math.ceil(v)].stress[best].toFixed(2)} at ` +
-      `${fmt(doc.frames[Math.ceil(v)].rho)} times the grid's strength (the solved positions either side)`;
-  tip.hidden = false;
-  tip.style.left = `${Math.min(view.w - 200, sx + 10)}px`;
-  tip.style.top = `${Math.max(0, sy - 30)}px`;
+  showTip(best);
 }
 
-markSlider();
+if (DETAILS) markSlider();
 new ResizeObserver(resize).observe(glCanvas.parentElement);
 motion.jump(0);
+
+// For the headless checks (?test=1): the motion and the view.
+if (new URLSearchParams(location.search).get("test") === "1") {
+  window.__city = { motion, view, get v() { return v; }, win, doc };
+}

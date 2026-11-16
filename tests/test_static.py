@@ -1,11 +1,15 @@
 """Attribution, pinned MapLibre with integrity hashes, and a matching service-worker cache."""
 import pathlib
+import posixpath
 import re
 
 import pytest
 
+from server.app import TOOL_PATHS  # the three tools' public paths and their folders (#28)
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "static"
 PAGES = ["meetup/index.html", "warp/index.html"]
+TOOL_PAGES = ["warp/index.html", "meetup/index.html", "whole-city/index.html"]
 MAPLIBRE = re.compile(r'(?:src|href)="(https://unpkg\.com/maplibre-gl@[^"]+)"')
 
 
@@ -30,6 +34,14 @@ def test_service_worker_caches_only_our_own_files():
     assert "url.origin !== self.location.origin" in sw
     for path in ("/api/", "/tiles/", "/glyphs/"):
         assert f'"{path}' not in sw.split("const APP_SHELL")[1].split("];")[0]
+    # Whole city's data is the one API path kept, after a view, network first, in its own cache
+    # (which the activate step's time-map- cleanup leaves alone); a 404 from the gate drops it.
+    city = sw.split("async function cityData")[1].split("\n}\n")[0]
+    assert 'const CITY_CACHE = "whole-city-data";' in sw and 'const CITY_DATA = "/api/whole-city/";' in sw
+    assert city.index("await fetch(request)") < city.index("cache.match(request)")
+    assert "response.status === 404) await caches.delete(CITY_CACHE)" in city
+    assert '"whole-city-data"' not in sw.split("activate")[1].split("});")[0]
+    assert 'export const CITY_CACHE = "whole-city-data";' in (ROOT / "shared/offline.js").read_text()
     # Network first, past the browser's HTTP cache: the cache is read only after the
     # network fails, and a new build never stores an old file.
     body = sw.split("async function networkFirst")[1]
@@ -37,20 +49,41 @@ def test_service_worker_caches_only_our_own_files():
     assert 'new Request(path, { cache: "reload" })' in sw
 
 
+def _static_file(path: str) -> pathlib.Path:
+    """A public path → the file under static/ that serves it (server/app.py TOOL_PATHS)."""
+    if path == "/":
+        return ROOT / "portfolio/index.html"
+    first, slash, rest = path.lstrip("/").partition("/")
+    if not slash:
+        return ROOT / first
+    return ROOT / TOOL_PATHS.get(first, first) / (rest or "index.html")
+
+
 def test_every_precached_file_exists():
     sw = (ROOT / "sw.js").read_text()
     shell = re.findall(r'^\s+"(/[^"]*)",$', sw.split("const APP_SHELL")[1].split("];")[0], re.M)
     assert shell
-    routes = {"/": "portfolio/index.html", "/meetup/": "meetup/index.html", "/warp/": "warp/index.html"}
     for path in shell:
-        rel = routes.get(path, path.lstrip("/"))
-        assert (ROOT / rel).is_file(), path
-    # Every module the pages import is precached, so the app shell opens offline (the map
-    # itself needs the network: MapLibre and tiles are never cached).
-    for page in ("warp/app.js", "meetup/app.js"):
-        for imp in re.findall(r'from "([^"]+)"', (ROOT / page).read_text()):
-            full = imp if imp.startswith("/") else "/" + page.rsplit("/", 1)[0] + "/" + imp.removeprefix("./")
-            assert full in shell, full
+        assert _static_file(path).is_file(), path
+    # Every module the pages import, and every module those import, is precached, so the app
+    # shell opens offline (the maps themselves need the network: MapLibre, tiles and Whole
+    # city's data are never cached).
+    todo = ["/from-here/app.js", "/meet-up/app.js", "/whole-city/app.js"]
+    seen = set()
+    while todo:
+        mod = todo.pop()
+        if mod in seen:
+            continue
+        seen.add(mod)
+        assert mod in shell, mod
+        base = mod.rsplit("/", 1)[0]
+        for imp in re.findall(r'from "([^"]+)"', _static_file(mod).read_text()):
+            full = imp if imp.startswith("/") else posixpath.normpath(f"{base}/{imp}")
+            todo.append(full)
+
+
+def test_the_tool_paths_are_the_three_tools():
+    assert TOOL_PATHS == {"from-here": "warp", "meet-up": "meetup", "whole-city": "whole-city"}
 
 
 def test_meetup_attribution():
@@ -107,7 +140,7 @@ def test_meetup_offers_public_transport_only_where_the_tables_are():
     html = (ROOT / "meetup/index.html").read_text()
     js = (ROOT / "meetup/app.js").read_text()
     # The When control is there, hidden until someone is on public transport.
-    assert re.search(r'<label class="field" id="window-field" hidden>', html)
+    assert re.search(r'<div class="when-field" id="window-field" hidden>', html)
     assert '<select id="window-select">' in html
     # So is Where (#19): its kinds come from the tables' status, a pub unless the group picks.
     assert re.search(r'<label class="field" id="venue-field" hidden>', html)
@@ -116,9 +149,11 @@ def test_meetup_offers_public_transport_only_where_the_tables_are():
     # The station sentence or the venue one, whichever was picked; no select without venues.
     assert '<p class="hint" id="venue-hint" hidden>' in html and '<p class="hint" id="both-hint" hidden>' in html
     assert '$("venue-field").hidden = !on || venueKinds.length === 0;' in js
-    # Public transport is not in the static list: it is added from the tables' status, and
-    # offered to a person only inside the area they cover.
-    assert 'value="transit"' not in html
+    # Public transport starts hidden: it is shown from the tables' status, and offered to a
+    # person only inside the area they cover.
+    assert '<label class="chip" id="transit-chip" hidden><input type="radio" name="add-mode" value="transit"' in html
+    assert html.count('value="transit"') == 1
+    assert '$("transit-chip").hidden = !transit.available;' in js
     assert 'fetch("/api/transit/status")' in js and "insideArea(transit.coverage" in js
     # Journey links open in a new tab and send no referrer.
     assert 'rel="noopener noreferrer"' in js
@@ -159,10 +194,33 @@ def test_landing_mentions_public_transport_only_when_the_tables_are_there():
     html = (ROOT / "portfolio/index.html").read_text()
     lines = re.findall(r'<p class="transit-line"( hidden)?>', html)
     assert len(lines) == 2 and all(lines)
-    assert 'fetch("/api/transit/status")' in html and ".transit-line[hidden]" in html
+    assert 'import { expired, pollStatus, statusLoading } from "/shared/transit.js";' in html
+    assert ".transit-line[hidden]" in html
+    # The status comes from one shared helper, not from another tool's folder (#28).
+    assert "/warp/" not in html and "views.js" not in html
+    assert 'url = "/api/transit/status"' in (ROOT / "shared/transit.js").read_text()
 
 
-@pytest.mark.parametrize("page", ["meetup/index.html", "warp/index.html", "portfolio/index.html"])
+def test_landing_lists_three_tools_and_never_links_to_a_missing_map():
+    html = (ROOT / "portfolio/index.html").read_text()
+    main = html.split('<main class="tools">')[1].split("</main>")[0]
+    for name, path in (("From here", "/from-here/"), ("Meet up", "/meet-up/")):
+        assert f'<a href="{path}" class="tool">' in main and f"<h2>{name}</h2>" in main
+    # Whole city is an <a> with no href (not a link) until the server says its map can be shown
+    # here; then it gains the href, in place, so its animation isn't restarted.
+    assert '<a class="tool" id="city-card">' in main and "<h2>Whole city</h2>" in main
+    assert 'href="/whole-city/"' not in html and "aria-disabled" not in html
+    assert 'document.getElementById("city-card").href = "/whole-city/";' in html
+    assert "if (city && city.available)" in html and "replaceChildren" not in html
+    # While it is still loading, the card keeps asking, then says so in words.
+    assert "statusLoading(s)" in html and "still getting ready" in html
+    # One sentence and one animation each.
+    assert main.count('class="say"') == 3 and main.count("<svg") == 3
+    assert html.count("<title>Minutes Away</title>") == 1 and "<h1>Minutes Away</h1>" in html
+
+
+@pytest.mark.parametrize("page", ["meetup/index.html", "warp/index.html", "portfolio/index.html",
+                                  "whole-city/index.html"])
 def test_page_zoom_is_allowed(page):
     html = (ROOT / page).read_text()
     assert "user-scalable" not in html
@@ -195,14 +253,17 @@ def _visible_html_text(html: str) -> list[str]:
     return [text, *attrs]
 
 
-@pytest.mark.parametrize("page", ["meetup/index.html", "warp/index.html", "portfolio/index.html"])
+@pytest.mark.parametrize("page", ["meetup/index.html", "warp/index.html", "portfolio/index.html",
+                                  "whole-city/index.html"])
 def test_no_jargon_in_page_text(page):
     for chunk in _visible_html_text((ROOT / page).read_text()):
         assert not JARGON.search(chunk), JARGON.search(chunk).group(0)
 
 
 @pytest.mark.parametrize("page", ["meetup/app.js", "meetup/words.js", "meetup/share.js", "warp/app.js",
-                                  "warp/words.js", "warp/views.js", "shared/api.js"])
+                                  "warp/words.js", "warp/views.js", "shared/api.js", "whole-city/app.js",
+                                  "whole-city/carry.js", "shared/tools.js", "shared/transit.js", "shared/nav.js",
+                                  "shared/locate.js", "shared/handoff.js", "shared/offline.js"])
 def test_no_jargon_in_ui_strings(page):
     js = (ROOT / page).read_text()
     js = re.sub(r"/\*.*?\*/|^\s*//.*$", "", js, flags=re.S | re.M)      # comments
@@ -227,6 +288,172 @@ def test_landing_animations_stop_on_their_own():
         assert float(dur) + float(delay) < 5
 
 
+# ── One app, three tools (#28, U-03) ─────────────────────────────────
+TOOLS = {"warp/index.html": ("From here", "How far can I get from here?"),
+         "meetup/index.html": ("Meet up", "Where should we meet?"),
+         "whole-city/index.html": ("Whole city", "What does London look like when distance means travel time?")}
+
+
+@pytest.mark.parametrize("page", TOOL_PAGES)
+def test_each_tool_has_its_name_its_question_and_the_app_name(page):
+    html = (ROOT / page).read_text()
+    name, question = TOOLS[page]
+    assert f"<title>{name} · Minutes Away</title>" in html
+    assert f'<p class="tool-name">{name}</p>' in html
+    assert re.search(rf'<h1 class="question">{re.escape(question)}</h1>', html)
+    assert '<a href="/" class="back-link">← Minutes Away</a>' in html
+
+
+def test_the_old_name_is_gone_from_everything_a_visitor_sees():
+    files = [p for p in ROOT.rglob("*") if p.is_file() and p.suffix in (".html", ".js", ".json", ".css")
+             and "lab" not in p.relative_to(ROOT).parts and "vendor" not in p.relative_to(ROOT).parts]
+    for p in files:
+        text = p.read_text()
+        text = re.sub(r"/\*.*?\*/|^\s*//.*$", "", text, flags=re.S | re.M)
+        assert "Time-Map" not in text and "Time Map" not in text, p
+    readme = (ROOT.parent / "README.md").read_text()
+    assert readme.startswith("# Minutes Away") and "Time-Map" not in readme
+    assert '"name": "Minutes Away"' in (ROOT / "manifest.json").read_text()
+
+
+@pytest.mark.parametrize("page", TOOL_PAGES)
+def test_the_other_two_tools_are_one_tap_away(page):
+    html = (ROOT / page).read_text()
+    nav = html.split('<nav class="switcher" aria-label="Tools">')[1].split("</nav>")[0]
+    here = TOOLS[page][0]
+    assert nav.count('aria-current="page"') == 1 and f'aria-current="page">{here}<' in nav
+    for name, path in (("From here", "/from-here/"), ("Meet up", "/meet-up/")):
+        assert f'href="{path}"' in nav and f">{name}<" in nav
+    # Whole city starts as text in the other tools: it becomes a link only once the server
+    # says its map can be shown (shared/nav.js), so the switcher never leads to a broken page.
+    if page != "whole-city/index.html":
+        assert '<span data-tool="whole-city" class="off">Whole city</span>' in nav
+        assert "/whole-city/" not in html
+        js = (ROOT / page.replace("index.html", "app.js")).read_text()
+        assert "updateSwitcher(" in js and "watchCity(" in js
+    nav_js = (ROOT / "shared/nav.js").read_text()
+    assert "if (city && city.available)" in nav_js and 'a.href = "/whole-city/";' in nav_js
+    # Why it isn't available is visible (short) and read out (in full); no aria-disabled on text.
+    assert "cityShort(reason)" in nav_js and "cityUnavailable(reason)" in nav_js and "aria-disabled" not in nav_js
+
+
+def test_the_pressed_tick_is_not_part_of_the_buttons_name():
+    css = (ROOT / "shared/ui.css").read_text()
+    rules = re.findall(r'\[aria-pressed="true"\]::before\s*{([^}]*)}', css)
+    assert rules and all(re.search(r'content:\s*"[^"]*"\s*/\s*""', r) for r in rules), rules
+
+
+def test_meet_up_keeps_its_group_for_the_trip_back():
+    js = (ROOT / "meetup/app.js").read_text()
+    # Saved on every change and after a shared link; restored ahead of a handed-on pin.
+    assert "keepGroup();" in js.split("function handOn")[1].split("\n}\n")[0]
+    # An edited example is kept too (its people keep their example flag, so aren't handed on).
+    assert "every((p) => p.example)" not in js.split("function keepGroup")[1].split("\n}\n")[0]
+    assert "handOn();" in js.split("async function openShared")[1].split("\n}\n")[0]
+    fresh = js.split("const fresh = () => {")[1].split("};")[0]
+    assert fresh.index("readGroup()") < fresh.index("HANDOFF.pin")
+    # The tables' status is handled once: Whole city's own loading is left to the switcher.
+    assert "cityLoading" not in js and "cityLoading" not in (ROOT / "warp/app.js").read_text()
+
+
+@pytest.mark.parametrize("page", ["warp/index.html", "whole-city/index.html"])
+def test_the_time_map_button_says_its_state_once(page):
+    html = (ROOT / page).read_text()
+    button = re.search(r'<button id="(view-toggle|bend)"[^>]*>([^<]*)</button>', html)
+    assert button and button.group(2) == "Time map" and 'aria-pressed="false"' in button.group(0)
+    js = (ROOT / page.replace("index.html", "app.js")).read_text()
+    name = "toggleBtn" if page.startswith("warp") else "toggle"
+    # Its label never changes: aria-pressed alone carries the state.
+    assert not re.search(rf"setText\({name}\b|{name}\.textContent\s*=", js)
+    assert f'{name}.setAttribute("aria-pressed"' in js
+    for gone in ("Bend the map", "Bend by travel time", "Back to the real map", "Back to the normal map"):
+        assert gone not in html and gone not in js
+
+
+def test_whole_city_slider_ends_are_the_two_maps():
+    html = (ROOT / "whole-city/index.html").read_text()
+    slider = html.split('<div class="slider">')[1].split("</div>\n    </div>")[0]
+    assert "<span>Real map</span>" in slider and "<span>Time map</span>" in slider
+
+
+def test_travel_mode_is_the_same_chips_in_every_tool():
+    warp = (ROOT / "warp/index.html").read_text()
+    meetup = (ROOT / "meetup/index.html").read_text()
+    for html, name in ((warp, "mode"), (meetup, "add-mode")):
+        chips = re.findall(rf'<input type="radio" name="{name}" value="(\w+)"[^>]*/><span>([^<]+)</span>', html)
+        assert chips == [("walking", "Walk"), ("cycling", "Cycle"), ("driving", "Drive"), ("transit", "Public transport")]
+    assert 'id="mode-select"' not in meetup and "<select class=\"p-mode\"" not in (ROOT / "meetup/app.js").read_text()
+    # Each person's way of travelling: the same chips, smaller, with the shared labels.
+    js = (ROOT / "meetup/app.js").read_text()
+    assert 'class="chips compact p-mode"' in js and 'import { MODE_LABEL } from "/shared/tools.js";' in js
+    tools = (ROOT / "shared/tools.js").read_text()
+    assert 'MODE_LABEL = { walking: "Walk", cycling: "Cycle", driving: "Drive", transit: "Public transport" }' in tools
+
+
+def test_time_of_day_is_the_same_visible_control():
+    for page in ("warp/index.html", "meetup/index.html"):
+        html = (ROOT / page).read_text()
+        field = html.split('class="when-field"')[1].split("</div>")[0]
+        assert '<label class="label" for="window-select">When?</label>' in field
+        assert '<select id="window-select"></select>' in field
+        assert "Public transport times are for a typical hour on that day" in " ".join(field.split())
+        assert "<details" not in html.split('class="when-field"')[0].rsplit("</details>", 1)[-1]
+    assert 'id="more-options"' not in (ROOT / "warp/index.html").read_text()
+    for page in ("warp/app.js", "meetup/app.js"):
+        assert "windowOptions(" in (ROOT / page).read_text()
+
+
+def test_asking_for_a_location_is_the_same_in_both_tools():
+    for page in ("warp", "meetup"):
+        html = (ROOT / f"{page}/index.html").read_text()
+        card = html.split('id="location-card"')[1].split("</div>\n  </div>")[0]
+        assert "data-yes>Use my location</button>" in card and "data-no>Keep the example</button>" in card
+        assert re.search(r'<button [^>]*id="locate-btn"[^>]*>Use my location</button>', html)
+        js = (ROOT / f"{page}/app.js").read_text()
+        assert 'from "/shared/locate.js"' in js and "offerLocation(" in js
+        assert "navigator.geolocation" not in js and "LOCATION_PREF" not in js
+
+
+def test_no_page_imports_another_tools_folder():
+    for page in ("meetup/app.js", "meetup/share.js", "whole-city/app.js", "portfolio/index.html"):
+        text = (ROOT / page).read_text()
+        assert "/warp/" not in text and "../warp/" not in text, page
+
+
+def test_whole_city_loads_only_its_data_through_the_gate():
+    js = (ROOT / "whole-city/app.js").read_text()
+    for spec in re.findall(r'from "([^"]+)"', js):
+        assert spec.startswith("/shared/") or spec == "./carry.js", spec
+    for target in re.findall(r"\bload\(([^,)]*)", js):
+        assert target.startswith("`/api/whole-city/${win}/") or target == "url", target
+    assert sorted(re.findall(r"fetch\(([^)]*)\)", js)) == ['"/api/transit/status"', "url"]
+    for word in ("XMLHttpRequest", "WebSocket", "sendBeacon", "EventSource", "/tiles/", "/glyphs/", "import("):
+        assert word not in js
+    html = (ROOT / "whole-city/index.html").read_text()
+    assert "noindex" not in html and "Local use only" not in html and "Local use only" not in js
+    assert '<link rel="stylesheet" href="/shared/ui.css" />' in html
+
+
+def test_whole_city_offline_only_until_its_build_expires():
+    """Offline (#28): the kept copy is used only with no answer from the server, only while its
+    valid-until date hasn't passed, only for the windows whose files were kept; a server that
+    refuses Whole city makes the pages forget it."""
+    off = (ROOT / "shared/offline.js").read_text()
+    kept = off.split("export async function keptCityWhy")[1].split("\n}\n")[0]
+    assert "expired(c.valid_until)" in kept and "caches.delete(CITY_CACHE)" in kept and '"expired"' in kept
+    assert "cache.match(`/api/whole-city/${w.id}/timemap.json`)" in kept
+    gate = off.split("export async function cityOrKept")[1].split("\n}\n")[0]
+    assert "if (!status)" in gate and 'c.reason !== "loading") await forgetCity()' in gate
+    js = (ROOT / "whole-city/app.js").read_text()
+    assert "({ city: offline, reason: noNetwork } = await keptCityWhy())" in js and "if (!offline) keepCity(city, win)" in js
+    # Windows are offered offline only if viewed under the kept build (tests/js/shared-tools.test.js).
+    assert "viewed.includes(w.id)" in kept
+    assert "await forgetCity()" in js
+    # The home card and the switcher go by the same rule.
+    assert "await cityOrKept(s)" in (ROOT / "portfolio/index.html").read_text()
+    assert "await cityOrKept(status)" in (ROOT / "shared/nav.js").read_text()
+
+
 # ── The mesh renderer spike (issue #5, W-01) ─────────────────────────
 LAB = "warp/lab/index.html"
 
@@ -237,8 +464,9 @@ def test_lab_page_is_unlisted_and_credits_the_map():
     for text in ("© Mapbox", "© OpenStreetMap", "Improve this map", 'id="mapbox-logo"'):
         assert text in html
     # Not in the app shell, and no page links to it.
-    assert "/warp/lab" not in (ROOT / "sw.js").read_text()
-    for page in [*PAGES, "portfolio/index.html"]:
+    sw = (ROOT / "sw.js").read_text()
+    assert "/warp/lab" not in sw and "/from-here/lab" not in sw
+    for page in [*PAGES, "portfolio/index.html", "whole-city/index.html"]:
         assert "lab/" not in (ROOT / page).read_text()
 
 

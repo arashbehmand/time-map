@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f6f5f2" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <title>Whole city · Minutes Away</title>
+  <link rel="stylesheet" href="/shared/ui.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header id="top" class="app-header">
+    <div class="app-line">
+      <a href="/" class="back-link">← Minutes Away</a>
+      <nav class="switcher" aria-label="Tools">
+        <a href="/from-here/" data-tool="from-here">From here</a>
+        <a href="/meet-up/" data-tool="meet-up">Meet up</a>
+        <a href="/whole-city/" data-tool="whole-city" aria-current="page">Whole city</a>
+      </nav>
+    </div>
+    <p class="tool-name">Whole city</p>
+    <h1 class="question">What does London look like when distance means travel time?</h1>
+  </header>
+
+  <main id="stage">
+    <canvas id="map" aria-hidden="true"></canvas>
+    <canvas id="overlay" role="img" aria-label="London's land and stations, placed by public transport time"></canvas>
+    <div id="tip" role="status" hidden></div>
+    <p id="status" class="status" role="status" aria-live="polite">Getting the map ready…</p>
+    <div id="unavailable" class="card" hidden>
+      <p id="unavailable-text"></p>
+      <p>You can still use <a href="/from-here/">From here</a> or <a href="/meet-up/">Meet up</a>.</p>
+    </div>
+  </main>
+
+  <section id="controls" class="card sheet" aria-label="What the map shows" hidden>
+    <div class="row">
+      <button id="bend" class="btn" type="button" aria-pressed="false">Time map</button>
+      <button id="fit" class="btn" type="button">Fit</button>
+      <button id="zoom-in" class="btn" type="button" aria-label="Zoom in">+</button>
+      <button id="zoom-out" class="btn" type="button" aria-label="Zoom out">−</button>
+    </div>
+    <div class="slider">
+      <span>Real map</span>
+      <div class="track">
+        <input id="frame" type="range" min="0" max="0" step="any" value="0" aria-label="From the real map to the time map" />
+        <div id="marks" class="marks" aria-hidden="true"></div>
+      </div>
+      <span>Time map</span>
+    </div>
+    <div class="when-field">
+      <label class="label" for="window-select" id="when-label" hidden>When?</label>
+      <select id="window-select" hidden></select>
+      <p id="when-line" class="hint"></p>
+    </div>
+    <p id="window-note" class="hint" hidden></p>
+    <div id="readout" class="readout" aria-live="polite"></div>
+    <div class="key">
+      <p class="label">Each station's colour: how well its distances on the map match its travel times</p>
+      <div class="colour-bar" aria-hidden="true"></div>
+      <div class="key-ends"><span>Close</span><span>Far off</span></div>
+    </div>
+    <label class="field" for="station-select"><span>Show a station</span>
+      <select id="station-select"><option value="">Pick a station</option></select>
+    </label>
+    <details id="options">
+      <summary>Map options</summary>
+      <div class="checks">
+        <label><input id="labels" type="checkbox" checked /> Names</label>
+        <label><input id="line" type="checkbox" checked /> Metropolitan line</label>
+        <label><input id="ghosts" type="checkbox" checked /> Where they really are</label>
+        <label class="details-only" hidden><input id="smooth" type="checkbox" checked /> Smooth lines</label>
+        <label class="details-only" hidden><input id="mesh" type="checkbox" /> Grid</label>
+      </div>
+    </details>
+    <p id="notice" class="hint"></p>
+    <p id="credits" class="credits"></p>
+    <details id="checked" hidden>
+      <summary>How this map was checked</summary>
+      <ul>
+        <li><a id="report-link" href="#">The report</a>: how it was made and checked, in full.</li>
+        <li><a id="shepard-link" href="#">The Shepard plot</a>: distances on the map against travel times.</li>
+      </ul>
+    </details>
+  </section>
+
+  <script type="module" src="app.js"></script>
+  <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
+</body>
+</html>

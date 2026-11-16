@@ -1,4 +1,4 @@
-// Drive the renderer lab (/warp/lab/) in a Chrome you started with remote debugging, and
+// Drive the renderer lab (/from-here/lab/) in a Chrome you started with remote debugging, and
 // print the result as JSON. This is how the desktop numbers in docs/warp-renderer-spike.md
 // were taken. Node 22+ (global fetch and WebSocket); no packages.
 //
@@ -7,14 +7,14 @@
 //      MAPBOX_ACCESS_TOKEN is enough to start the server)
 //   2. "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
 //        --remote-debugging-port=9333 --user-data-dir=/tmp/lab-chrome --enable-gpu --use-angle=metal
-//   3. node scripts/lab_headless.mjs --url "http://127.0.0.1:8765/warp/lab/?backend=b" \
+//   3. node scripts/lab_headless.mjs --url "http://127.0.0.1:8765/from-here/lab/?backend=b" \
 //        --eval "__lab.runSelfTest()" [--shot out.png] [--size 1440x900] [--dpr 1] [--throttle 4]
 //        [--no-cache]   (turns off the page's HTTP cache; it does not reach the tile worker, so
 //                        for cold tile loads start Chrome with a fresh --user-data-dir instead)
 //
-// It drives the warp page itself the same way when the URL is /warp/ (it waits for __warp
-// instead of __lab; the page exposes it only with ?test=1), for the pan, new-pin and request
-// checks of #5 (W-02), e.g. --url "http://127.0.0.1:8765/warp/?test=1":
+// It drives From here itself the same way when the URL is /from-here/ (or the old /warp/; it
+// waits for __warp instead of __lab; the page exposes it only with ?test=1), for the pan,
+// new-pin and request checks of #5 (W-02), e.g. --url "http://127.0.0.1:8765/from-here/?test=1":
 //   __warp.panBy(200, 0)                        one camera pan → {ms to the next drawn frame}
 //   __warp.bend(true)                           bend the map (resolves when the morph is done)
 // --out FILE also writes the result JSON to FILE.
@@ -57,7 +57,7 @@ await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceSc
 if (args.throttle) await send("Emulation.setCPUThrottlingRate", { rate: Number(args.throttle) });
 if (args["no-cache"]) { await send("Network.enable"); await send("Network.setCacheDisabled", { cacheDisabled: true }); }
 await send("Page.navigate", { url: args.url });
-const hook = /\/warp\/(\?|#|$)/.test(new URL(args.url).pathname + new URL(args.url).search.slice(0, 1)) ? "__warp" : "__lab";
+const hook = /\/(warp|from-here)\/(\?|#|$)/.test(new URL(args.url).pathname + new URL(args.url).search.slice(0, 1)) ? "__warp" : "__lab";
 for (let i = 0; i < 200 && (await evaluate(`!!(window.${hook} && window.${hook}.ready)`)) !== true; i++) await new Promise((r) => setTimeout(r, 100));
 const ready = await evaluate(`Promise.race([${hook}.ready.then(() => 'ready', (e) => 'boot failed: ' + e.message), new Promise((r) => setTimeout(() => r('not ready after 40 s'), 40000))])`);
 const value = ready === "ready" && args.eval ? await evaluate(args.eval) : null;

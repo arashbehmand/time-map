@@ -1,7 +1,10 @@
 // The sentences the meetup page shows for an answer, and for "no place works".
 // Pure functions, no page access, so they can be tested on their own (tests/js/words.test.js).
 
-export const mins = (t) => Math.round(t);
+import { minutesText } from "../shared/tools.js";
+
+// Minutes in the words every tool uses (#28): "24 min", or "under a minute".
+export const mins = minutesText;
 
 // "on Baker Street", or "" when the place has no street name.
 export function onStreet(c) {
@@ -12,8 +15,8 @@ export function headline(best, objectiveValue) {
   const where = onStreet(best);
   const meet = where ? `Meet ${where} (★ on the map).` : "Meet here (★ on the map).";
   return objectiveValue === "sum"
-    ? `${meet} The average trip is ${mins(best.mean_time_min)} min; the longest is ${mins(best.max_time_min)} min.`
-    : `${meet} Everyone gets there within ${mins(best.max_time_min)} min.`;
+    ? `${meet} The average trip is ${mins(best.mean_time_min)}; the longest is ${mins(best.max_time_min)}.`
+    : `${meet} Everyone gets there within ${mins(best.max_time_min)}.`;
 }
 
 export function meaning(objectiveValue) {
@@ -24,8 +27,8 @@ export function meaning(objectiveValue) {
 
 export function altText(c, objectiveValue) {
   const time = objectiveValue === "sum"
-    ? `average trip ${mins(c.mean_time_min)} min`
-    : `longest trip ${mins(c.max_time_min)} min`;
+    ? `average trip ${mins(c.mean_time_min)}`
+    : `longest trip ${mins(c.max_time_min)}`;
   const where = onStreet(c);
   return where ? `${where} · ${time}` : time;
 }
@@ -45,7 +48,7 @@ const aKind = (c) => `a ${VENUE_WORD[c.kind]}`;
 
 export function placeHeadline(best) {
   const where = isVenue(best) && best.name && best.name.trim() ? `${placeName(best)}, ${aKind(best)}` : placeName(best);
-  return `Meet at ${where} (★ on the map). Everyone gets there within ${mins(best.max_time_min)} min.`;
+  return `Meet at ${where} (★ on the map). Everyone gets there within ${mins(best.max_time_min)}.`;
 }
 
 // Said under a venue answer: OpenStreetMap doesn't reliably say when a place is open.
@@ -56,8 +59,8 @@ export const OPEN_HOURS_HINT = "We don't know whether it's open.";
 export function quickestText(q) {
   const where = isPlace(q) ? `Quickest on average: ${placeName(q)}`
     : `Of the places we checked, the quickest on average is ${onStreet(q) || "at the Q on the map"}`;
-  return `${where}. The average trip is ${mins(q.mean_time_min)} min; ` +
-    `the longest is ${mins(q.max_time_min)} min.`;
+  return `${where}. The average trip is ${mins(q.mean_time_min)}; ` +
+    `the longest is ${mins(q.max_time_min)}.`;
 }
 
 export const TIE_TEXT = "About as good: the times can't tell these apart.";
@@ -65,7 +68,7 @@ export const ALL_TIES_TEXT = "These are all about as good as the first: the time
 
 // `markTie`: label a tie on its own row (off when every row is a tie and one sentence says so).
 export function stationAltText(c, markTie = true) {
-  return `${placeName(c)} · longest trip ${mins(c.max_time_min)} min${markTie && c.tie ? " · about as good" : ""}`;
+  return `${placeName(c)} · longest trip ${mins(c.max_time_min)}${markTie && c.tie ? " · about as good" : ""}`;
 }
 
 // What a "Plan journey" link does, said once under the answer.

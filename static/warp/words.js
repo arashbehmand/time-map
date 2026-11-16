@@ -1,6 +1,7 @@
 // Every sentence the warp page shows (#5, W-02). Pure. No jargon: tests/test_static.py
 // checks these strings, and tests/js/warp-words.test.js checks what they say.
 import { spacing } from "../shared/mesh/rings.js";
+import { minutesText as measured } from "../shared/tools.js";
 
 const VERBS = { walking: "walk", cycling: "cycle", driving: "drive", transit: "get" };
 
@@ -15,7 +16,7 @@ export function spacingWords(plan) {
 }
 
 export function sentence(mode, outer, plan, bent, layout = "fold") {
-  if (bent && layout === "squash") return `Each bent ring runs through the first place that many minutes away in each direction, a ring ${spacingWords(plan)}. The space between two rings grows with the places they add, so a wide band means many more places.`;
+  if (bent && layout === "squash") return `On the time map, each ring runs through the first place that many minutes away in each direction, a ring ${spacingWords(plan)}. The space between two rings grows with the places they add, so a wide band means many more places.`;
   if (bent) return `Distance from the pin now means travel time: a ring ${spacingWords(plan)}.`;
   return `The coloured bands show where you can ${VERBS[mode]} to within ${outer} minutes, a band ${spacingWords(plan)}.`;
 }
@@ -37,12 +38,11 @@ export const EXAMPLE_NOTE = "This is a saved example. Drag the pin or search to 
 export const NO_TRANSIT = "Public transport times aren't available here yet.";
 export const LONDON_ONLY = "Public transport times cover London only, so this shows walking.";
 export const DEV_ONLY = "Development only: these public transport times are not licensed for publication.";
-export const BEND_LABEL = { off: "Bend the map (experimental)", on: "Back to the normal map" };
-export const NO_BEND = "This browser can't bend the map. The bands still show on the normal map.";
-export const PREPARING = "Preparing the bent map…";
+export const NO_BEND = "This browser can't show the time map. The bands still show on the real map.";
+export const PREPARING = "Preparing the time map…";
 export const TILES_MISSING = "Some map tiles didn't load. Trying again…";
-export const TILES_FAILED = "The map tiles didn't load, so the map can't bend right now.";
-export const BEND_FAILED = "The bent map couldn't be prepared. Press the button to try again.";
+export const TILES_FAILED = "The map tiles didn't load, so the time map can't be shown right now.";
+export const BEND_FAILED = "The time map couldn't be prepared. Press Time map to try again.";
 export const EXPIRED = "These public transport times have expired, so this shows walking.";
 export const UPDATING = "Updating…";
 
@@ -65,15 +65,16 @@ export const SQUASH_TAP_NOTE = "These places are drawn close together; each has 
 export const BANDS_FAILED = "The travel-time bands couldn't be drawn. Move the pin to try again.";
 export const OVERLAP_NOTE = "Where the map overlaps itself, different places are the same number of minutes away in the same direction.";
 
+// A time read off the field is an estimate: "about 12 min".
 export function minutesText(m) {
-  return m < 1 ? "under a minute" : `about ${Math.round(m)} min`;
+  return m < 1 ? measured(m) : `about ${measured(m)}`;
 }
 
 // An uncertain patch (field.js): the route data leaves it out, so it has no time to show; it is
-// left uncoloured, and drawn small on the bent map.
+// left uncoloured, and drawn small on the time map.
 export const UNCERTAIN_TAP = "No reliable travel time here: the route data leaves this patch out.";
 
-// What a tap on the ordinary map says.
+// What a tap on the real map says.
 export function tapGeographic(node, label) {
   if (node && node.uncertain) return UNCERTAIN_TAP;
   if (!node || node.minutes === -1) return "No travel time here.";

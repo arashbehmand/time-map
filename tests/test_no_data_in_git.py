@@ -52,7 +52,9 @@ def test_no_data_or_large_file_is_tracked():
                                   "transit/out/timemap/2026-11-12/wd13/timemap.json",
                                   "transit/out/timemap/2026-11-12/wd13/land.bin",
                                   "transit/out/timemap/2026-11-12/wd13/panels.svg",
-                                  "transit/out/timemap/2026-11-12/wd13/mesh/renderer.js"])
+                                  # and never a copy beside the app's Whole city page (#28)
+                                  "static/whole-city/timemap.json", "static/whole-city/land.bin",
+                                  "server/timemap.json"])
 def test_data_files_are_ignored_anywhere(path):
     if _git("rev-parse", "--git-dir").returncode:
         pytest.skip("not a git checkout")

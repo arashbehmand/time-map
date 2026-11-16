@@ -2,9 +2,31 @@
 import pytest
 
 
-@pytest.mark.parametrize("path", ["/", "/manifest.json", "/sw.js", "/meetup/", "/warp/", "/api/meetup/health"])
+@pytest.mark.parametrize("path", ["/", "/manifest.json", "/sw.js", "/meet-up/", "/from-here/", "/whole-city/",
+                                  "/api/meetup/health"])
 def test_pages(client, path):
     assert client.get(path).status_code == 200
+
+
+# Old links (#28): the tools' first paths still work, with the rest of the path and the query.
+# The browser keeps a #fragment (a meetup share link's group) across the redirect itself.
+@pytest.mark.parametrize(("old", "new"), [
+    ("/warp", "/from-here/"), ("/warp/", "/from-here/"), ("/warp/?mode=transit&window=wd08", "/from-here/?mode=transit&window=wd08"),
+    ("/warp/app.js?polar=1", "/from-here/app.js?polar=1"), ("/warp/lab/", "/from-here/lab/"),
+    ("/meetup", "/meet-up/"), ("/meetup/", "/meet-up/"), ("/meetup/?x=1", "/meet-up/?x=1"),
+    ("/meetup/style.css", "/meet-up/style.css"),
+])
+def test_old_paths_redirect(client, old, new):
+    for method in (client.get, client.head):
+        resp = method(old, follow_redirects=False)
+        assert resp.status_code == 308, old
+        assert resp.headers["location"] == new
+    assert client.get(old).status_code == 200
+
+
+def test_a_query_named_rest_stays_in_the_query(client):
+    resp = client.get("/warp?rest=lab/", follow_redirects=False)
+    assert resp.status_code == 308 and resp.headers["location"] == "/from-here/?rest=lab/"
 
 
 def test_isochrones(client):

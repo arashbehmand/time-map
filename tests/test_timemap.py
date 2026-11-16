@@ -490,8 +490,8 @@ def test_build_end_to_end(job_env):
                   "Most squeezed", "How thin triangles get", "Beside the stations-only layout", "What shapes Wembley Park",
                   "Train springs only pull", "The end of the slider is where the ladder stops",
                   "Station triangles bent", "positive definite", "a test of the step size",
-                  "Every position", "Train links", "Land", "Local use only (#6, L-02)", "not cleared for publication",
-                  "expired"):
+                  "Every position", "Train links", "Land", "The app shows it as Whole city only while those tables "
+                  "may be served", "not cleared for publication", "expired", "TIMEMAP_DIR"):
         assert words in md, words
     assert "| — |" in md                                      # the real map's smallest area: nothing squeezed
 
@@ -502,10 +502,12 @@ def test_build_end_to_end(job_env):
     cy = dict((sid, float(y)) for y, sid in re.findall(r'cy="([-\d.]+)" r="3"[^>]*data-station="([^"]+)"', first))
     assert cy["syn:G55"] < cy["syn:G22"]
 
-    page = ("index.html", "app.js", "app.css", "carry.js", "timemap.json", "land.bin")
-    gz = sum(len(gzip.compress((out / n).read_bytes())) for n in page) + \
-        sum(len(gzip.compress((out / "mesh" / n).read_bytes())) for n in timemap.RENDERER_FILES)
-    assert gz < 2_000_000
+    # What a visitor downloads: the app's page and what it loads, and this build's data.
+    gz = sum(len(gzip.compress((out / n).read_bytes())) for n in ("timemap.json", "land.bin")) + \
+        timemap.page_static_bytes()
+    assert gz < 2_000_000 and rep["page_gzip_bytes"] >= timemap.page_static_bytes()
+    # The job writes only data and the report: the page is the app's code.
+    assert sorted(p.name for p in out.iterdir()) == sorted(timemap.OUTPUT_FILES)
     shepard = (out / "shepard.svg").read_text()
     assert "Stations-only time map" in shepard and "Spring grid" in shepard
 
@@ -525,24 +527,23 @@ def test_without_land_the_page_still_draws_the_stations(job_env):
     assert doc["land"] is None and (out / "land.bin").stat().st_size == 0
 
 
-def test_the_copied_renderer_is_the_committed_one_and_the_page_loads_only_its_own_files(job_env):
-    _, out = _main(job_env[0])
-    for name in timemap.RENDERER_FILES:
-        assert (out / "mesh" / name).read_bytes() == (ROOT / "static" / "shared" / "mesh" / name).read_bytes()
-    page = ROOT / "transit" / "layout" / "timemap_page"
-    html = (page / "index.html").read_text()
-    assert sorted(re.findall(r'(?:src|href)="([^"]*)"', html)) == ["app.css", "app.js", "data:,"]
-    assert 'name="robots" content="noindex"' in html
-    for path in page.iterdir():
-        text = path.read_text()
-        for word in ("://", "XMLHttpRequest", "WebSocket", "sendBeacon", "EventSource", "/api/", "import("):
-            assert word not in text, f"{path.name} has {word!r}"
-        for target in re.findall(r'fetch\(([^)]*)\)', text):
-            assert target == "name", target                   # only through load(), below
-        for target in re.findall(r'\bload\(([^,)]*)', text):
-            assert target in ('"timemap.json"', "doc.land.file", "name"), target
-        for spec in re.findall(r'from "([^"]+)"', text):
-            assert spec.startswith("./"), spec
+def test_the_apps_whole_city_page_reads_what_the_job_writes(job_env):
+    """The contract between the job and the app (#28): its output loads through the server's
+    Whole city loader, made from the build it names."""
+    from server.transit.whole_city import load_window
+    tmp_path, build_dir, _ = job_env
+    _, out = _main(tmp_path, "timemap/" + WINDOW)
+    cw = load_window(out)
+    manifest = json.loads((build_dir / "manifest.json").read_text())
+    assert cw.build == manifest["build"] and cw.window == WINDOW
+    assert cw.table_sha256 == manifest["outputs"][f"tt_{WINDOW}"]["sha256"]
+    assert {"timemap.json", "land.bin", "report.md", "shepard.svg"} <= set(cw.files) and cw.report
+    # The page and its modules are counted in the size budget, not copied.
+    assert {f.name for f in out.iterdir()} == set(timemap.OUTPUT_FILES)
+    for d, names in ((timemap.PAGE, timemap.PAGE_FILES), (timemap.SHARED, timemap.SHARED_FILES),
+                     (timemap.RENDERER, timemap.RENDERER_FILES)):
+        for n in names:
+            assert (d / n).is_file(), n
 
 
 # ── refusals ────────────────────────────────────────────────────────
@@ -711,29 +712,30 @@ def test_panels_merge_a_position_that_is_two_of_the_three():
     assert [k for k, _ in picks] == [0, 1, 2] and picks[1][1].startswith("Middle of the slider")
 
 
-def test_a_symlinked_mesh_folder_is_refused(tmp_path):
+def test_a_symlinked_output_file_is_refused(tmp_path):
     out = tmp_path / "timemap"
     out.mkdir()
-    (out / "mesh").symlink_to(ROOT / "static" / "shared" / "mesh")
+    (out / "timemap.json").symlink_to(tmp_path / "elsewhere.json")
     with pytest.raises(timemap.Refused, match="symlink"):
         timemap.check_out_dir(out)
 
 
-def test_every_module_the_page_imports_is_copied():
-    page = ROOT / "transit" / "layout" / "timemap_page"
-    mesh_dir = ROOT / "static" / "shared" / "mesh"
-    want, todo = set(), [(page / "app.js", "")]
+def test_the_size_budget_counts_every_module_the_page_loads():
+    """The page is the app's Whole city tool (#28): the job's size check counts it and every
+    module it loads (relative or from /shared/), which the job doesn't write."""
+    static = ROOT / "static"
+    counted = {timemap.PAGE / n for n in timemap.PAGE_FILES} | {timemap.SHARED / n for n in timemap.SHARED_FILES} \
+        | {timemap.RENDERER / n for n in timemap.RENDERER_FILES}
+    want, todo = set(), [timemap.PAGE / "app.js"]
     while todo:
-        path, prefix = todo.pop()
-        for spec in re.findall(r'from "\./([^"]+)"', path.read_text()):
-            name = prefix + spec
-            if name in want:
-                continue
-            want.add(name)
-            todo.append(((page / name) if not name.startswith("mesh/") else mesh_dir / name[len("mesh/"):],
-                         "mesh/" if name.startswith("mesh/") else ""))
-    copied = {*timemap.PAGE_FILES, *(f"mesh/{n}" for n in timemap.RENDERER_FILES)}
-    assert want <= copied, want - copied
+        path = todo.pop()
+        if path in want:
+            continue
+        want.add(path)
+        for spec in re.findall(r'from "([^"]+)"', path.read_text()):
+            todo.append(static / spec.lstrip("/") if spec.startswith("/") else (path.parent / spec).resolve())
+    assert want <= counted, sorted(str(p) for p in want - counted)
+    assert (timemap.SHARED / "ui.css") in counted
 
 
 def test_without_the_step_cap_the_barrier_alone_still_never_accepts_a_fold(monkeypatch):

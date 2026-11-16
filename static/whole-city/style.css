@@ -1,0 +1,75 @@
+/* Whole city: the header, the map, and the controls under it (on a phone, the shared bottom
+   sheet over it). Type, buttons, chips and focus come from /shared/ui.css. */
+html, body { height: 100%; }
+body {
+  display: grid; grid-template-rows: auto 1fr auto;
+  height: 100vh; height: 100dvh; overflow: hidden;
+}
+
+#top {
+  display: flex; flex-direction: column; gap: 2px; padding: 8px 14px 10px;
+  background: var(--surface); box-shadow: var(--shadow); z-index: 5;
+}
+
+/* The map stays light: the renderer's land colours and the dots are drawn for a light map. */
+#stage { position: relative; min-height: 220px; overflow: hidden; background: #f0ede9; }
+#stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#overlay { touch-action: none; cursor: grab; }
+#stage .status {
+  position: absolute; left: 12px; top: 8px; margin: 0; z-index: 2;
+  background: var(--surface); padding: 4px 8px; border-radius: var(--radius-sm); box-shadow: var(--shadow);
+}
+#unavailable {
+  position: absolute; z-index: 3; left: 16px; right: 16px; top: 24px; max-width: 460px; margin: 0 auto;
+  display: flex; flex-direction: column; gap: 8px;
+}
+#tip {
+  position: absolute; z-index: 2; pointer-events: none; max-width: 220px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 6px 8px; font-size: 13px;
+}
+
+#controls {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 16px 12px;
+  border-radius: 0; max-height: 46vh; max-height: 46dvh; overflow: auto; z-index: 4;
+  box-shadow: 0 -2px 10px rgba(20, 20, 40, 0.1);
+}
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#zoom-in, #zoom-out { min-width: 40px; font-size: 18px; }
+
+.slider { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-2); }
+.slider > span { padding-top: 3px; white-space: nowrap; }
+.track { flex: 1; min-width: 0; position: relative; padding-bottom: 18px; }
+.track input { width: 100%; margin: 0; min-height: 28px; }
+.marks { position: absolute; left: 8px; right: 8px; bottom: 0; height: 16px; }
+.mark {
+  position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: 11px; color: #9b0056;
+  padding-top: 4px;
+}
+.mark::before {
+  content: ""; position: absolute; left: 50%; top: -3px; width: 1px; height: 6px; background: #9b0056;
+}
+.mark.jump { color: #8a4b00; }
+.mark.jump::before { background: #8a4b00; }
+
+.readout { font-variant-numeric: tabular-nums; font-size: 14px; }
+
+/* The stations' colour key: the same bar as the minutes legends, with what it means. */
+.key { display: flex; flex-direction: column; gap: 3px; }
+.colour-bar {
+  height: 10px; border-radius: 3px;
+  background: linear-gradient(to right, rgb(44, 123, 182), rgb(255, 255, 191), rgb(215, 25, 28));
+}
+.key-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-2); }
+
+#options summary, #checked summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.checks { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; padding: 4px 0; }
+.checks label { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; }
+#checked ul { margin: 4px 0; padding-left: 18px; font-size: 14px; }
+.credits { font-size: 12px; color: var(--text-2); }
+
+@media (max-width: 640px) {
+  #top { padding: 6px 10px 8px; }
+  /* #controls is the shared bottom sheet (ui.css .sheet); the id rule above outranks it. */
+  #controls { border-radius: var(--radius); max-height: 45dvh; box-shadow: var(--shadow); }
+}

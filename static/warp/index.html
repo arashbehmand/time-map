@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f6f5f2" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <title>How far can I get? · Time-Map</title>
+  <title>From here · Minutes Away</title>
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"
         integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous" />
   <link rel="stylesheet" href="/shared/ui.css" />
@@ -18,10 +18,18 @@
   <canvas id="overlay-canvas" aria-hidden="true"></canvas>
   <button id="origin-pin" type="button" aria-label="Starting point. Drag it, or use the arrow keys, to move it."></button>
 
-  <header id="top">
+  <header id="top" class="app-header">
+    <div class="app-line">
+      <a href="/" class="back-link">← Minutes Away</a>
+      <nav class="switcher" aria-label="Tools">
+        <a href="/from-here/" data-tool="from-here" aria-current="page">From here</a>
+        <a href="/meet-up/" data-tool="meet-up">Meet up</a>
+        <span data-tool="whole-city" class="off">Whole city</span>
+      </nav>
+    </div>
     <div id="top-row">
-      <a href="/" class="back-link">← Time-Map</a>
-      <h1>How far can I get from here?</h1>
+      <p class="tool-name">From here</p>
+      <h1 class="question">How far can I get from here?</h1>
     </div>
     <form id="search-form" role="search">
       <label class="visually-hidden" for="search">Search for a place</label>
@@ -32,11 +40,11 @@
     <p class="search-note">Searches go to OpenStreetMap Nominatim through this site.</p>
   </header>
 
-  <div id="location-card" class="card" hidden>
+  <div id="location-card" class="card location-card" hidden>
     <p>Start from where you are? Your location is only used to place the pin and work out travel times.</p>
     <div class="row">
-      <button class="btn primary" type="button" id="location-yes">Use my location</button>
-      <button class="btn" type="button" id="location-no">Keep the example</button>
+      <button class="btn primary" type="button" id="location-yes" data-yes>Use my location</button>
+      <button class="btn" type="button" id="location-no" data-no>Keep the example</button>
     </div>
   </div>
 
@@ -51,7 +59,7 @@
     <p id="tap-note" class="note" hidden></p>
   </section>
 
-  <section id="legend" class="card" aria-label="What the map shows">
+  <section id="legend" class="card sheet" aria-label="What the map shows">
     <fieldset class="chips" id="mode-chips">
       <legend class="label">How are you travelling?</legend>
       <label class="chip"><input type="radio" name="mode" value="walking" checked /><span>Walk</span></label>
@@ -62,13 +70,19 @@
     <fieldset class="chips" id="outer-chips">
       <legend class="label">How far?</legend>
     </fieldset>
+    <div id="when-field" class="when-field" hidden>
+      <label class="label" for="window-select">When?</label>
+      <select id="window-select"></select>
+      <p class="hint">Public transport times are for a typical hour on that day, so trips can take a few
+        minutes more or less.</p>
+    </div>
     <p id="from"></p>
     <p id="sentence" aria-live="polite"></p>
-    <div id="band-legend" aria-hidden="true"></div>
+    <div id="band-legend" class="minute-bar" aria-hidden="true"></div>
     <p id="limits"></p>
     <p id="beyond" class="note"></p>
     <fieldset class="chips" id="direction-chips" hidden>
-      <legend class="label">Directions on the bent map</legend>
+      <legend class="label">Directions on the time map</legend>
       <label class="chip"><input type="radio" name="directions" value="reach" checked /><span>By reach</span></label>
       <label class="chip"><input type="radio" name="directions" value="compass" /><span>True compass</span></label>
     </fieldset>
@@ -80,15 +94,11 @@
     </fieldset>
     <p id="layout-note" class="note" hidden></p>
     <p id="overlap-note" class="note" hidden></p>
-    <details id="more-options" hidden>
-      <summary>More options</summary>
-      <label for="window-select">When</label>
-      <select id="window-select"></select>
-    </details>
     <div class="row">
-      <button id="view-toggle" class="btn primary" type="button" aria-pressed="false">Bend the map (experimental)</button>
+      <button id="view-toggle" class="btn" type="button" aria-pressed="false">Time map</button>
       <button id="centre-list" class="btn" type="button">What's at the map centre?</button>
     </div>
+    <p id="time-map-note" class="note" hidden>The time map is still being tested. Press it again for the real map.</p>
     <p id="status" class="status" role="status" aria-live="polite"></p>
     <p id="dev-note" class="note" hidden></p>
   </section>

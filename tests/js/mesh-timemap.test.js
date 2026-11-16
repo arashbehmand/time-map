@@ -6,7 +6,7 @@ import { PASSES, STYLE_ID, STYLES } from "../../static/shared/mesh/schema-street
 import {
   atDistance, blend, buildLand, decodeLand, distanceAt, ease, keyframes, moveLand, nodesOf, pathLengths, place, placeLine,
   createMotion, createPlacer, lineChains, loadSegment, segmentAt, segmentTriangles, smoothLine, triangleMaps, widthFactors, WIDTH_MIN,
-} from "../../transit/layout/timemap_page/carry.js";
+} from "../../static/whole-city/carry.js";
 
 const ORIGIN = { lon: -0.1276, lat: 51.5073 };
 // Two triangles sharing the edge (1000, 0)–(0, 1000); y points south, as in the local frame.

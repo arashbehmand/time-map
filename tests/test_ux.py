@@ -34,7 +34,8 @@ def test_build_id_changes_with_the_files(tmp_path):
 
 
 def test_shared_files_are_served(client):
-    for path in ("/shared/ui.css", "/shared/api.js", "/shared/latest.js", "/warp/views.js"):
+    for path in ("/shared/ui.css", "/shared/api.js", "/shared/latest.js", "/shared/transit.js", "/shared/tools.js",
+                 "/shared/handoff.js", "/shared/nav.js", "/shared/locate.js", "/from-here/views.js"):
         resp = client.get(path)
         assert resp.status_code == 200, path
 
@@ -42,8 +43,9 @@ def test_shared_files_are_served(client):
 def test_app_files_are_revalidated(client):
     # Without this, browsers cache app code heuristically and a deploy can mix old and new
     # modules. no-cache means "ask the server first" (a cheap 304 when unchanged).
-    for path in ("/", "/manifest.json", "/sw.js", "/warp/", "/warp/app.js", "/meetup/",
-                 "/meetup/example.json", "/shared/api.js", "/icons/mapbox-logo.svg"):
+    for path in ("/", "/manifest.json", "/sw.js", "/from-here/", "/from-here/app.js", "/meet-up/",
+                 "/meet-up/example.json", "/whole-city/", "/whole-city/app.js", "/shared/api.js",
+                 "/icons/mapbox-logo.svg"):
         resp = client.get(path)
         assert resp.status_code == 200, path
         assert resp.headers.get("cache-control") == "no-cache", path

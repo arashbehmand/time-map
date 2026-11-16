@@ -7,7 +7,8 @@ springs whose rest length is the scaled travel time between them; and every spri
 resists collapse without limit, so no triangle can turn inside out. A slider moves from the real
 map to the time map by making the train springs stronger against the grid (springs.py says how,
 mesh.py why the map stays one to one). The Thames, parks, rail lines and borough outlines are
-cut along the mesh and move with it (land.py), and the page draws them with W-01's renderer.
+cut along the mesh and move with it (land.py), and the app's Whole city page (static/whole-city/,
+#28) draws them with W-01's renderer.
 
 Reads, like the stations-only job, $TRANSIT_OUT/<build>/ (points.csv, point_ok.npy,
 tt_<window>.npy, its fingerprint, manifest.json), and from $TRANSIT_DATA/work/<build>/ the
@@ -15,9 +16,12 @@ prepared rail feed gbt.gtfs.zip (which stations trains join) and the OSM clip lo
 land), each checked against the manifest's sha256. Writes to
 <repo>/transit/out/timemap/<build>/<window>/ (git-ignored):
 
-  index.html, app.js, app.css, carry.js, mesh/*.js   the page (serve the folder; see the README)
   timemap.json, land.bin                             what the page draws
   report.md, report.json, shepard.svg, panels.svg   the report, beside the stations-only layout's
+
+The app serves them from TIMEMAP_DIR=transit/out/timemap/<build>, only while the tables they were
+made from may be served (server/transit/whole_city.py). The page itself is the app's code, so the
+size check counts it with the data: what a visitor downloads.
 
 It exits 2, having written nothing, when an input, the checks file, the output folder, a solve,
 the no-flip check on what would ship, or the page's size is refused. Pass and fail of the checks
@@ -29,7 +33,6 @@ import argparse
 import gzip
 import heapq
 import math
-import shutil
 import sys
 import tempfile
 import time
@@ -48,7 +51,6 @@ from transit.layout.prep import (
     BuildInput,
     Refused,
     RefusedInput,
-    RefusedOutput,
     RefusedSolve,
     load_build,
     sha256,
@@ -59,13 +61,17 @@ from transit.layout.smacof import align_rigid, node_stress, sigma1
 __all__ = ["OUTPUT_FILES", "Refused", "default_out", "main", "run"]
 
 REPO = l01_job.REPO
-PAGE = Path(__file__).with_name("timemap_page")
-PAGE_FILES = ("index.html", "app.js", "app.css", "carry.js")
-RENDERER = REPO / "static" / "shared" / "mesh"
+# The page that draws the output: the app's Whole city tool, and the shared modules it loads.
+# Not written by the job; counted in the page's size.
+PAGE = REPO / "static" / "whole-city"
+PAGE_FILES = ("index.html", "app.js", "carry.js", "style.css")
+SHARED = REPO / "static" / "shared"
+SHARED_FILES = ("ui.css", "handoff.js", "offline.js", "tools.js", "transit.js")
+RENDERER = SHARED / "mesh"
 RENDERER_FILES = ("renderer.js", "caps.js", "warp.js", "field.js", "frame.js", "schema-streets-v8.js")
 DATA_FILES = ("timemap.json", "land.bin")
 REPORT_FILES = ("report.json", "report.md", "shepard.svg", "panels.svg")
-OUTPUT_FILES = (*PAGE_FILES, *(f"mesh/{n}" for n in RENDERER_FILES), *DATA_FILES, *REPORT_FILES)
+OUTPUT_FILES = (*DATA_FILES, *REPORT_FILES)
 MAX_GZIP_BYTES = 2_000_000
 SEGMENT_STEP_M = 100.0
 RESTART_SEEDS = (1, 2)        # the restart check: the sweep again from the real map nudged by
@@ -77,10 +83,7 @@ def default_out(build: str, window: str) -> Path:
 
 
 def check_out_dir(out: Path) -> None:
-    out = Path(out)
-    if (out / "mesh").is_symlink():
-        raise RefusedOutput(f"{out / 'mesh'} is a symlink; the job writes only plain files")
-    l01_job.check_out_dir(out, OUTPUT_FILES)
+    l01_job.check_out_dir(Path(out), OUTPUT_FILES)
 
 
 # ── inputs ──────────────────────────────────────────────────────────
@@ -629,17 +632,12 @@ def gzip_size(data: bytes) -> int:
     return len(gzip.compress(data, mtime=0))
 
 
-def copy_page(out: Path) -> None:
-    (out / "mesh").mkdir(parents=True, exist_ok=True)
-    for name in PAGE_FILES:
-        shutil.copyfile(PAGE / name, out / name)
-    for name in RENDERER_FILES:
-        shutil.copyfile(RENDERER / name, out / "mesh" / name)
-
-
 def page_static_bytes() -> int:
-    return sum(gzip_size((PAGE / n).read_bytes()) for n in PAGE_FILES) + \
-        sum(gzip_size((RENDERER / n).read_bytes()) for n in RENDERER_FILES)
+    """The app's Whole city page and what it loads, gzipped: the part of a view the job doesn't
+    write."""
+    return sum(gzip_size((d / n).read_bytes())
+               for d, names in ((PAGE, PAGE_FILES), (SHARED, SHARED_FILES), (RENDERER, RENDERER_FILES))
+               for n in names)
 
 
 def main(argv: list[str] | None = None) -> int:

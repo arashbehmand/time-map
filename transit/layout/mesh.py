@@ -297,15 +297,24 @@ def carry_route(mesh: Mesh, nodes: list[int]) -> tuple[np.ndarray, np.ndarray]:
             u_ = (q[:, 0] * d[1] - q[:, 1] * d[0]) / den
         eps = 1e-9
         hit = (np.abs(den) > 1e-12) & (s_ > eps) & (s_ < 1 - eps) & (u_ > eps) & (u_ < 1 - eps)
-        for k in np.where(hit)[0][np.argsort(s_[hit], kind="stable")]:
+        events = []
+        for k in np.where(hit)[0]:
             lo, hi = int(E[k, 0]), int(E[k, 1])
             tq = int(round(float(u_[k]) * WEIGHT_Q))
-            if tq <= 0:
-                push((lo, lo, lo), (0, 0))
-            elif tq >= WEIGHT_Q:
-                push((hi, hi, hi), (0, 0))
-            else:
-                push((lo, hi, hi), (tq, 0))
+            c, w = ((lo, lo, lo), (0, 0)) if tq <= 0 else ((hi, hi, hi), (0, 0)) if tq >= WEIGHT_Q else ((lo, hi, hi), (tq, 0))
+            events.append((float(s_[k]), c, w))
+        # A mesh node the segment runs through is a vertex too: there it crosses edges at their
+        # ends, which the test above leaves out, and without the node two consecutive vertices
+        # would lie in different triangles.
+        L2 = float(d @ d)
+        if L2 > 0:
+            rel = P - A
+            t = (rel @ d) / L2
+            off = np.abs(d[0] * rel[:, 1] - d[1] * rel[:, 0]) / np.sqrt(L2)
+            for n in np.where((t > eps) & (t < 1 - eps) & (off < 1e-6))[0]:
+                events.append((float(t[n]), (int(n),) * 3, (0, 0)))
+        for _, c, w in sorted(events, key=lambda ev: ev[0]):
+            push(c, w)
     if nodes:
         push((nodes[-1],) * 3, (0, 0))
     return np.array(C, dtype=np.int64).reshape(-1, 3), np.array(W, dtype=np.int64).reshape(-1, 2)

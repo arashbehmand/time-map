@@ -397,7 +397,7 @@ def report_md(rep: dict) -> str:
     names = [r["name"].replace("Wembley Stadium", "Stadium") for r in rep["ratio_rows"][1:]]
     out += ["## Every position", "",
             "| Position | σ₁ | T | C | Flipped | Station triangles bent | Smallest area (near) | Thinness median / max | "
-            "Wembley Park | vs 0.240 | " + " | ".join(names) + " | Met breaks | Links past s·t / p90 past | Median move | "
+            f"Wembley Park | vs {h['l01_sigma1_time']:.3f} | " + " | ".join(names) + " | Met breaks | Links past s·t / p90 past | Median move | "
             "Iterations | Positive definite |",
             "|---|---:|---:|---:|---:|---:|---|---|---|---|" + "---|" * len(names) + "---:|---:|---:|---:|---|"]
     for f in frames:
@@ -449,6 +449,9 @@ def _restart_text(restart, frames) -> str:
         return "The restart check didn't run."
     parts = []
     for _, v in sorted(restart["at"].items(), key=lambda kv: int(kv[0])):
+        if not v["runs"]:
+            parts.append(f"at {_rho_text(v['rho'])} no run converged")
+            continue
         km = [r["wembley_km"] for r in v["runs"]]
         sig = [r["sigma1"] for r in v["runs"]]
         mb = [r["met_breaks"] for r in v["runs"]]
@@ -458,8 +461,10 @@ def _restart_text(restart, frames) -> str:
                      f"({', '.join(sorted(v['statuses']))}), σ₁ {min(sig):.3f}–{max(sig):.3f}, Met breaks "
                      f"{min(mb)}–{max(mb)}, and no node lands more than {far} from its shipped place")
     note = "" if restart["complete"] else " (a run that didn't converge is left out)"
-    steady = all(v["shift_max_m"] <= 1.0 for v in restart["at"].values())
-    tail = (" These layouts depend neither on where the continuation starts nor on the size of its steps."
+    tested = [v for v in restart["at"].values() if v["runs"]]
+    steady = bool(tested) and all(v["shift_max_m"] <= 1.0 for v in tested)
+    tail = (" No run converged, so these layouts weren't tested." if not tested else
+            " These layouts depend neither on where the continuation starts nor on the size of its steps."
             if steady else " Numbers there belong to this path, not to the model alone: another start or other "
             "steps reach a different layout.")
     return (f"Solved again from the real map nudged by up to {restart['jitter_m']:g} m ({len(restart['seeds'])} "

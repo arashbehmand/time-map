@@ -948,3 +948,30 @@ def test_split_steps_reach_the_page_in_slider_order(job_env, monkeypatch):
     for j in mo["jumps"]:
         assert j["at_from"] < j["at_to"]
     assert mo["blends"] == len(keys) - 1
+
+
+def test_a_restart_check_where_nothing_converged_is_reported_not_a_crash():
+    restart = {"jitter_m": 0.5, "seeds": [1, 2], "ladders": ["every other step"], "complete": False,
+               "at": {"14": {"rho": 2.72, "runs": [], "statuses": ["pass"], "shift_max_m": 0.0, "shift_at": None,
+                             "shift_run": None, "wembley_km_spread": 0.0}}}
+    text = timemap_report._restart_text(restart, [])
+    assert "no run converged" in text and "depend neither" not in text
+
+
+def test_a_route_through_a_mesh_node_stops_at_that_node():
+    # An exact grid: the route from node 0 to node 2 runs straight through node 1.
+    xy = np.array([(1000.0 * c, 1000.0 * r) for r in range(4) for c in range(4)])
+    mesh = meshmod.build_mesh(xy, np.zeros((0, 2)))
+    C, W = meshmod.carry_route(mesh, [0, 2])
+    assert [1, 1, 1] in C.tolist()
+    tris = [set(t) for t in mesh.tri.tolist()]
+    for a, b in zip(C.tolist(), C.tolist()[1:]):
+        assert any(set(a) | set(b) <= t for t in tris)             # each piece lies in one triangle
+
+
+def test_the_strict_column_names_the_tolerance_it_used(job_env):
+    code, out = _main(job_env[0], "strict")
+    assert code == 0
+    rep = json.loads((out / "report.json").read_text())
+    md = (out / "report.md").read_text()
+    assert f"| vs {rep['headlines']['l01_sigma1_time']:.3f} |" in md

@@ -1,0 +1,55 @@
+{
+ "captured": "2026-11-16",
+ "request": {
+  "profile": "walking",
+  "coordinates": [
+   [
+    1.3127,
+    51.1258
+   ],
+   [
+    1.8508,
+    50.9536
+   ],
+   [
+    1.8508,
+    50.9536
+   ]
+  ],
+  "sources": [
+   0
+  ],
+  "destinations": [
+   1,
+   2
+  ]
+ },
+ "status": 200,
+ "body": {
+  "code": "Ok",
+  "durations": [
+   [
+    8358.8,
+    8358.8
+   ]
+  ],
+  "destinations": [
+   {
+    "location": [
+     1.850788,
+     50.953624
+    ],
+    "name": "",
+    "distance": 2.799833945
+   },
+   {
+    "location": [
+     1.850788,
+     50.953624
+    ],
+    "name": "",
+    "distance": 2.799833945
+   }
+  ]
+ }
+}

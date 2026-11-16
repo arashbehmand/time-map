@@ -48,7 +48,7 @@ def best_point(resp):
 def test_two_walkers_meet_near_the_midpoint():
     resp = run([person("a", -1, 0), person("b", 1, 0)], FixedRouter(straight_line))
     assert km_between(best_point(resp), at(0, 0)) < 0.6
-    assert resp.diagnostics["stage"] == "fine"
+    assert resp.diagnostics["stage"] in ("fine", "finest")
     assert set(resp.best.times) == {"a", "b"}
 
 
@@ -104,6 +104,96 @@ def _coarse_only(people, router, objective="minimax"):
         solver._fine_candidates = real
 
 
+def _two_stage_only(people, router, objective="minimax"):
+    """Coarse and fine only: no third stage."""
+    real = solver.FINEST_SEEDS
+    solver.FINEST_SEEDS = 0
+    try:
+        return run(people, router, objective)
+    finally:
+        solver.FINEST_SEEDS = real
+
+
+# ── the third stage ─────────────────────────────────────────────────
+class StageRouter(FixedRouter):
+    """Calls `hook(stage, result)` on each stage's result (stage 1, 2, 3; one mode)."""
+
+    def __init__(self, fn, hook):
+        super().__init__(fn)
+        self.hook = hook
+
+    async def duration_matrix(self, mode, origins, destinations):
+        result = await super().duration_matrix(mode, origins, destinations)
+        return self.hook(self.calls, result)
+
+
+def test_walkers_far_apart_get_a_finer_answer_from_the_third_stage():
+    # Wembley Park and Bank are about 14 km apart: the fine cells are 1.4 km across.
+    people = [person("a", -7, 0), person("b", 7, 0)]
+    resp = run(people, FixedRouter(straight_line))
+    two = _two_stage_only(people, FixedRouter(straight_line))
+    d = resp.diagnostics
+    assert d["stage"] == "finest"
+    assert d["answer_resolution"] == d["finest_resolution"] == d["coarse_resolution"] + 2
+    assert 0 < d["finest_candidates"] <= 21
+    assert resp.best.score < two.best.score - 0.5
+    assert resp.best.score <= 7.0 / 4.8 * 60 + 2.0    # within 2 min of the straight-line best
+
+
+def test_a_worse_third_stage_keeps_the_fine_answer():
+    people = [person("a", -7, 0), person("b", 7, 0)]
+
+    def worse(stage, result):
+        if stage == 3:
+            result.minutes = result.minutes + 100.0
+        return result
+
+    resp = run(people, StageRouter(straight_line, worse))
+    two = _two_stage_only(people, FixedRouter(straight_line))
+    assert resp.diagnostics["stage"] == "fine"
+    assert resp.best.score == pytest.approx(two.best.score)
+    assert solver.NOTE_FINE_SKIPPED not in resp.notes
+
+
+def test_a_busy_third_stage_keeps_the_fine_answer_with_one_note():
+    people = [person("a", -7, 0), person("b", 7, 0)]
+
+    def busy(stage, result):
+        if stage == 3:
+            raise Busy()
+        return result
+
+    resp = run(people, StageRouter(straight_line, busy))
+    assert resp.diagnostics["stage"] == "fine"
+    assert resp.notes.count(solver.NOTE_FINE_SKIPPED) == 1
+
+
+def test_a_failed_fine_stage_runs_no_third_stage():
+    people = [person("a", -7, 0), person("b", 7, 0)]
+    router = BusyFineStage(straight_line)
+    resp = run(people, router)
+    assert resp.diagnostics["stage"] == "coarse"
+    assert resp.diagnostics["finest_candidates"] == 0
+    assert router.calls == 2
+    assert resp.notes.count(solver.NOTE_FINE_SKIPPED) == 1
+
+
+def test_an_equal_third_stage_wins_the_tie():
+    people = [person("a", -7, 0), person("b", 7, 0)]
+    best_fine = {}
+
+    def same(stage, result):
+        if stage == 2:
+            best_fine["score"] = float(result.minutes.max(axis=0).min())
+        if stage == 3:   # nowhere better than the best fine place
+            result.minutes = np.maximum(result.minutes, best_fine["score"])
+        return result
+
+    resp = run(people, StageRouter(straight_line, same))
+    assert resp.diagnostics["stage"] == "finest"
+    assert resp.best.score == pytest.approx(round(best_fine["score"], 2))
+
+
 # ── against brute force ─────────────────────────────────────────────
 def _random_case(rng):
     n = rng.randint(2, 4)
@@ -136,12 +226,14 @@ def test_within_a_minute_of_brute_force_and_never_worse_than_coarse():
     for _ in range(100):
         people, objective, fn = _random_case(rng)
         resp = run(people, FixedRouter(fn), objective)
-        res = resp.diagnostics["coarse_resolution"] + 1
+        res = resp.diagnostics["coarse_resolution"] + 2
         brute = _brute_force(people, objective, fn, res)
         gaps.append(resp.best.score - brute)
         assert resp.best.score <= brute + 1.0, (people, objective, fn.__name__)
         coarse = _coarse_only(people, FixedRouter(fn), objective)
         assert resp.best.score <= coarse.best.score + 1e-9
+        two = _two_stage_only(people, FixedRouter(fn), objective)
+        assert resp.best.score <= two.best.score + 1e-9
     assert max(gaps) <= 1.0
 
 
@@ -413,9 +505,9 @@ def test_a_lopsided_group_also_gets_the_quickest_place():
     assert km_between((q.lon, q.lat), best_point(resp)) * 1000 >= solver.MIN_ALT_GAP_M
     assert q.mean_time_min <= resp.best.mean_time_min - solver.QUICKEST_MIN_GAIN_MIN
     assert q.max_time_min >= resp.best.max_time_min
-    assert resp.diagnostics["quickest_stage"] in ("coarse", "fine")
+    assert resp.diagnostics["quickest_stage"] in ("coarse", "fine", "finest")
     # From the places already checked: no more routing than the fairest answer alone.
-    assert router.calls == 2
+    assert router.calls == 3
 
 
 def test_no_alternative_repeats_the_quickest_place():

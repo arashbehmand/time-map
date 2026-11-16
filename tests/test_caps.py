@@ -138,6 +138,7 @@ def test_boundary_solve_passes(mapbox, matrix_client):
     diag = resp.json()["diagnostics"]
     assert diag["coarse_candidates"] <= 160 + 8
     assert diag["fine_candidates"] <= 160
+    assert diag["finest_candidates"] <= 21
     elements = sum(
         len(r.url.params["sources"].split(";")) * len(r.url.params["destinations"].split(";"))
         for r in mapbox.calls

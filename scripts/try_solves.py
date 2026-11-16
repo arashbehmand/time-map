@@ -8,7 +8,8 @@ For reproducing problems and for before/after numbers. Start a server first, e.g
 
 Against live Mapbox, cap the spend on the server you run it against
 (MATRIX_DAILY_BUDGET=8000, CLIENT_DAILY_SHARE=1 so one client may use all of it, and a scratch
-USAGE_DB_PATH): every solve spends Matrix elements. --repeat N runs each group N times and
+USAGE_DB_PATH): every solve spends Matrix elements. Pass --group G1 --group G2 --group G3 for
+the street groups only: T1 and T2 need TRANSIT_DIR. --repeat N runs each group N times and
 prints the median and p95 wall time of the solves that answered 200, with the count of each
 status; --pause S waits between solves so the Matrix rate window (60 requests a minute) is
 not what is measured.
@@ -58,8 +59,8 @@ GROUPS = {
 }
 
 DIAG_KEYS = ("path", "shortlist", "checked_by_road", "places", "lower_bound_proven", "stage",
-             "coarse_resolution", "fine_resolution", "answer_resolution", "coarse_candidates",
-             "fine_candidates", "feasible_count", "dropped_no_route", "unchecked_for_budget",
+             "coarse_resolution", "fine_resolution", "finest_resolution", "answer_resolution",
+             "coarse_candidates", "fine_candidates", "finest_candidates", "feasible_count", "dropped_no_route", "unchecked_for_budget",
              "dropped_off_street", "retries", "bad_replies", "no_route_replies", "matrix_requests",
              "matrix_elements", "estimated_matrix_elements", "elapsed_ms")
 

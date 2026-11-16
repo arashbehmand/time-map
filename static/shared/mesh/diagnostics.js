@@ -22,6 +22,12 @@ function notAPlace(f, skipFilled = true) {
 
 export const LIMITS = { folded: 0.10, stretch: 3 };
 
+// W-03 (#27): the checks squash must pass to be public transport's time map, fixed 2026-11-16
+// before any of them was measured (docs/warp-time-polar.md, "W-03"). Measured by layoutChecks at
+// T = 45: overlap ≤ 5%, median stretch ≤ 4:1, and at most 1% of the places drawn inside the ring
+// over half a minute slower than it (cut patches left out). A row with no sample fails.
+export const LAYOUT_LIMITS = { overlap: 0.05, stretch: 4, slowInside: 0.01 };
+
 // Fold and stretch on a polar field, as Direction 4 of #5 measures them:
 //   foldedShare    the share of the area inside the outer ring covered by folded sheets on the
 //                  bent map: the union of the folded cells' images, rasterised, so overlapping

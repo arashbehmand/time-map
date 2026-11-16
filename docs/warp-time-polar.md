@@ -396,6 +396,66 @@ have.
   unstable). Earlier figures in this section, measured over the whole view before the cut's
   threshold and the shared field, are withdrawn.
 
+## W-03: squash for public transport
+
+Issue #27, part W-03. The owner picked squash (Direction 1) on 2026-11-16 for public
+transport's time map, and agreed the checks below before any of them was measured. They are
+committed on their own, before the first run. The trial figures above (weekday 08–09, by reach)
+only shaped the tuning ranges; pass or fail comes from a new run.
+
+**The checks** (`LAYOUT_LIMITS` in `static/shared/mesh/diagnostics.js`, measured by
+`layoutChecks`). All at T = 45, on smoothed fields, with the page's squash settings (rings spaced
+by places reached):
+
+| Check | Limit | What it measures |
+|---|---|---|
+| C1 overlap | ≤ 5% | Share of the drawn area of the places within 45 minutes covered twice or more |
+| C2 stretch | ≤ 4:1 | Median local stretch over those places' cells |
+| C3 slower inside | ≤ 1% | Share of the places drawn inside the 45 ring that are over 45.5 minutes away, cut patches left out |
+| C4 stated | the page says it | The share of the places within 45 minutes drawn past the 45 ring, from the same count as the check |
+
+- **Places** are field nodes sampled every second node (200 m on transit's grid), with their
+  true minutes. Filled-in ground (water, parkland) and uncertain patches are left out, as
+  everywhere in this document. The overlap is rasterised at 800 px across the view; the ring is
+  read on 720 bearings and has a quarter-minute allowance.
+- **C3's 1%** is how "every place inside a ring is quicker than that ring" is measured: a 100 m
+  grid and 720 bearings can't give exactly zero. Cut patches (ground walled off from the streets
+  around it, lowered by squash's cut) are counted separately and reported.
+- **The grid:** Baker Street, Wembley Park, Canary Wharf, Heathrow and Croydon
+  (`static/warp/lab/stations.json`), the four windows (wd08, wd13, wd19, sa13), and both
+  direction settings (by reach 0.5, true compass): 40 rows. Every row must pass on its own;
+  nothing is averaged. A row with no sample or no ring fails; it never counts as 0%.
+- **Reported, not gated:** the places not drawn at all, the bearings the ring covers, the
+  places drawn past the 45 ring, and rings 30, 60, 90 and 120 at weekday 08–09.
+- **Tuning:** only settings that apply everywhere (the climb slope in a pocket's shadow, the
+  by-reach spread, the ring spacing and its inner 15 minutes), never one per origin. One setting
+  must pass all 40 rows. If none does, the table goes to the owner; the limits don't move.
+- **If only true compass fails,** the owner decides whether public transport keeps that choice.
+- **First scene:** under 2 s, as the median of 10 runs at Baker Street (weekday 08–09, 45
+  minutes, by reach, warm tiles, desktop), from the request to the whole scene installed, the
+  fade and the morph left out. The maximum is reported too.
+
+**Comprehension test for squash** (replaces the fold's protocol below once squash ships; the
+scoring is fixed now):
+
+- **Setup:** `/from-here/?mode=transit&window=wd08`, pin on Baker Street, Time map pressed, by
+  reach. Five people who haven't seen it, five seconds each.
+- **Ask:**
+  1. "What do the rings mean?"
+  2. "Is everything inside the 30 ring within 30 minutes?"
+  3. "Show me every place under this spot." (a tap on a crowded spot)
+- **Pass:** at least 4 of 5 say a ring is how far you get in that many minutes in each
+  direction, with quicker places possibly further out (on question 2, "yes, everything inside"
+  is not a pass), and the tap lists every place under the finger with its minutes.
+
+| Person | Rings | Inside the 30 ring | Tap |
+|---|---|---|---|
+| 1 | | | |
+| 2 | | | |
+| 3 | | | |
+| 4 | | | |
+| 5 | | | |
+
 ## Done when
 
 Every row is about the shipped path: the normal map, and the fold where the map bends.

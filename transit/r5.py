@@ -86,12 +86,19 @@ def build_network(osm: Path, gtfs: list[Path], out_json: Path):
     threading.Thread(target=heartbeat, daemon=True).start()
     m = r5py()
     cached_before = _cached_networks()
+    inputs = [osm, *gtfs]
     try:
         tn = m.TransportNetwork(str(r5_input(osm)), [str(r5_input(p)) for p in gtfs])
     finally:
         timer.cancel()
         done.set()
     elapsed = time.monotonic() - started
+    # The cause of #30's stale build, checked at its root: each name r5py keeps in its cache must
+    # lead to this build's own file (a copy, where links fail, or an old link would not).
+    wrong = [p.name for p in inputs if (settings.CACHE / "r5py" / r5_input(p).name).resolve() != p.resolve()]
+    if wrong:
+        raise SystemExit(f"r5py's cache folder does not lead to this build's {', '.join(wrong)}: "
+                         f"remove those entries from {settings.CACHE / 'r5py'} and run again")
     # r5py saves a network to its cache right after building it: a new or newer cache file
     # means this was a cold build; otherwise it was loaded from the cache.
     cold = _cached_networks() != cached_before
@@ -132,7 +139,7 @@ def r5_input(p: Path) -> Path:
     return link
 
 
-def has_services_on(tn, days) -> list:
+def days_without_service(tn, days) -> list:
     """The days in `days` on which the network runs no public transport at all."""
     return [d for d in days if not tn.transit_layer.covers(d)]
 

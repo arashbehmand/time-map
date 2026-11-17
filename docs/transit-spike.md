@@ -433,6 +433,9 @@ advisory, the pages keep serving and say "Services may have changed since." afte
   the Wednesday), which reads as planned weekend works; Southern runs the same corridor that day
   (177). It was the only week after the change the dates stage accepted: the January weeks fail
   the 85%-of-usual-trips rule.
+- **Station snaps on Mapbox's roads** (#4, #19): all 640 usable stations, at the street points the
+  meetup sends, through the Matrix API: driving median 19 m, largest 114 m (London Euston);
+  cycling and walking median 0 m, largest 82 m (Waddon). None over 150 m, none dropped at 400 m.
 - **Points:** 3,716 (640 stations, 3,076 cells); 7 not snapped and 130 cut off, as in build
   2026-11-12. Wembley Park to Baker Street: 22 / 20 / 19 / 20 min (wd08 / wd13 / wd19 / sa13).
 - **Per-mode tables (#23):** `tt_wd13_bus` (47% of pairs have no time within 180 min) and

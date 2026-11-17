@@ -35,7 +35,7 @@ log = logging.getLogger("transit.build")
 
 STAGES = ("fetch", "dates", "prep", "check", "network", "points", "journeys", "tables",
           "walksheds", "venues", "modetimes", "manifest", "package")
-# #23's per-mode times (#30): bus-only and walking-only tables, for the car's window only.
+# #23's per-mode times (#30): bus and walking-only tables, for the car's window only.
 MODE_KINDS = ("bus", "walk")
 FEEDS = {"gbt": ("gb_transit", "gtfs-rail-and-tfl.zip", None),
          "bods": ("bods", "itm_london_gtfs.zip", [3])}
@@ -294,10 +294,7 @@ def stage_prep(b: Build, args) -> None:
         info["feeds"][fid] = prep_feed(b.raw_feed(fid), b.prepped(fid), [wd, sat], clip, fid, rtypes)
 
     england = b.raw / "osm" / "england-latest.osm.pbf"
-    stamp = osm_timestamp(england)
-    if not england.exists() and clip_is_current(b) and (b.out / "prep.json").exists():
-        # A rerun after the England file was deleted: the clip, and so its date, are unchanged.
-        stamp = b.read_json("prep.json").get("osm", {}).get("data_as_of") or stamp
+    stamp = osm_date(b, england)
     poly_text, identity = clip_identity(b)
     clip_json = b.work / "clip.json"
     if b.osm_clip.exists() and clip_json.exists() and json.loads(clip_json.read_text()) != identity:
@@ -319,6 +316,16 @@ def stage_prep(b: Build, args) -> None:
         england.unlink()
         log.info("deleted the England PBF (its sha256 and md5 stay in its .meta.json)")
     b.write_json("prep.json", info)
+
+
+def osm_date(b: Build, england: Path) -> str | None:
+    """When the OSM data was cut. On a rerun after the England file was deleted, the clip and so
+    its date are unchanged: keep the one prep.json recorded (the file name gives only the day)."""
+    if not england.exists() and clip_is_current(b) and (b.out / "prep.json").exists():
+        kept = b.read_json("prep.json").get("osm", {}).get("data_as_of")
+        if kept:
+            return kept
+    return osm_timestamp(england)
 
 
 def clip_identity(b: Build) -> tuple[str, dict]:
@@ -418,9 +425,9 @@ def network(b: Build):
         _network, _ = build_network(b.osm_clip, [b.prepped(f) for f in FEEDS], b.out / "network.json")
         # A network without services on the service dates routes everything on foot, and the
         # tables stage then masks nearly every point as cut off: refuse it here instead (#30).
-        from transit.r5 import has_services_on
+        from transit.r5 import days_without_service
 
-        missing = has_services_on(_network, b.dates())
+        missing = days_without_service(_network, b.dates())
         if missing:
             raise SystemExit(f"R5's network runs no public transport on {', '.join(map(str, missing))}: "
                              "it was not built from this build's prepared feeds")
@@ -660,7 +667,7 @@ def stage_tables(b: Build, args):
         if len(iso) > 0.5 * ok.sum():
             raise SystemExit(f"{len(iso)} of {int(ok.sum())} points look cut off from the network in every "
                              "window: the network is wrong (no public transport on the service dates?), "
-                             "not the points")
+                             "not the points. Fix the network, then run the tables stage again with --force")
         for t in tables.values():
             if len(iso):
                 t[iso, :] = settings.UNREACHABLE
@@ -728,8 +735,28 @@ def stage_modetimes(b: Build, args):
                                   fingerprint=mode_table_fingerprint(b, kind))
         if info[kind]["complete"]:
             info[kind]["share_255"] = float((np.load(p, mmap_mode="r") == settings.UNREACHABLE).mean())
+    if info["bus"]["complete"]:
+        # Buses are a subset of the tables' modes over the same window, so a bus time is never below
+        # the table's (255, no time, sorts last). Anything else means the mode setting was ignored.
+        faster = bus_faster_than_tables(np.load(b.out / f"tt_{w}.npy", mmap_mode="r"),
+                                        np.load(mode_table_path(b, "bus"), mmap_mode="r"), ok)
+        info["bus"]["faster_than_tables"] = faster
+        if faster:
+            b.write_json("modetimes.json", info)
+            raise SystemExit(f"tt_{w}_bus.npy is faster than tt_{w}.npy on {faster} pairs: buses are a "
+                             "subset of the tables' modes, so R5 did not route buses only")
     b.write_json("modetimes.json", info)
     return None if all(i["complete"] for i in info.values()) else "incomplete"
+
+
+def bus_faster_than_tables(tables: np.ndarray, bus: np.ndarray, ok: np.ndarray) -> int:
+    """How many usable pairs the bus table times faster than the all-mode table (should be 0)."""
+    u = np.flatnonzero(ok)
+    faster = 0
+    for k in range(0, len(u), 500):                     # by rows, so two N x N tables never meet in memory
+        rows = u[k:k + 500]
+        faster += int((np.asarray(bus[np.ix_(rows, u)]) < np.asarray(tables[np.ix_(rows, u)])).sum())
+    return faster
 
 
 def attribution() -> list[str]:
@@ -773,9 +800,12 @@ def stage_manifest(b: Build, args) -> None:
             continue
         fp = fingerprint_path(p)
         f = json.loads(fp.read_text()) if fp.exists() else {}
-        if not f.get("complete") or f.get("inputs") != mode_table_fingerprint(b, kind):
-            raise SystemExit(f"{p.name} is incomplete or was built from other inputs: run the "
-                             "modetimes stage again")
+        if not f.get("complete"):
+            # A failed or interrupted modetimes stage: the build goes out without this table.
+            log.warning("%s is incomplete: left out of the manifest (run modetimes again to add it)", p.name)
+            continue
+        if f.get("inputs") != mode_table_fingerprint(b, kind):
+            raise SystemExit(f"{p.name} was built from other inputs: run the modetimes stage again")
         mode_fps[kind] = f["inputs"]
     built_with = [f["settings"] for f in fps.values()]
     srcs = json.loads((b.raw / "sources.json").read_text())
@@ -979,6 +1009,13 @@ def stage_inputs(b: Build, name: str) -> tuple[list[Path], list[Path]]:
     return io[name]
 
 
+def _iso_day(text: str) -> str:
+    try:
+        return date.fromisoformat(text).isoformat()
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a date (YYYY-MM-DD): {text!r}") from None
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m transit.build", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -987,8 +1024,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--build", default=date.today().isoformat(), help="build id (default: today)")
     p.add_argument("--force", action="store_true", help="redo stages even if nothing changed")
     p.add_argument("--today", help="pretend today is this date when picking service dates")
-    p.add_argument("--not-before", help="dates: no service date before this day (YYYY-MM-DD), e.g. "
-                   "the Monday after a timetable change")
+    p.add_argument("--not-before", type=_iso_day, help="dates: no service date before this day "
+                   "(YYYY-MM-DD), e.g. the Monday after a timetable change")
     p.add_argument("--gb-transit-tag", help="gb-transit release tag (default: latest)")
     p.add_argument("--with-tfl-txc", action="store_true",
                    help="also download TfL's TransXChange zip (UK2GTFS check, bus fallback)")

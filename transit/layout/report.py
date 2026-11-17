@@ -289,8 +289,8 @@ def report_md(rep: dict) -> str:
            f"`{rep['table_sha256'][:16]}…`; code `{rep['code']}`. Definitions: `transit/README.md`, "
            "\"Stations-only layout\".", ""]
     if h["expired"]:
-        out += [f"**These tables expired on {rep['valid_until']}.** Rebuild them before relying on this "
-                "layout (`transit/README.md`, \"Monthly rebuild\").", ""]
+        out += [f"**These tables' timetable may have changed since {rep['valid_until']}.** Rebuild them "
+                "when it matters (`transit/README.md`, \"Rebuilding\").", ""]
     out += ["## Headlines", ""]
     merges = "; ".join(" + ".join(m) for m in p["merges"]) or "none"
     left = "; ".join(f"group {g['group']} ({len(g['names'])} stations): {', '.join(g['names'])}"
@@ -435,7 +435,7 @@ def write(out: Path, b, pairs, frames, tri, tri_full, peeled, checks, lines_at, 
         "Wembley Park at λ=0: " + (f"{w0['status']} ({w0['ratio_to_median']:.3f}× median, ±{w0['tolerance']:.3f})"
                                    if "ratio_to_median" in w0 else str(w0.get("status"))),
         f"Metropolitan breaks at λ=0: {head['metropolitan_breaks']}; restart better: "
-        f"{head['restart_better_found']}" + ("; THE TABLES HAVE EXPIRED" if expired else ""),
+        f"{head['restart_better_found']}" + ("; the timetable may have changed since valid_until" if expired else ""),
         f"wrote {out} (viewer {gz / 1e6:.2f} MB gzipped) in {seconds:.0f} s",
     ]
     return {"summary": summary, "gzip_bytes": gz, "headlines": head, "out": out}

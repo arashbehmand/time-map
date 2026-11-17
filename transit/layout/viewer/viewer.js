@@ -245,9 +245,11 @@
   $("ramp").style.background = `linear-gradient(to right, ${RAMP.join(", ")})`;
   $("ramp-hi").textContent = `${top}+`;
   if (L.notice) $("notice").textContent = L.notice;
-  const expired = L.valid_until && new Date() > new Date(`${L.valid_until}T23:59:59`);
-  $("credits").textContent = `Build ${L.build}, ${L.window} (departing ${L.departure}); tables valid until ` +
-    `${L.valid_until}${expired ? " (EXPIRED: rebuild them)" : ""}. ` + (L.attribution || []).join(" · ");
+  // Past valid_until in London the timetable may have changed (advisory only, as on the site, #30).
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+  const old = L.valid_until && today > L.valid_until;
+  $("credits").textContent = `Build ${L.build}, ${L.window} (departing ${L.departure}); timetable may change after ` +
+    `${L.valid_until}${old ? " (services may have changed since)" : ""}. ` + (L.attribution || []).join(" · ");
   if (L.left_out && L.left_out.length) {
     $("left-out").textContent = "Left out, not joined both ways to the rest: " +
       L.left_out.map((g) => `${g.names.join(", ")} (${g.names.length})`).join("; ") + ".";

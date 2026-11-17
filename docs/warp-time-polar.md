@@ -105,7 +105,8 @@ walking field and 15–85 ms to a cycling or driving one (measured on live field
 (a refused isochrone call) is served with a note and not cached.
 
 **Transit is served only from a build that passes every check:**
-- complete, unexpired, and matching its manifest's hashes;
+- complete and matching its manifest's hashes (it never expires: past its `valid_until` the
+  pages only add that services may have changed);
 - marked `licences_cleared: true` in the manifest.
 
 `TRANSIT_ALLOW_UNCLEARED=1` serves an uncleared build for local development: only to requests

@@ -405,7 +405,7 @@ def test_build_end_to_end(tmp_path, monkeypatch):
     md = (out / "report.md").read_text()
     for words in ("Normalised stress", "Trustworthiness / continuity", "fold-free from the real map",
                   "full triangulation", "Wembley Park to Baker Street", "Metropolitan line",
-                  "Local use only", "not cleared for publication", "expired",
+                  "Local use only", "not cleared for publication", "may have changed since",
                   "group 1 (2 stations): Syn I1, Syn I2"):
         assert words in md, words
 

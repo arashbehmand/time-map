@@ -99,7 +99,8 @@ def main() -> None:
     parser.add_argument("--objective", choices=["minimax", "sum"], default="minimax")
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--pause", type=float, default=0.0, help="seconds to wait between solves")
-    parser.add_argument("--venue", help="public transport groups: meet at this kind of place")
+    parser.add_argument("--venue", choices=["station", "pub", "bar", "cafe", "restaurant", "park"],
+                        help="public transport groups: meet at this kind of place")
     args = parser.parse_args()
 
     names = args.group or sorted(GROUPS)

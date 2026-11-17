@@ -34,6 +34,8 @@ body {
   border-radius: 0; max-height: 46vh; max-height: 46dvh; overflow: auto; z-index: 4;
   box-shadow: 0 -2px 10px rgba(20, 20, 40, 0.1);
 }
+/* The sheet scrolls rather than squeezing its rows (the readout grows with the travel modes' lines). */
+#controls > * { flex-shrink: 0; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 #zoom-in, #zoom-out { min-width: 40px; font-size: 18px; }
 
@@ -53,6 +55,11 @@ body {
 .mark.jump::before { background: #8a4b00; }
 
 .readout { font-variant-numeric: tabular-nums; font-size: 14px; }
+
+/* Travel modes (#23): one toggle per way of travelling, its state in aria-pressed only. */
+.modes { align-items: center; }
+.modes legend { width: 100%; }
+.modes .btn { min-height: 36px; }
 
 /* The stations' colour key: the same bar as the minutes legends, with what it means. */
 .key { display: flex; flex-direction: column; gap: 3px; }

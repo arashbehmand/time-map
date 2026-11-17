@@ -8,7 +8,7 @@ from server.errors import ApiError, NotFound
 from server.guard.guard import per_ip
 from server.local import is_local
 from server.transit.provider import WINDOWS
-from server.transit.whole_city import FILES, SVG_CSP
+from server.transit.whole_city import FILES, MODE_FILES, SVG_CSP
 
 router = APIRouter(tags=["whole-city"])
 
@@ -35,6 +35,22 @@ async def whole_city_file(window: str, name: str, request: Request):
     blob = state.whole_city.file(state.transit, window, name, local=is_local(request))
     if blob is None:
         raise ApiError("The Whole city map isn't available here.", status=404, code="whole_city_unavailable")
+    return _send(blob, request)
+
+
+@router.get("/whole-city/{window}/modes/{name}", dependencies=[per_ip("whole_city")])
+async def whole_city_mode_file(window: str, name: str, request: Request):
+    """The travel modes (#23, L-03): car alone and car with train and tube, under the map's own gate."""
+    if window not in WINDOWS or name not in MODE_FILES:
+        raise NotFound()
+    state = request.app.state
+    blob = state.whole_city.mode_file(state.transit, window, name, local=is_local(request))
+    if blob is None:
+        raise ApiError("The travel modes aren't available here.", status=404, code="whole_city_modes_unavailable")
+    return _send(blob, request)
+
+
+def _send(blob, request: Request) -> Response:
     # The gzip copy was made once at load; GZipMiddleware leaves a response with
     # Content-Encoding alone.
     gz = blob.gz is not None and _accepts_gzip(request)

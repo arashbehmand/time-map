@@ -72,6 +72,11 @@ RENDERER_FILES = ("renderer.js", "caps.js", "warp.js", "field.js", "frame.js", "
 DATA_FILES = ("timemap.json", "land.bin")
 REPORT_FILES = ("report.json", "report.md", "shepard.svg", "panels.svg")
 OUTPUT_FILES = (*DATA_FILES, *REPORT_FILES)
+# The travel modes (#23, L-03), with --modes car: served like the map, each combination fetched the
+# first time it is switched on.
+MODES_DIR = "modes"
+MODES_FILES = tuple(f"{MODES_DIR}/{n}" for n in ("modes.json", "combo-car.json", "combo-car-train.json", "roads.bin",
+                                                 "report.md", "report.json"))
 MAX_GZIP_BYTES = 2_000_000
 SEGMENT_STEP_M = 100.0
 RESTART_SEEDS = (1, 2)        # the restart check: the sweep again from the real map nudged by
@@ -82,8 +87,8 @@ def default_out(build: str, window: str) -> Path:
     return REPO / "transit" / "out" / "timemap" / build / window
 
 
-def check_out_dir(out: Path) -> None:
-    l01_job.check_out_dir(Path(out), OUTPUT_FILES)
+def check_out_dir(out: Path, modes: bool = False) -> None:
+    l01_job.check_out_dir(Path(out), OUTPUT_FILES + (MODES_FILES if modes else ()))
 
 
 # ── inputs ──────────────────────────────────────────────────────────
@@ -99,6 +104,10 @@ def load_checks(path: Path) -> tuple[dict, str]:
     if not ok:
         raise RefusedInput(f"checks file {path}: [[ratio]] needs name, station and reference; "
                            "[[required_link]] needs a and b")
+    spots = checks.get("car_spot", [])          # pairs faster by car (#23, L-03): the travel modes' spot check
+    if not (isinstance(spots, list) and all(isinstance(r, dict) and all(isinstance(r.get(k), str)
+                                                                         for k in ("name", "a", "b")) for r in spots)):
+        raise RefusedInput(f"checks file {path}: [[car_spot]] needs name, a and b")
     return checks, sha
 
 
@@ -258,13 +267,13 @@ def restart_check(m, mesh, pairs, rhos, frames, picks, checks, tol, max_iter, lo
     layout on every node. It never stops the job."""
     runs = checks.get("metropolitan", [])
     wem = checks.get("wembley", {})
-    free = ~mesh.fixed
+    free = ~m.fixed                      # the mesh's free nodes, and the car's twins when it has them
     inner = mesh.kinds != meshmod.RING
     out = {"jitter_m": RESTART_JITTER_M, "seeds": list(RESTART_SEEDS), "ladders": [], "complete": True, "at": {}}
     rows = {k: [] for k in picks}
 
     def measure(k, X, kind, name):
-        dm = springs.quantise(X * m.scale)
+        dm = springs.quantise(X[:m.n_mesh] * m.scale)
         shift = np.hypot(*((dm - frames[k]["dm"]) / 10.0).T)
         shift[~inner] = 0
         far = int(np.argmax(shift))
@@ -329,7 +338,10 @@ def _rho_short(r: float) -> str:
 # ── the job ─────────────────────────────────────────────────────────
 def run(b: BuildInput, feed: Path, clip: Path | None, checks: dict, out: Path, *, rhos=springs.RHOS,
         tol: float = springs.TOL, max_iter: int = springs.MAX_ITER, log=print, checks_sha256: str | None = None,
-        input_sha: dict | None = None, land_work: Path | None = None, restarts: bool = True) -> dict:
+        input_sha: dict | None = None, land_work: Path | None = None, restarts: bool = True,
+        car: tuple | None = None) -> dict:
+    """The job. With `car` (car_links.json, roads.json and car_report.json, transit/layout/car.py),
+    the travel modes too (#23, L-03): car alone and car with train and tube, written to modes/."""
     from transit.layout import timemap_report as rep
 
     t0 = time.monotonic()
@@ -337,14 +349,10 @@ def run(b: BuildInput, feed: Path, clip: Path | None, checks: dict, out: Path, *
     k = measures.TC_K
     if pairs.n <= 3 * k + 1:
         raise RefusedInput(f"too few nodes ({pairs.n}) for neighbourhoods of {k}: it needs more than {3 * k + 1}")
-    cells = [p for p in b.points if p["kind"] == "cell"]
-    cell_xy = to_local(np.array([float(p["lon"]) for p in cells]), np.array([float(p["lat"]) for p in cells])) \
-        if cells else np.zeros((0, 2))
-    pick = meshmod.thin_cells(pairs.xy, cell_xy)
-    try:
-        mesh = meshmod.build_mesh(pairs.xy, cell_xy[pick])
-    except ValueError as e:
-        raise RefusedInput(f"the mesh can't be built from the real positions: {e}") from None
+    mesh, cells, pick = mesh_of(b, pairs)
+    if isinstance(car, (str, Path)):             # the car job's folder: refused unless made on this mesh
+        from transit.layout import car as carmod
+        car = carmod.load(b.manifest.get("build"), b.window, mesh, Path(car))
     log(f"{pairs.n} station nodes, {mesh.n_cell} cells, {mesh.n_ring} guard nodes: {len(mesh.tri)} triangles, "
         f"{len(mesh.edges)} grid springs")
 
@@ -357,6 +365,45 @@ def run(b: BuildInput, feed: Path, clip: Path | None, checks: dict, out: Path, *
     log(f"{len(lk.pairs)} train links ({lk.counts['station_trips_on_day']} station trips on {dep.date()})")
 
     m = springs.model(mesh, lk.pairs, lk.rest_m)
+    frames, motion = solve_combo(m, mesh, pairs, rhos, tol, max_iter, log)
+
+    n_st = pairs.n
+    A = frames[0]["Xs"][:n_st]
+    tc = measures.TrustContinuity(pairs.t, pairs.used, k=k)
+    l01 = l01_recompute(pairs, checks, tc, log)
+    ctx = measure_context(pairs, mesh, checks, tc, l01, A)
+    lines_at = measure_frames(frames, m, mesh, pairs, lk, ctx)
+
+    wembley = wembley_analysis(pairs, mesh, lk, frames, checks, l01)
+    picks = sorted({p for p in (wembley.get("pick"), len(frames) - 1) if p is not None})
+    restart = restart_check(m, mesh, pairs, rhos, frames, picks, checks, tol, max_iter, log) if restarts else None
+    runs = checks.get("metropolitan", [])
+    routes = [{"name": r["name"], "nodes": nodes, **dict(zip(("c", "w"), meshmod.carry_route(mesh, nodes)))}
+              for r in runs for nodes in [[i for i in (pairs.index_of(s) for s in r["stations"]) if i is not None]]
+              if len(nodes) >= 2]
+
+    modes = None
+    if car is not None:
+        modes = solve_modes(car, mesh, pairs, lk, m, frames, motion, wembley, checks, ctx, rhos, tol, max_iter,
+                            restarts, log)
+    land_doc = None
+    if clip is not None:
+        land_doc = carry_land(clip, mesh, land_work, log)
+    result = rep.write(out, b=b, pairs=pairs, mesh=mesh, links=lk, model=m, frames=frames, cells=cells, pick=pick,
+                       checks=checks, lines_at=lines_at, l01=l01, wembley=wembley, land=land_doc, routes=routes,
+                       restart=restart, motion=motion, code=l01_job.code_version(), checks_sha256=checks_sha256,
+                       input_sha=input_sha or {}, expired=l01_job.expired(b.manifest.get("valid_until")),
+                       started=t0, log=log, modes=modes)
+    for line in result["summary"]:
+        log(line)
+    return result
+
+
+def solve_combo(m, mesh, pairs, rhos, tol, max_iter, log, name: str | None = None) -> tuple[list[dict], dict]:
+    """One combination of travel modes solved over the ρ ladder from the real map, refused unless
+    every position converges and every blend the page draws holds: the shipped positions (whole
+    decimetres, checked as shipped and in Float32) and the keyframes between them."""
+    what = f"{name}: " if name else ""
     frames = springs.sweep(m, rhos, tol=tol, max_iter=max_iter, log=log)
     # The sweep stops at the first step that doesn't converge or still folds; both refuse. A step
     # that failed on its way (at an in-between ρ) is named by the ρ it reached.
@@ -364,31 +411,36 @@ def run(b: BuildInput, feed: Path, clip: Path | None, checks: dict, out: Path, *
     if bad:
         where = ", ".join(f"{f['reached']:.3g}" + (f" (on the way to {f['rho']:.3g})" if f["reached"] != f["rho"] else "")
                           for f in bad)
-        raise RefusedSolve(f"the solve at ρ = {where} did not converge (cap {max_iter} iterations, "
+        raise RefusedSolve(f"{what}the solve at ρ = {where} did not converge (cap {max_iter} iterations, "
                            f"{springs.SUBDIVIDE} levels of sub-steps); nothing was written")
     folding = [f["rho"] for f in frames if not f["smooth_ok"]]
     if folding:
-        raise RefusedSolve(f"the step to ρ = {folding[0]:.3g} still folds part way after {springs.MOTION_DEPTH} levels "
-                           "of in-between positions; nothing was written")
-
+        raise RefusedSolve(f"{what}the step to ρ = {folding[0]:.3g} still folds part way after {springs.MOTION_DEPTH} "
+                           "levels of in-between positions; nothing was written")
     # What ships: whole decimetres. The no-flip check runs on exactly that, and on its Float32 image.
     for f in frames:
         ship(f, m, mesh)
-    motion = motion_keyframes(m, mesh, frames, pairs.labels, log)
+    return frames, motion_keyframes(m, mesh, frames, pairs.labels, log)
 
-    n_st = pairs.n
-    A = frames[0]["Xs"][:n_st]
-    tc = measures.TrustContinuity(pairs.t, pairs.used, k=k)
+
+def measure_context(pairs, mesh, checks, tc, l01, A) -> dict:
+    """What every combination's measures share."""
     tri_l01_full = measures.delaunay(pairs.xy)
     tri_l01, _ = measures.peel(pairs.xy, tri_l01_full)
-    l01 = l01_recompute(pairs, checks, tc, log)
-    strict = l01["frames"][-1]["metrics"]["sigma1"]
-    rl = ratio_list(checks)
-    runs = checks.get("metropolitan", [])
+    inner = ~(mesh.kinds[mesh.tri] == meshmod.RING).any(axis=1)
+    return {"tc": tc, "strict": l01["frames"][-1]["metrics"]["sigma1"], "rl": ratio_list(checks),
+            "runs": checks.get("metropolitan", []), "tri_l01": tri_l01, "tri_l01_full": tri_l01_full,
+            "inner": inner, "A": A}
+
+
+def measure_frames(frames, m, mesh, pairs, lk, ctx) -> dict:
+    """Each position's measures (frame["metrics"], frame["stress"]); returns the Metropolitan line's
+    order at each. `lk` is the train links (None when the combination has no trains)."""
+    n_st = pairs.n
+    A, tc, inner = ctx["A"], ctx["tc"], ctx["inner"]
+    A0_in = mesh.A0[inner]
     lines_at = {}
     prev = None
-    inner = ~(mesh.kinds[mesh.tri] == meshmod.RING).any(axis=1)
-    A0_in = mesh.A0[inner]
     for i, f in enumerate(frames):
         X = f["Xs"]
         st = X[:n_st]
@@ -396,22 +448,27 @@ def run(b: BuildInput, feed: Path, clip: Path | None, checks: dict, out: Path, *
         r = meshmod.area_ratios(mesh, X)[inner]
         stretch = meshmod.stretch(mesh, X)
         st_in = stretch[inner]
-        lines_at[i] = measures.line_order(pairs, st, runs, A=A)
-        lens = np.hypot(*(X[lk.pairs[:, 0]] - X[lk.pairs[:, 1]]).T) if len(lk.pairs) else np.zeros(0)
-        past = np.maximum(lens / lk.rest_m - 1, 0) if len(lens) else np.zeros(1)   # how far past s·t
+        lines_at[i] = measures.line_order(pairs, st, ctx["runs"], A=A)
+        if lk is not None and len(lk.pairs):
+            lens = np.hypot(*(X[lk.pairs[:, 0]] - X[lk.pairs[:, 1]]).T)
+            past = np.maximum(lens / lk.rest_m - 1, 0)                     # how far past s·t
+        else:
+            past = np.zeros(1)
         shift = np.hypot(*(st - A).T)
         moved = np.hypot(*(X - prev).T)[mesh.kinds != meshmod.RING] if prev is not None else np.zeros(1)
         prev = X
         _, rot = align_rigid(st, A)
+        Xe = f["X"].copy()                       # the energy on what ships, the twins where they were solved
+        Xe[:m.n_mesh] = X / m.scale
         f["stress"] = node_stress(st, pairs)
         f["metrics"] = {
             "sigma1": sig, **tc(st),
-            "ratios": _ratios(pairs, st, rl, sig, strict),
+            "ratios": _ratios(pairs, st, ctx["rl"], sig, ctx["strict"]),
             "met_breaks": l01_job.report.count_breaks(lines_at[i]),
             "folds": {"flipped": f["fold"]["flipped"], "triangles": int(len(mesh.tri)),
                       "area_share": float(A0_in[~(r > 0)].sum() / A0_in.sum())},
-            "folds_l01": {"peeled": measures.fold_stats(tri_l01, pairs.xy, st),
-                          "full": measures.fold_stats(tri_l01_full, pairs.xy, st)},
+            "folds_l01": {"peeled": measures.fold_stats(ctx["tri_l01"], pairs.xy, st),
+                          "full": measures.fold_stats(ctx["tri_l01_full"], pairs.xy, st)},
             "area_ratio_min": float(r.min()), "area_ratio_p1": float(np.percentile(r, 1)),
             "under_25pct": int((r < 0.25).sum()), "under_5pct": int((r < 0.05).sum()),
             "stretch_max": float(st_in.max()), "stretch_median": float(np.median(st_in)),
@@ -420,36 +477,236 @@ def run(b: BuildInput, feed: Path, clip: Path | None, checks: dict, out: Path, *
             "stretch_worst": meshmod.worst(mesh, stretch, pairs.labels, inner, largest=True),
             "squeezed": meshmod.squeezed(mesh, X, pairs.labels, mask=inner),
             "links_past_share": float((past > 0.01).mean()), "links_past_p90": float(np.percentile(past, 90)),
-            "energy": springs.parts(m, X / m.scale, f["rho"]),
+            "energy": springs.parts(m, Xe, f["rho"]),
             "shift_median_m": float(np.median(shift)), "shift_p90_m": float(np.percentile(shift, 90)),
             "move_median_m": float(np.median(moved)), "rotation_deg": float(rot["rotation_deg"]),
             "iterations": f["iterations"], "gmax": f["gmax"], "substeps": f["substeps"], "pd": bool(f["pd"]),
         }
+    return lines_at
 
-    wembley = wembley_analysis(pairs, mesh, lk, frames, checks, l01)
-    picks = sorted({p for p in (wembley.get("pick"), len(frames) - 1) if p is not None})
-    restart = restart_check(m, mesh, pairs, rhos, frames, picks, checks, tol, max_iter, log) if restarts else None
-    routes = [{"name": r["name"], "nodes": nodes, **dict(zip(("c", "w"), meshmod.carry_route(mesh, nodes)))}
-              for r in runs for nodes in [[i for i in (pairs.index_of(s) for s in r["stations"]) if i is not None]]
-              if len(nodes) >= 2]
-    land_doc = None
-    if clip is not None:
-        land_doc = carry_land(clip, mesh, land_work, log)
-    result = rep.write(out, b=b, pairs=pairs, mesh=mesh, links=lk, model=m, frames=frames, cells=cells, pick=pick,
-                       checks=checks, lines_at=lines_at, l01=l01, wembley=wembley, land=land_doc, routes=routes,
-                       restart=restart, motion=motion, code=l01_job.code_version(), checks_sha256=checks_sha256,
-                       input_sha=input_sha or {}, expired=l01_job.expired(b.manifest.get("valid_until")),
-                       started=t0, log=log)
-    for line in result["summary"]:
-        log(line)
-    return result
+
+# ── travel modes (#23, L-03) ────────────────────────────────────────
+PULL_PAST = 0.01             # a spring "pulls" when it is stretched more than this share past its rest
+COMBOS = (("car",), ("car", "train"))       # solved besides train alone (timemap.json), in this order
+
+
+def combo_id(modes) -> str:
+    return "-".join(sorted(modes))
+
+
+def car_springs(car_links: dict, s: float) -> tuple[springs.CarSprings, list[dict]]:
+    """The car's road layer from car_links.json: twins on every linked node, a road spring per link
+    at s·drive minutes, access springs at s·overhead/2."""
+    links = car_links["links"]
+    twins = np.array(car_links["twins"], dtype=np.int64)
+    at = {int(v): k for k, v in enumerate(twins.tolist())}
+    hops = np.array([[at[lk["a"]], at[lk["b"]]] for lk in links], dtype=np.int64).reshape(-1, 2)
+    rest = np.array([s * float(lk["minutes"]) for lk in links])
+    return springs.CarSprings(twins, hops, rest, s * float(car_links["overhead_min"]) / 2), links
+
+
+def pulls(m, X: np.ndarray, labels: list[str], car_links: list[dict] | None) -> dict:
+    """Per travel mode: how many of its springs pull at X (normalised, every row) and which pull
+    hardest (train: the station pairs; car: the roads)."""
+    out = {}
+    for f in m.families:
+        if not len(f.links):
+            continue
+        d = X[f.links[:, 0]] - X[f.links[:, 1]]
+        past = np.hypot(d[:, 0], d[:, 1]) / f.rest - 1
+        on = past > PULL_PAST
+        order = [int(i) for i in np.argsort(-past) if past[i] > PULL_PAST]
+        rec = {"n": int(on.sum()), "of": int(len(past)), "share": float(on.mean()),
+               "past_p90": float(np.percentile(np.maximum(past, 0), 90))}
+        if f.name == "train":
+            rec["top"] = [f"{labels[int(f.links[i, 0])]} – {labels[int(f.links[i, 1])]}" for i in order[:3]]
+        elif f.name == "car" and car_links is not None:
+            seen = []
+            for i in order:
+                for road in car_links[i]["roads"][:1]:
+                    if road not in seen:
+                        seen.append(road)
+                if len(seen) >= 3:
+                    break
+            rec["top"] = seen
+            rec["top_links"] = [f"{car_links[i]['a_name']} – {car_links[i]['b_name']}" for i in order[:3]]
+        out[f.name] = rec
+    return out
+
+
+def cross_flags(mesh, frames_a: list[dict], frames_b: list[dict]) -> list[dict | None]:
+    """Whether the straight blend between two combinations at each solved position keeps every
+    triangle's area positive all the way (exactly, on whole decimetres: mesh.blend_min_area), and
+    its smallest area ratio. Position 0 is the real map in both: no blend."""
+    out = [None]
+    for fa, fb in zip(frames_a[1:], frames_b[1:]):
+        lo = float((meshmod.blend_min_area(mesh.tri, fa["dm"], fb["dm"]) / (200 * mesh.A0)).min())
+        out.append({"rho": fa["rho"], "ok": bool(lo > 0), "min_area_ratio": lo})
+    return out
+
+
+def _car_minutes(n: int, car_links: list[dict], overhead: float) -> np.ndarray:
+    """Door-to-door car minutes between every two nodes along the car links (overhead once a trip;
+    inf where no road joins them)."""
+    D = np.full((n, n), np.inf)
+    adj = [[] for _ in range(n)]
+    for lk in car_links:
+        adj[lk["a"]].append((lk["b"], lk["minutes"]))
+        adj[lk["b"]].append((lk["a"], lk["minutes"]))
+    for s in sorted({x for lk in car_links for x in (lk["a"], lk["b"])}):
+        dist = {s: 0.0}
+        q = [(0.0, s)]
+        while q:
+            d, i = heapq.heappop(q)
+            if d > dist.get(i, math.inf):
+                continue
+            for j, w in adj[i]:
+                if d + w < dist.get(j, math.inf):
+                    dist[j] = d + w
+                    heapq.heappush(q, (d + w, j))
+        for j, d in dist.items():
+            D[s, j] = d + overhead if j != s else 0.0
+    return D
+
+
+SPOT_MIN_M = 3000.0          # the spot check's pair is at least this far apart on the real map
+
+
+def spot_check(pairs, mesh, car_links: list[dict], overhead: float, combos: dict, picks: list[int],
+               checks: dict) -> list[dict]:
+    """Pairs faster by car than by train (the issue's spot check): the station pair at least
+    SPOT_MIN_M apart with the largest table time minus car time, and every [[car_spot]] row of the
+    checks file. Each with its real distance and its map distance with train only, car only and
+    car + train at `picks` (positions); it passes when car + train ends closer than train only."""
+    n = pairs.n
+    D = _car_minutes(mesh.n, car_links, overhead)[:n, :n]
+    real = np.hypot(*(pairs.xy[:, None, :] - pairs.xy[None, :, :]).transpose(2, 0, 1))
+    gain = np.where(pairs.used & np.isfinite(D) & (real >= SPOT_MIN_M), np.nan_to_num(pairs.t, nan=0.0) - D, -np.inf)
+    rows = []
+    if np.isfinite(gain).any() and gain.max() > 0:
+        i, j = np.unravel_index(int(np.argmax(gain)), gain.shape)
+        rows.append({"name": "Biggest gain by car", "a": int(min(i, j)), "b": int(max(i, j)), "kind": "auto"})
+    for r in checks.get("car_spot", []):
+        i, j = pairs.index_of(r["a"]), pairs.index_of(r["b"])
+        if i is None or j is None:
+            rows.append({"name": r["name"], "absent": [x for x, v in ((r["a"], i), (r["b"], j)) if v is None],
+                         "kind": "checks"})
+            continue
+        rows.append({"name": r["name"], "a": i, "b": j, "kind": "checks"})
+    out = []
+    for r in rows:
+        if "absent" in r:
+            out.append({**r, "status": "absent"})
+            continue
+        a, b = r["a"], r["b"]
+        rec = {**r, "a_name": pairs.labels[a], "b_name": pairs.labels[b], "real_km": float(real[a, b]) / 1000,
+               "train_table_min": float(pairs.t[a, b]) if pairs.used[a, b] else None,
+               "car_min": float(D[a, b]) if math.isfinite(D[a, b]) else None, "at": {}}
+        for k in picks:
+            rec["at"][k] = {cid: float(np.hypot(*(fr[k]["Xs"][a] - fr[k]["Xs"][b]))) / 1000
+                            for cid, fr in combos.items()}
+        end = max(picks)
+        closer = rec["at"][end]["car-train"] < rec["at"][end]["train"]
+        rec["status"] = "pass" if closer else "fail"
+        rec["closer_at"] = [k for k in picks if rec["at"][k]["car-train"] < rec["at"][k]["train"]]
+        out.append(rec)
+    return out
+
+
+def combo_rows(mesh, pairs, combos: dict, k: int) -> dict:
+    """The issue's comparison at position k, per combination: node shift against the real map and
+    against train only (every station and cell), σ₁ against the all-mode tables, Wembley Park, the
+    thinnest triangle."""
+    inner = mesh.kinds != meshmod.RING
+    real = combos["train"][0]["Xs"]
+    train = combos["train"][k]["Xs"]
+    out = {}
+    for cid, fr in combos.items():
+        X = fr[k]["Xs"]
+        mt = fr[k]["metrics"]
+        s_real = np.hypot(*(X - real).T)[inner]
+        s_train = np.hypot(*(X - train).T)[inner]
+        far = int(np.where(inner)[0][int(np.argmax(s_real))])
+        out[cid] = {"rho": fr[k]["rho"], "shift_real_median_m": float(np.median(s_real)),
+                    "shift_real_max_m": float(s_real.max()),
+                    "shift_real_max_at": pairs.labels[far] if far < pairs.n else
+                    f"a point near {pairs.labels[int(np.argmin(np.hypot(*(pairs.xy - mesh.P[far]).T)))]}",
+                    "shift_train_median_m": float(np.median(s_train)), "shift_train_max_m": float(s_train.max()),
+                    "sigma1": mt["sigma1"], "wembley": mt["ratios"].get("wembley_park", {}),
+                    "stretch_max": mt["stretch_max"], "stretch_worst": mt["stretch_worst"],
+                    "area_ratio_min": mt["area_ratio_min"], "flipped": mt["folds"]["flipped"]}
+    return out
+
+
+def solve_modes(car, mesh, pairs, lk, m_train, frames, motion, wembley, checks, ctx, rhos, tol, max_iter,
+                restarts, log) -> dict:
+    """Car alone and car with train and tube, beside train alone: each solved over the same ρ
+    ladder, measured, its restart check run, and the straight blends between combinations that
+    differ by one mode checked at every solved position."""
+    car_links_doc, roads_doc, car_report = car
+    if abs(float(car_links_doc["s_m_per_min"]) - pairs.s) > 1e-6 * pairs.s:
+        raise RefusedInput("the car links were built at another scale than this layout's: run "
+                           "python -m transit.layout.car again")
+    cs, links = car_springs(car_links_doc, pairs.s)
+    log(f"car: {len(links)} road springs on {len(cs.twins)} twins, {car_links_doc['overhead_min']:g} min overhead "
+        "once a trip")
+    combos = {"train": frames}
+    motions = {"train": motion}
+    models = {"train": m_train}
+    restart = {}
+    lines = {}
+    for modes in COMBOS:
+        cid = combo_id(modes)
+        mc = springs.model(mesh, lk.pairs if "train" in modes else [], lk.rest_m if "train" in modes else [], car=cs)
+        log(f"── {cid} ──")
+        fr, mo = solve_combo(mc, mesh, pairs, rhos, tol, max_iter, log, name=cid)
+        lines[cid] = measure_frames(fr, mc, mesh, pairs, lk if "train" in modes else None, ctx)
+        combos[cid], motions[cid], models[cid] = fr, mo, mc
+    for cid, fr in combos.items():
+        for f in fr:
+            f["pulls"] = pulls(models[cid], f["X"], pairs.labels, links)
+    picks = {}
+    for cid, fr in combos.items():
+        got = _wembley_pick(fr)
+        picks[cid] = sorted({p for p in ((got[1] if got else None), len(fr) - 1) if p})     # never the real map
+        if cid != "train" and restarts:
+            log(f"restart check, {cid}:")
+            restart[cid] = restart_check(models[cid], mesh, pairs, rhos, fr, picks[cid], checks, tol, max_iter, log)
+    cross = {"train|car-train": cross_flags(mesh, combos["train"], combos["car-train"]),
+             "car|car-train": cross_flags(mesh, combos["car"], combos["car-train"])}
+    for key, flags in cross.items():
+        bad = [f["rho"] for f in flags if f and not f["ok"]]
+        log(f"switch {key}: straight at {sum(1 for f in flags if f and f['ok'])} of {len(flags) - 1} positions"
+            + (f"; through the real map at ρ = {', '.join(f'{r:.3g}' for r in bad)}" if bad else ""))
+    wpick = wembley.get("pick")
+    cmp_at = sorted({p for p in (wpick, len(frames) - 1) if p is not None})
+    spots = spot_check(pairs, mesh, links, float(car_links_doc["overhead_min"]), combos, cmp_at, checks)
+    return {"combos": combos, "motions": motions, "models": models, "restart": restart, "cross": cross,
+            "picks": picks, "compare": {k: combo_rows(mesh, pairs, combos, k) for k in cmp_at}, "compare_at": cmp_at,
+            "spots": spots, "car_links": car_links_doc, "roads": roads_doc, "car_report": car_report, "lines": lines}
+
+
+
+
+def mesh_of(b: BuildInput, pairs) -> tuple:
+    """The mesh of a build's station nodes and its thinned cells (the car job builds the same one):
+    (mesh, the build's cells, the picked cells' indices into them)."""
+    cells = [p for p in b.points if p["kind"] == "cell"]
+    cell_xy = to_local(np.array([float(p["lon"]) for p in cells]), np.array([float(p["lat"]) for p in cells])) \
+        if cells else np.zeros((0, 2))
+    pick = meshmod.thin_cells(pairs.xy, cell_xy)
+    try:
+        mesh = meshmod.build_mesh(pairs.xy, cell_xy[pick])
+    except ValueError as e:
+        raise RefusedInput(f"the mesh can't be built from the real positions: {e}") from None
+    return mesh, cells, pick
 
 
 def ship(f: dict, m, mesh) -> None:
     """A solved layout as it ships, whole decimetres (f["dm"], f["Xs"]), refused unless it is one
     to one as shipped and in Float32."""
     f32 = lambda a: np.asarray(a).astype(np.float32).astype(np.float64)  # noqa: E731
-    f["dm"] = springs.quantise(f["X"] * m.scale)
+    f["dm"] = springs.quantise(f["X"][:m.n_mesh] * m.scale)           # the car's twins never ship
     f["Xs"] = f["dm"] / 10.0
     for label, X, P in (("as shipped", f["Xs"], mesh.P), ("in Float32", f32(f["Xs"]), f32(mesh.P))):
         fc = meshmod.fold_check(mesh, X, P)
@@ -648,6 +905,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out-dir", type=Path, help="default: transit/out/timemap/<build>/<window>/ in this repo")
     ap.add_argument("--checks", type=Path, default=l01_job.CHECKS, help="hand-typed station ids (checks.toml)")
     ap.add_argument("--no-land", action="store_true", help="skip the OSM land (no osmium needed)")
+    ap.add_argument("--modes", choices=["car"], help="the travel modes too (#23, L-03): car alone and car with "
+                    "train and tube, from python -m transit.layout.car; written to modes/, local use only")
+    ap.add_argument("--car-dir", type=Path, help="the car job's output (default: transit/out/car/<build>/<window>/)")
     args = ap.parse_args(argv)
     try:
         date.fromisoformat(args.build)
@@ -655,11 +915,15 @@ def main(argv: list[str] | None = None) -> int:
         ap.error(f"--build must be a date (YYYY-MM-DD), not {args.build!r}")
     out = args.out_dir or default_out(args.build, args.window)
     try:
-        check_out_dir(out)
+        check_out_dir(out, modes=bool(args.modes))
         checks, checks_sha = load_checks(args.checks)
         b = load_build(settings.OUT / args.build, args.window)
         feed, clip, shas = find_inputs(b, settings.DATA, land=not args.no_land)
-        run(b, feed, clip, checks, out, checks_sha256=checks_sha, input_sha=shas)
+        car = None
+        if args.modes:
+            from transit.layout import car as carmod
+            car = args.car_dir or carmod.default_out(args.build, args.window)
+        run(b, feed, clip, checks, out, checks_sha256=checks_sha, input_sha=shas, car=car)
     except Refused as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2

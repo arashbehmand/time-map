@@ -49,6 +49,24 @@ def _squeeze_text(f: dict) -> str:
 
 
 # ── timemap.json ────────────────────────────────────────────────────
+def frame_doc(f: dict) -> dict:
+    """One solved position as the page reads it: decimetres, station stress and a few measures."""
+    mt = f["metrics"]
+    sq = mt["squeezed"][0] if mt["squeezed"] else None
+    return {
+        "rho": f["rho"], "x": f["dm"][:, 0].tolist(), "y": f["dm"][:, 1].tolist(),
+        "stress": [round(float(v), 3) for v in f["stress"]],
+        "metrics": _r({"sigma1": mt["sigma1"], "T": mt["T"], "C": mt["C"], "flipped": mt["folds"]["flipped"],
+                       "area_ratio_min": mt["area_ratio_min"], "stretch_median": mt["stretch_median"],
+                       "stretch_max": mt["stretch_max"],
+                       "squeezed_near": sq["near"] if sq and sq["ratio"] < 1 - 1e-9 else None,
+                       "met_breaks": mt["met_breaks"], "iterations": mt["iterations"],
+                       "ratios": {k: {"status": v.get("status"), "ratio": v.get("ratio_to_median"),
+                                      "km": (v["map_m"] / 1000) if "map_m" in v else None,
+                                      "tolerance": v.get("tolerance")}
+                                  for k, v in mt["ratios"].items()}})}
+
+
 def page_doc(b, pairs, mesh, links, model, frames, checks, routes, code, checks_sha256, input_sha) -> dict:
     labels = []
     for sid in checks.get("labels", {}).get("stations", []):
@@ -62,22 +80,7 @@ def page_doc(b, pairs, mesh, links, model, frames, checks, routes, code, checks_
         rows.append({"key": r["key"], "name": r["name"], "station": i, "reference": j})
     stress_all = np.concatenate([f["stress"] for f in frames])
     top = max(0.05, math.ceil(float(np.percentile(stress_all, 98)) * 20) / 20)
-    out_frames = []
-    for f in frames:
-        mt = f["metrics"]
-        sq = mt["squeezed"][0] if mt["squeezed"] else None
-        out_frames.append({
-            "rho": f["rho"], "x": f["dm"][:, 0].tolist(), "y": f["dm"][:, 1].tolist(),
-            "stress": [round(float(v), 3) for v in f["stress"]],
-            "metrics": _r({"sigma1": mt["sigma1"], "T": mt["T"], "C": mt["C"], "flipped": mt["folds"]["flipped"],
-                           "area_ratio_min": mt["area_ratio_min"], "stretch_median": mt["stretch_median"],
-                           "stretch_max": mt["stretch_max"],
-                           "squeezed_near": sq["near"] if sq and sq["ratio"] < 1 - 1e-9 else None,
-                           "met_breaks": mt["met_breaks"], "iterations": mt["iterations"],
-                           "ratios": {k: {"status": v.get("status"), "ratio": v.get("ratio_to_median"),
-                                          "km": (v["map_m"] / 1000) if "map_m" in v else None,
-                                          "tolerance": v.get("tolerance")}
-                                      for k, v in mt["ratios"].items()}})})
+    out_frames = [frame_doc(f) for f in frames]
     st = mesh.kinds == meshmod.STATION
     return {
         "schema": 2, "kind": "london-time-map", "notice": notice(b.manifest, "L-02"),
@@ -585,7 +588,8 @@ def motion_doc(motion) -> dict:
 
 
 def write(out: Path, *, b, pairs, mesh, links, model, frames, cells, pick, checks, lines_at, l01, wembley, land,
-          routes, restart, motion, code, checks_sha256, input_sha, expired, started, log) -> dict:
+          routes, restart, motion, code, checks_sha256, input_sha, expired, started, log, modes=None) -> dict:
+    from transit.layout import modes_report
     from transit.layout import timemap as tm
 
     out = Path(out)
@@ -600,8 +604,10 @@ def write(out: Path, *, b, pairs, mesh, links, model, frames, cells, pick, check
         # Every keyframe as drawn, in slider order: the land must keep its orientation on each and
         # all along the blend between each two, in the Float32 values the page mixes.
         keyed = [k["dm"] / 10.0 for k in motion["keys"]]
+        # With the travel modes, every blend the page can draw for them too (#23, L-03).
+        extra = modes_report.blend_pairs(modes) if modes else None
         for k in range(land["n_rungs"]):
-            carried, dropped = landmod.drop_blend_slivers(land["rung"](k), keyed)
+            carried, dropped = landmod.drop_blend_slivers(land["rung"](k), keyed, extra)
             blob, header = landmod.pack(carried, mesh.n)
             header["slivers_dropped"] = dropped
             header["sliver_margin_m"] = landmod.BLEND_MARGIN_M
@@ -702,6 +708,10 @@ def write(out: Path, *, b, pairs, mesh, links, model, frames, cells, pick, check
     panels = panels_svg(pairs, mesh, frames, panel_picks(frames, wembley), land["coarse"] if land else None, routes,
                         checks, f"London by travel time on a spring grid that can't fold, build {doc['build']} {b.window}")
 
+    # The travel modes' files, built and size-checked before anything is written.
+    mfiles, msummary = modes_report.build(b=b, pairs=pairs, mesh=mesh, links=links, frames=frames, modes=modes,
+                                          stress_scale=doc["stress_scale"], code=code, page_gzip=gz,
+                                          land_dropped=dropped) if modes else ({}, [])
     out.mkdir(parents=True, exist_ok=True)
     (out / "timemap.json").write_text(text + "\n", encoding="utf-8")
     (out / "land.bin").write_bytes(blob)
@@ -709,6 +719,9 @@ def write(out: Path, *, b, pairs, mesh, links, model, frames, cells, pick, check
     (out / "report.md").write_text(md + f"\nRun time {time.monotonic() - started:.0f} s.\n", encoding="utf-8")
     (out / "shepard.svg").write_text(svg, encoding="utf-8")
     (out / "panels.svg").write_text(panels, encoding="utf-8")
+    for name, data in mfiles.items():
+        (out / name).parent.mkdir(parents=True, exist_ok=True)
+        (out / name).write_bytes(data)
 
     w = headlines["wembley_end"]
     summary = [
@@ -720,5 +733,6 @@ def write(out: Path, *, b, pairs, mesh, links, model, frames, cells, pick, check
         f"{headlines['met_breaks_end']}; thinnest triangle {headlines['stretch_worst_end']['value']:.0f}:1; smallest "
         f"area {squeeze_end['ratio'] * 100:.1f}% near {squeeze_end['near']}",
         f"wrote {out} (page {gz / 1e6:.2f} MB gzipped)",
+        *msummary,
     ]
     return {"summary": summary, "gzip_bytes": gz, "headlines": headlines, "out": out, "report": rep}

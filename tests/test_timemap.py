@@ -977,3 +977,161 @@ def test_the_strict_column_names_the_tolerance_it_used(job_env):
     rep = json.loads((out / "report.json").read_text())
     md = (out / "report.md").read_text()
     assert f"| vs {rep['headlines']['l01_sigma1_time']:.3f} |" in md
+
+
+# ── travel modes (#23, L-03) ────────────────────────────────────────
+def _car_model(mesh, twins, hops, hop_shares, access_m, links=(), rests=()):
+    """A road layer on `mesh`: twins on the given nodes, road springs between them at `hop_shares`
+    of their real distance."""
+    twins = np.asarray(twins)
+    hops = np.asarray(hops).reshape(-1, 2)
+    rest = np.array([s * float(np.hypot(*(mesh.P[twins[a]] - mesh.P[twins[b]]))) for (a, b), s in zip(hops, hop_shares)])
+    return springs.model(mesh, np.asarray(links, dtype=np.int64).reshape(-1, 2), np.asarray(rests, dtype=float),
+                         car=springs.CarSprings(twins, hops, rest, access_m))
+
+
+def test_the_road_layer_starts_at_rest_and_its_slack_springs_cost_nothing():
+    mesh = grid_mesh(5)
+    m = _car_model(mesh, [6, 8, 18], [(0, 1), (1, 2)], [0.3, 0.3], 200.0)
+    assert m.n_mesh == mesh.n and len(m.P) == mesh.n + 3 and not m.fixed[mesh.n:].any()
+    assert [f.name for f in m.families] == ["car", "car_access"]
+    assert springs.energy(m, m.P, 0.0) == pytest.approx(0.0, abs=1e-12)
+    E, g, H = springs.grad_hess(m, m.P, 2.0)          # every access spring has length 0 here: no NaN
+    assert math.isfinite(E) and np.isfinite(g).all() and np.isfinite(H).all()
+    p = springs.parts(m, m.P, 2.0)
+    assert set(p) == {"grid", "train", "car", "car_access", "tether", "area", "shape"} and p["car_access"] == 0.0
+    with pytest.raises(ValueError):
+        _car_model(mesh, [6, 8], [(0, 1)], [0.3], 0.0)
+    with pytest.raises(ValueError):                    # a twin with no road spring
+        _car_model(mesh, [6, 8, 18], [(0, 1)], [0.3], 200.0)
+
+
+def test_car_gradient_and_hessian_match_finite_differences():
+    mesh = grid_mesh(5, seed=1)
+    m = _car_model(mesh, [0, 12, 24], [(0, 1), (1, 2)], [0.3, 2.5], 150.0, links=[(6, 18)], rests=[300.0])
+    rng = np.random.default_rng(0)
+    X = m.P.copy()
+    X[~m.fixed] += rng.uniform(-0.03, 0.03, X[~m.fixed].shape)
+    X[m.n_mesh] += [0.4, 0.1]                           # one twin far from its node: its access spring pulls
+    assert (signed_areas(X, m.tri) > 0).all()
+    rho = 2.0
+    E, g, H = springs.grad_hess(m, X, rho)
+    h = 1e-6
+    gd, Hd = np.zeros_like(g), np.zeros_like(H)
+    for k in range(m.n_dof):
+        d = np.zeros(m.n_dof)
+        d[k] = h
+        Xp, Xm = springs.apply_step(m, X, d), springs.apply_step(m, X, -d)
+        gd[k] = (springs.energy(m, Xp, rho) - springs.energy(m, Xm, rho)) / (2 * h)
+        Hd[:, k] = (springs.grad_hess(m, Xp, rho, hessian=False)[1] - springs.grad_hess(m, Xm, rho, hessian=False)[1]) / (2 * h)
+    assert np.allclose(g, gd, rtol=1e-5, atol=1e-7)
+    assert np.allclose(H, Hd, rtol=1e-4, atol=1e-6)
+    taut = springs.taut(m, X, m.family("car_access"))
+    assert taut[0] and not taut[1:].any()
+
+
+def test_the_overhead_is_paid_once_a_trip_not_at_every_node_along_the_road():
+    """A, B and C along one road, 4 km apart: road springs of 0.5 km each, access springs of 0.5 km.
+    Pulled hard, A and C end at most access + road + road + access (2 km) apart, plus what the grid
+    still holds; an overhead paid at B too would keep them at least 2 × (0.5 + 0.5 + 0.5) = 3 km apart."""
+    mesh = grid_mesh(15, step=1000.0, seed=4)
+    a, b, c = 7 * 15 + 3, 7 * 15 + 7, 7 * 15 + 11
+    d_ab = float(np.hypot(*(mesh.P[a] - mesh.P[b])))
+    d_bc = float(np.hypot(*(mesh.P[b] - mesh.P[c])))
+    m = _car_model(mesh, [a, b, c], [(0, 1), (1, 2)], [500.0 / d_ab, 500.0 / d_bc], 250.0)
+    X = m.P.copy()
+    for rho in (1.0, 10.0, 100.0, 1000.0):
+        res = springs.solve(m, X, rho)
+        assert res.converged and (signed_areas(res.X, m.tri) > 0).all()
+        X = res.X
+    ac = float(np.hypot(*(X[a] - X[c]))) * m.scale
+    assert ac < 2400.0
+    assert float(np.hypot(*(m.P[a] - m.P[c]))) * m.scale > 7000.0
+
+
+def test_a_switch_whose_straight_blend_would_fold_goes_through_the_real_map():
+    from types import SimpleNamespace
+    tri = np.array([[0, 1, 2]])
+    A = np.array([[0, 0], [100, 0], [0, 100]])
+    B = np.array([[0, 0], [-200, 100], [-210, 100]])
+    mesh = SimpleNamespace(tri=tri, A0=np.array([5000.0 / 10 ** 2 * 100]))
+    fa = [{"rho": 0.0, "dm": A}, {"rho": 1.0, "dm": A}, {"rho": 2.0, "dm": A}]
+    fb = [{"rho": 0.0, "dm": A}, {"rho": 1.0, "dm": A * 2}, {"rho": 2.0, "dm": B}]
+    flags = timemap.cross_flags(mesh, fa, fb)
+    assert flags[0] is None and flags[1]["ok"] and not flags[2]["ok"]
+
+
+def _car_dir(tmp_path, build_dir, tamper=None):
+    from timemap_network import car_docs
+    d = tmp_path / "car"
+    d.mkdir(exist_ok=True)
+    docs = car_docs(build_dir)
+    if tamper:
+        tamper(docs)
+    for name, doc in zip(("car_links.json", "roads.json", "car_report.json"), docs):
+        (d / name).write_text(json.dumps(doc))
+    return d
+
+
+def test_the_travel_modes_end_to_end(job_env):
+    tmp_path, build_dir, _ = job_env
+    _, plain = _main(tmp_path, "plain")
+    car = _car_dir(tmp_path, build_dir)
+    code, out = _main(tmp_path, "modes", "--modes", "car", "--car-dir", str(car))
+    assert code == 0
+    for name in timemap.MODES_FILES:
+        assert (out / name).is_file(), name
+    # Train alone is the same time map with or without the modes.
+    a, b = (json.loads((d / "timemap.json").read_text()) for d in (plain, out))
+    assert a["frames"] == b["frames"] and a["motion"] == b["motion"]
+    assert not (plain / "modes").exists()
+    idx = json.loads((out / "modes/modes.json").read_text())
+    assert [m["id"] for m in idx["modes"]] == ["walk", "bus", "train", "car"]
+    assert [m["available"] for m in idx["modes"]] == [False, False, True, True]
+    assert len(idx["train_pulls"]) == len(springs.RHOS) and idx["train_pulls"][-1]["train"]["n"] > 0
+    assert set(idx["cross"]) == {"train|car-train", "car|car-train"} and idx["roads"]["file"] == "roads.bin"
+    assert idx["nodes"] == len(b["nodes"]["kind"]) and idx["table_sha256"] == b["table_sha256"]
+    for cid in ("car", "car-train"):
+        c = json.loads((out / f"modes/combo-{cid}.json").read_text())
+        assert c["id"] == cid and len(c["frames"]) == len(springs.RHOS) and c["build"] == b["build"]
+        tri = np.array(b["triangles"]).reshape(-1, 3)
+        for f in c["frames"]:
+            X = np.stack([f["x"], f["y"]], 1) / 10
+            assert len(X) == len(b["nodes"]["kind"]) and (signed_areas(X, tri) > 0).all()
+            assert f["metrics"]["flipped"] == 0 and "car" in f["pulls"]
+        assert c["frames"][0]["x"] == b["frames"][0]["x"]                 # every combination starts at the real map
+        assert ("train" in c["frames"][-1]["pulls"]) == (cid == "car-train")
+    rep = json.loads((out / "modes/report.json").read_text())
+    assert all(c["flipped_max"] == 0 for c in rep["combos"].values())
+    assert set(rep["restart"]) == {"car", "car-train"} and all(r["complete"] for r in rep["restart"].values())
+    assert rep["spots"] and rep["spots"][0]["status"] == "pass"
+    for k in rep["compare_at"]:
+        row = rep["compare"][str(k)]
+        assert set(row) == {"train", "car", "car-train"} and row["train"]["shift_train_max_m"] == 0
+    md = (out / "modes/report.md").read_text()
+    for words in ("HERE Traffic4cast", "non-commercial", "5 minutes once a trip", "Flipped triangles: 0", "Switching",
+                  "Speeds on our roads", "The combinations compared", "Median shift from the real map",
+                  "Road springs pulling", "Spot check", "Restart check", "Thames crossings", "13:00–14:00"):
+        assert words in md, words
+
+
+def test_travel_modes_without_the_car_files_or_on_another_mesh_write_nothing(job_env, capsys):
+    tmp_path, build_dir, _ = job_env
+    code, out = _main(tmp_path, "nocar", "--modes", "car", "--car-dir", str(tmp_path / "nowhere"))
+    assert code == 2 and "no car links" in capsys.readouterr().err and not out.exists()
+
+    def other(docs):
+        for d in docs:
+            d["mesh_sha256"] = "0" * 64
+    car = _car_dir(tmp_path, build_dir, other)
+    code, out = _main(tmp_path, "othermesh", "--modes", "car", "--car-dir", str(car))
+    assert code == 2 and "another mesh" in capsys.readouterr().err and not out.exists()
+
+
+def test_a_travel_mode_file_over_two_megabytes_is_refused(job_env, monkeypatch, capsys):
+    from transit.layout import modes_report
+    tmp_path, build_dir, _ = job_env
+    monkeypatch.setattr(modes_report, "MAX_GZIP_BYTES", 1000)
+    car = _car_dir(tmp_path, build_dir)
+    code, out = _main(tmp_path, "big", "--modes", "car", "--car-dir", str(car))
+    assert code == 2 and "travel modes' files would be over" in capsys.readouterr().err and not out.exists()

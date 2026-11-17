@@ -33,7 +33,11 @@ export function place(c, w, Q, nodes, out, stride = 2) {
 }
 
 // Which renderer pass each land style is drawn in.
-export const PASS_OF = { water: "water", park: "park", boundary: "boundary", major_rail: "rail", minor_rail: "rail", rail_tunnel: "rail" };
+export const PASS_OF = {
+  water: "water", park: "park", boundary: "boundary", major_rail: "rail", minor_rail: "rail", rail_tunnel: "rail",
+  // the car's main roads (#23, L-03: roads.bin), in the renderer's road pass (casing and fill)
+  motorway: "road", trunk: "road", primary: "road",
+};
 
 // The renderer's scene passes for the land, on the real map (`real`: the first layout), plus what
 // moveLand needs to put them on another layout: {passes: {water, park, boundary, rail}, verts}.
@@ -507,4 +511,48 @@ export function loadSegment(scene, placedA, placedB) {
     }
   }
   return scene;
+}
+
+// ── travel modes (#23, L-03) ────────────────────────────────────────
+// The build solves each combination of modes over the same slider: train and tube alone (the time
+// map itself, timemap.json), car alone and car with train and tube (modes/combo-*.json). With no
+// mode on the map is the real map, which is also every combination's slider position 0.
+
+// The combination a set of modes on means: "train", "car", "car-train" or "none".
+export function comboOf(on) {
+  const ids = ["car", "train"].filter((m) => on.has(m));
+  return ids.length ? ids.join("-") : "none";
+}
+
+// How the page moves from combination `from` to `to` (they differ by one mode) with the map at
+// solved position i: "same"; "down" to the real map (no mode left on); "up" from it (the first mode
+// switched on); "swap" at the real map, where every combination is the same; "straight" across, when
+// the build checked that blend at i (cross: modes.json's flags, keyed "a|b" in either order); or
+// "via-real": back down the old combination to the real map and up the new one, both checked blends.
+export function switchPlan(cross, from, to, i) {
+  if (from === to) return "same";
+  if (to === "none") return "down";
+  if (from === "none") return "up";
+  if (i === 0) return "swap";
+  const flags = (cross && (cross[`${from}|${to}`] || cross[`${to}|${from}`])) || null;
+  const f = flags && flags[i];
+  return f && f.ok ? "straight" : "via-real";
+}
+
+const MODE_NAMES = { train: "Train and tube", car: "Car" };
+
+// One mode's line in the readout, from its pulls at a solved position (modes.json, combo frames):
+// how many of its springs pull and where. p: {n, of, share, top}; i: the position (0 is the real map).
+export function pullWords(mode, p, i, overheadMin = 0) {
+  const name = MODE_NAMES[mode] || mode;
+  const springs = mode === "car" ? "road springs" : "springs";
+  if (!p) return `${name}: on.`;
+  if (i === 0) return `${name}: on; on the real map no spring pulls yet.`;
+  if (!p.n) {
+    return `${name} moves nothing at this strength: none of its ${p.of} ${springs} is stretched past its time.`;
+  }
+  const pct = Math.max(1, Math.round(100 * p.share));
+  const top = p.top && p.top.length ? (mode === "car" ? `, mostly ${p.top.join(", ")}` : `, hardest ${p.top[0]}`) : "";
+  return `${name}: ${p.n} of ${p.of} ${springs} pulling (${pct}%)${top}.` +
+    (mode === "car" && overheadMin ? ` Car times include ${overheadMin} minutes once a trip for parking and getting to the car.` : "");
 }

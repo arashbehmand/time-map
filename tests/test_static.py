@@ -552,3 +552,34 @@ def test_lab_fallback_hides_the_overlay_and_skips_checks():
     for runner in ("async function runSelfTestNow", "async function runBenchNow"):
         body = js.split(runner)[1].split("\n}\n")[0]
         assert "meshMissing(" in body, runner
+
+
+def test_whole_city_has_a_toggle_per_way_of_travelling():
+    """Travel modes (#23, L-03): Walking and Bus wait for the next table rebuild and say so; Train and
+    tube is on; Car is enabled where the server lists the modes (the build has them)."""
+    html = (ROOT / "whole-city/index.html").read_text()
+    modes = html.split('<fieldset id="modes"')[1].split("</fieldset>")[0]
+    buttons = re.findall(r'<button class="btn" type="button" data-mode="(\w+)"([^>]*)>([^<]+)</button>', modes)
+    assert [(m, label) for m, _, label in buttons] == [("walk", "Walking"), ("bus", "Bus"), ("train", "Train and tube"),
+                                                       ("car", "Car")]
+    attrs = {m: a for m, a, _ in buttons}
+    assert "disabled" in attrs["walk"] and "next table rebuild" in attrs["walk"]
+    assert "disabled" in attrs["bus"] and "next table rebuild" in attrs["bus"]
+    assert 'aria-pressed="true"' in attrs["train"] and "disabled" not in attrs["train"]
+    assert 'aria-pressed="false"' in attrs["car"] and "disabled" in attrs["car"]
+    # The Metropolitan line isn't special: rail and tube are one layer that follows Train and tube.
+    assert 'id="line"' not in html and "Metropolitan line" not in html
+    js = (ROOT / "whole-city/app.js").read_text()
+    assert 'if (city.modes && city.modes[win])' in js
+    assert "load(`/api/whole-city/${win}/modes/modes.json`" in js and "load(`/api/whole-city/${win}/modes/${entry.file}`" in js
+    assert 'if (name === "rail" && !modes.has("train")) continue;' in js
+    assert 'if (name === "road" && !modes.has("car")) continue;' in js
+
+
+def test_the_travel_modes_are_kept_and_forgotten_with_the_map():
+    """Offline (#28): the car's files are Whole city data like the map; a build change drops them."""
+    sw = (ROOT / "sw.js").read_text()
+    assert "/modes/" not in sw
+    off = (ROOT / "shared/offline.js").read_text()
+    for name in ("modes/modes.json", "modes/combo-car.json", "modes/combo-car-train.json", "modes/roads.bin"):
+        assert f'"{name}"' in off, name

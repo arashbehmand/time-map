@@ -207,6 +207,29 @@ def jvm_home() -> str | None:
     return str(local) if local.exists() else None
 
 
+# ── Car (#23, L-03): typical weekday speeds on the main roads ───────
+# Traffic4cast 2022's London speeds (HERE probe data turned into speeds on OpenStreetMap edges by
+# the MeTS-10 pipeline): academic and non-commercial use only, so everything made from them stays
+# on this machine. The zip is its own setting: it need not sit beside the build's other inputs.
+T4C_ZIP = Path(os.environ.get("T4C_ZIP", RAW / "t4c22" / "LONDON_2022.zip"))
+T4C_MEMBER_DIR = "speed_classes/london/"
+T4C_COLUMNS = ("u", "v", "day", "t", "volume_class", "median_speed_kph", "free_flow_kph")
+T4C_BINS = (52, 53, 54, 55)              # 15-minute bins: 13:00-14:00, the transit tables' wd13
+T4C_LAST_DAY = date(2020, 2, 29)         # nothing from the covid period
+# England's bank holidays in the data's span (2019-07-01 to 2020-01-31), and the Christmas weeks.
+T4C_HOLIDAYS = (date(2019, 8, 26), date(2019, 12, 25), date(2019, 12, 26), date(2020, 1, 1))
+T4C_CHRISTMAS = ((12, 23), (1, 3))       # 23 December to 3 January, left out every year
+T4C_SYNTHETIC_ID = 1 << 40               # node ids at or above this are not OpenStreetMap's
+CAR_HIGHWAYS = ("motorway", "trunk", "primary")   # mainline only: no *_link
+CAR_MIN_KPH = 1.0                        # a bin's median under this is noise, not traffic
+CAR_OVERHEAD_MIN = 5.0                   # parking and getting to the car, once a trip (half each end)
+CAR_PIECE_M = 20.0                       # roads are cut into pieces at most this long
+CAR_MATCH_M = 20.0                       # a T4c edge's straight chord this near a piece can lend it a speed
+CAR_MATCH_DEG = 30.0                     # ... if their directions differ by at most this
+CAR_PATH_RATIO = 1.5                     # a T4c edge lands on our road if that path is at most this × u-v
+CAR_FILL_MIN_SHARE = 0.5                 # a link needs this share of its length measured to be filled
+
+
 def snapshot() -> dict:
     """The settings the manifest records (paths excluded)."""
     return {

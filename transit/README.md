@@ -386,7 +386,7 @@ It stops with exit code 2, having written nothing, when:
 
 | File | What it is |
 |---|---|
-| `timemap.json`, `land.bin` | What the app's Whole city page draws: the nodes, the mesh, the train links, every position in whole decimetres with its measures, the in-between keyframes (`motion`); the land cut along the mesh. The page (`static/whole-city/`) draws the land through the mesh renderer (cpu back-end, a target per vertex), the stations, names and the Metropolitan line (carried through the mesh like the land) on a canvas above, a slider that runs continuously through every blend, and a "Time map" button that plays the move |
+| `timemap.json`, `land.bin` | What the app's Whole city page draws: the nodes, the mesh, the train links, every position in whole decimetres with its measures, the in-between keyframes (`motion`); the land cut along the mesh. The page (`static/whole-city/`) draws the land through the mesh renderer (cpu back-end, a target per vertex), the stations and names on a canvas above (the Metropolitan line is carried in `lines` for the report; the page no longer draws it apart from the other rail, #23), a slider that runs continuously through every blend, and a "Time map" button that plays the move |
 | `report.md`, `report.json` | The verdicts first, then the stations-only layout beside it, what shapes Wembley Park, and one row per position |
 | `shepard.svg` | Map distance against travel time: the real map, the stations-only time map and this map's end |
 | `panels.svg` | Three panels, north up at one scale: the real map, the first position where Wembley Park passes (or the closest), the end. Triangles shaded by area against the real map, the water and borough outlines, the stations and the Metropolitan line |
@@ -453,7 +453,7 @@ It stops with exit code 2, having written nothing, when:
   gives both values. The live region stays quiet while the map moves or the slider is dragged,
   and the slider's spoken value changes only when its text does. Faint rings and dashed lines
   show where the named stations really are.
-- **Lines on the page:** rail, borough outlines and the Metropolitan line get thinner where the
+- **Lines on the page:** rail, borough outlines and (with Car on, #23) the main roads get thinner where the
   map squeezes the ground across them: each segment lies in one mesh triangle, whose linear map F
   is exact, and its width is det F ÷ |F·d| of the real width (d its direction), never wider and
   never under 30%. The renderer takes that as an optional width factor per line segment, at both
@@ -513,3 +513,105 @@ Everything it writes is derived from the tables, so it stays in the git-ignored 
 and never goes into git or `static/`. Unlike the stations-only layout, it is published: the app
 shows it as Whole city (#28), from `TIMEMAP_DIR`, under the tables' own expiry and licence gate.
 Its report and Shepard plot are linked from the page.
+
+## Travel modes (#23, L-03)
+
+Whole city has a toggle for each way of travelling: Walking, Bus, Train and tube, Car. Every mode
+is a family of pull-only springs like the train springs, at the same scale s, and the build solves
+each combination over the same 25 positions of ρ from the real map. Part 1 (this) is car with
+train and tube: three combinations (train alone, the time map above; car alone; car with train
+and tube) and the real map, with no mode on. Walking and Bus wait for walking-only and bus-only
+times from R5, which come with the next table rebuild; their toggles say so.
+
+```bash
+export TRANSIT_OUT=<builds> TRANSIT_DATA=<their data> T4C_ZIP=<path>/LONDON_2022.zip
+transit/.venv/bin/python -m transit.layout.carspeed                       # once per zip
+transit/.venv/bin/python -m transit.layout.car --build 2026-11-12         # once per build and window
+transit/.venv/bin/python -m transit.layout.timemap --build 2026-11-12 --modes car
+```
+
+**The car's speeds** (`carspeed.py`). `LONDON_2022.zip` is HERE's Traffic4cast 2022 sample data
+(<https://developer.here.com/sample-data>, 2.8 GB; the owner downloads it). It holds, per day from
+2019-07-01 to 2020-01-31 (110 days, all before covid), the MeTS-10 pipeline's speeds on
+OpenStreetMap edges: one row per directed edge (u, v: OSM node ids) and 15-minute bin with enough
+probe data (`speed_classes/london/*.parquet`: u, v, day, t, volume_class, median_speed_kph,
+free_flow_kph), and the movies they were made from (not read). There is no road geometry. Kept:
+weekdays, no bank holidays, not 23 December to 3 January (74 days), bins 52 to 55 (13:00 to 14:00,
+the tables' wd13), bins of at least 1 km/h; per directed edge the median over those rows. The bins
+follow London's clock (the morning rush sits at 08:45 in summer time and in GMT). The zip is read
+member by member, never unpacked or moved; `T4C_ZIP` (or `--t4c-zip`) says where it is, default
+`$TRANSIT_DATA/raw/t4c22/LONDON_2022.zip`. The speeds go to `<data>/work/t4c22/` beside the zip's
+`raw/` folder (`london_wd13_speeds.parquet` and `.json`: the days, the zip's sha256, the licence).
+**Licence:** academic and non-commercial use (`docs/provider-terms.md`); the owner uses it
+non-commercially, with the permissions collected.
+
+**The car links** (`car.py`, osmium and shapely; writes `transit/out/car/<build>/<window>/`):
+
+- **Roads:** `highway=motorway|trunk|primary` from the build's own clip (mainline only, no slip
+  roads; not closed to cars), bridges and tunnels included, one way or both as `oneway`,
+  `junction=roundabout` or a motorway's implied one way says.
+- **Speeds on them, by node id first:** a Traffic4cast edge is simplified between junctions, so
+  where both its ends are on our main roads its speed goes to every edge of the shortest path
+  between them along those roads, if that is at most 1.5× the straight distance ("before"
+  matching). Then, for edges still without one, the straight chord of a Traffic4cast edge whose ends
+  the clip still has (`osmium getid`), within 20 m and 30° ("after"). Edges with a synthetic id or a
+  node OpenStreetMap no longer has are counted and not used. The rest take their class's median
+  measured speed.
+- **Coverage on build 2026-11-12:** Traffic4cast's London is a fixed box, longitude −0.378 to
+  0.075 (about Hounslow to Woolwich): roads east and west of it have no speed. Inside it 85% of
+  the main roads' length has a measured speed; motorways are mostly unmatched (few of their 2019
+  node ids are still in OpenStreetMap).
+- **Links:** roads are cut into pieces of at most 20 m; each piece end belongs to its nearest
+  station or cell (never a guard node). A piece whose ends belong to different nodes A and B makes
+  A–B a candidate; within the road stretches owned by A or B the link's time is the drive from A's
+  anchor (its own road point nearest it) to B's, each way that exists, averaged, the fastest stretch
+  when there are several, floored at 0.5 min. A link with under half its road measured is dropped
+  and listed. Cutting finer changes nothing.
+- **Thames crossings:** every bridge or tunnel of a motor road that crosses the River Thames inside
+  Greater London (`london_region.geojson`, with the tidal river the ONS boundary leaves out filled
+  back in), with the link that crosses it, or why there is none (not a main road, closed to cars,
+  both banks on one node, the link dropped).
+
+**The car springs: the overhead once a trip.** A car trip pays CAR_OVERHEAD_MIN = 5 minutes for
+parking and getting to and from the car, once. Every node a car link touches gets a twin, a free
+point in no triangle and never drawn: an access spring (pull-only, rest s·2.5 min) joins the node
+to its twin, and road springs (pull-only, rest s·drive minutes) join twins along the links. Two
+places are then held at most s·(5 + the drive along the roads) apart, however many nodes the road
+passes. A road spring's weight is the train rule (the real distance between its nodes × the median
+mesh edge); an access spring's is the sum of its twin's road springs'. A weak tie, ρ·η·a·(d/r)²/2
+with η = 10⁻³, holds each twin by its node, so the Hessian stays positive definite where every car
+spring is slack; it is zero on the real map. Train and car springs between the same places sit in
+parallel and add: where a pair is stretched past both rest lengths the slower one pulls too. Train
+hops come from the tables and include a wait at each; a car trip pays its overhead once.
+
+**What it writes** (into `modes/` of the time map's folder, only with `--modes car`; without it
+the job's output is exactly what it was, byte for byte):
+
+| File | What it is |
+|---|---|
+| `modes.json` | The modes (Walking and Bus not available yet, and why), which combination is in which file, train and tube's pulling springs at each position, whether each switch goes straight across, `roads.bin`'s header, every file's size |
+| `combo-car.json`, `combo-car-train.json` | Each car combination: every solved position in whole decimetres, its measures and each mode's pulling springs, and its in-between keyframes |
+| `roads.bin` | The main roads carried through the mesh like the rail (`land.py`), drawn while Car is on |
+| `report.md`, `report.json` | The car data (licence, days, window, coverage before and after), the Thames crossings, the combinations compared at train alone's Wembley pick and at the end (node shift from the real map and from train alone, each mode's pulling share, Wembley Park, σ₁ against the all-mode tables, the thinnest triangle), every switch, the restart check per car combination, the spot check, every position |
+
+`timemap.json` and `land.bin` stay train and tube alone, so the page's first load is unchanged;
+the land's Float32 sliver check covers every blend any combination draws, switches included. Each
+car file must be under 2 MB gzipped; the page fetches a combination the first time it is switched
+on.
+
+**No folds.** Every combination is solved and checked like the time map: 0 flipped triangles at
+every shipped position, as shipped and in Float32, and every blend between neighbouring keyframes
+checked exactly; the restart check (nudged starts, other ladders of ρ) runs for each car
+combination. **Switching** happens at solved positions: the page glides to the nearest one, then
+blends straight across to the other combination where the build checked that blend
+(`mesh.blend_min_area` on whole decimetres), or else goes back down its own path to the real map
+and up the other combination. Both directions of train ↔ car with train and car ↔ car with train
+are checked at every position; train ↔ car always passes through one of them (one toggle at a time).
+
+**Spot check.** The station pair at least 3 km apart with the biggest gain by car (its table time
+minus the car's door-to-door time along the links, overhead included), and any `[[car_spot]]` row
+in `checks.toml`, with their map distance at train alone's Wembley pick and at the end, for each
+combination: it passes when car with train ends closer than train alone.
+
+**Serving.** The app serves `modes/` like the map itself, under the same gate (main README,
+"Whole city"). The car's speeds are used non-commercially, with the owner's permissions.

@@ -21,7 +21,7 @@ import gzip
 import hashlib
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
@@ -40,6 +40,16 @@ FILES = {
     "shepard.svg": "image/svg+xml",
 }
 REPORT = ("report.md", "shepard.svg")     # both present: the page links "How this map was checked"
+# The travel modes (#23, L-03), in the window's modes/ folder: car alone and car with train and tube,
+# served like the map itself, under the same gate.
+MODES_DIR = "modes"
+MODE_FILES = {
+    "modes.json": "application/json",
+    "combo-car.json": "application/json",
+    "combo-car-train.json": "application/json",
+    "roads.bin": "application/octet-stream",
+    "report.md": "text/plain; charset=utf-8",
+}
 DTYPE_BYTES = {"uint8": 1, "uint16": 2, "uint32": 4, "int32": 4, "float32": 4}
 GZIP_MIN = 500                            # as the app's GZipMiddleware
 
@@ -61,12 +71,12 @@ class Blob:
     gz_etag: str = ""
 
 
-def _blob(body: bytes, name: str) -> Blob:
+def _blob(body: bytes, name: str, media_type: str | None = None) -> Blob:
     tag = hashlib.sha256(body).hexdigest()[:32]
     gz = gzip.compress(body, compresslevel=6, mtime=0) if len(body) >= GZIP_MIN else None
     if gz is not None and len(gz) >= len(body):
         gz = None
-    return Blob(body, f'"{tag}"', FILES[name], gz, f'"{tag}-gz"' if gz is not None else "")
+    return Blob(body, f'"{tag}"', media_type or FILES[name], gz, f'"{tag}-gz"' if gz is not None else "")
 
 
 @dataclass(frozen=True)
@@ -76,6 +86,7 @@ class CityWindow:
     valid_until: date
     table_sha256: str
     files: dict[str, Blob]
+    modes: dict[str, Blob] = field(default_factory=dict)
 
     @property
     def report(self) -> bool:
@@ -128,7 +139,33 @@ def load_window(d: Path) -> CityWindow:
             files[name] = _blob((d / name).read_bytes(), name)
         except OSError:
             pass
-    return CityWindow(d.name, doc["build"], valid_until, doc["table_sha256"], files)
+    return CityWindow(d.name, doc["build"], valid_until, doc["table_sha256"], files, _load_modes(d, doc))
+
+
+def _load_modes(d: Path, doc: dict) -> dict[str, Blob]:
+    """The window's travel modes, every file present and made with this map (the same build, window,
+    table and node count), or none."""
+    md = d / MODES_DIR
+    if not (md / "modes.json").is_file():
+        return {}
+    nodes = len((doc.get("nodes") or {}).get("kind") or [])
+    out = {}
+    try:
+        for name, media in MODE_FILES.items():
+            body = (md / name).read_bytes()
+            if name.endswith(".json"):
+                m = json.loads(body)
+                same = (isinstance(m, dict) and m.get("build") == doc["build"] and m.get("window") == d.name
+                        and m.get("table_sha256") == doc["table_sha256"] and m.get("nodes") == nodes)
+                if not same:
+                    log.warning("whole city: window %s's travel modes left out (%s was made with another map)",
+                                d.name, name)
+                    return {}
+            out[name] = _blob(body, name, media)
+    except (OSError, ValueError) as exc:
+        log.warning("whole city: window %s's travel modes left out (%s)", d.name, type(exc).__name__)
+        return {}
+    return out
 
 
 def load_dir(directory: str | Path, repo: Path = REPO) -> dict[str, CityWindow]:
@@ -238,8 +275,16 @@ class WholeCityHolder:
             "windows": [{"id": w, "label": window_label(data.windows[w])} for w in WINDOWS if w in windows],
             "report": {w: cw.report for w, cw in windows.items()},
             "development_only": data.development_only,
+            # The travel modes (#23): the windows built with them.
+            **({"modes": {w: True for w, cw in windows.items() if cw.modes}}
+               if any(cw.modes for cw in windows.values()) else {}),
         }
 
     def file(self, transit: TransitHolder, window: str, name: str, *, local: bool = False) -> Blob | None:
         cw = self.usable(transit, local=local).get(window)
         return cw.files.get(name) if cw else None
+
+    def mode_file(self, transit: TransitHolder, window: str, name: str, *, local: bool = False) -> Blob | None:
+        """A travel-mode file, under the same gate as the map."""
+        cw = self.usable(transit, local=local).get(window)
+        return cw.modes.get(name) if cw else None

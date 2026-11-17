@@ -13,9 +13,14 @@
 // mixing on the GPU. "Time map" plays the whole move at an even pace, and pressed again plays it
 // back; with reduced motion they jump. Faint rings mark where the named stations really are.
 //
-// Lines (rail, borough outlines, the Metropolitan line) get thinner where the map squeezes the
-// ground across them, and smooth lines round off the small bends they take where they cross a
-// mesh edge (carry.js says how). ?details=1 shows the build's own numbers as well.
+// Lines (rail, roads, borough outlines) get thinner where the map squeezes the ground across them,
+// and smooth lines round off the small bends they take where they cross a mesh edge (carry.js says
+// how). ?details=1 shows the build's own numbers as well.
+//
+// Travel modes (#23, L-03): Walking, Bus, Train and tube, Car. Train and tube alone is the time map
+// above. Where the build has them (the server lists them), car alone and car with train and tube
+// come from its modes/ folder, each fetched the first time it is switched on; a switch moves the
+// map only along blends the build checked.
 import { readHandoff, writeHandoff } from "/shared/handoff.js";
 import { createMeshRenderer } from "/shared/mesh/renderer.js";
 import { localFrame, makeCamera } from "/shared/mesh/frame.js";
@@ -24,8 +29,8 @@ import { cityUnavailable } from "/shared/tools.js";
 import { forgetCity, keepCity, keptCityWhy } from "/shared/offline.js";
 import { defaultWindow, pollStatus, statusLoading, windowText } from "/shared/transit.js";
 import {
-  blend, buildLand, createMotion, createPlacer, decodeLand, keyframes, loadSegment, pathLengths, placeLine,
-  segmentAt, segmentTriangles, smoothLine, triangleMaps, widthFactors,
+  blend, buildLand, comboOf, createMotion, createPlacer, decodeLand, ease, keyframes, loadSegment, pathLengths,
+  pullWords, segmentAt, switchPlan,
 } from "./carry.js";
 
 const $ = (id) => document.getElementById(id);
@@ -35,6 +40,7 @@ const DETAILS = new URLSearchParams(location.search).get("details") === "1";
 const TAP_PX = 5;            // a press that moves less than this is a tap, not a drag
 const PLAY_MS = 4500;        // the whole move, real map to the end; a part of it takes its share
 const STEP_MS = 450;         // the shortest glide with the arrow keys
+const SWITCH_MS = 900;       // a straight blend from one combination of travel modes to another
 const HANDOFF = readHandoff();
 
 // Say why there's no map here, and stop: nothing below runs (an unsettled await, not an error,
@@ -129,12 +135,34 @@ const frame = localFrame({ lon: doc.frame.origin[0], lat: doc.frame.origin[1] })
 const kinds = doc.nodes.kind;
 const nStation = doc.nodes.stations;
 const tri = Uint32Array.from(doc.triangles);
-const keys = keyframes(doc);
-const last = doc.frames.length - 1;              // the slider runs 0 … last
-const real = keys[0].nodes;
-const inner = kinds.map((k, i) => (k !== 2 ? i : -1)).filter((i) => i >= 0);
-const cum = pathLengths(keys, inner);
+const last = doc.frames.length - 1;              // the slider runs 0 … last, the same in every combination
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const inner = kinds.map((k, i) => (k !== 2 ? i : -1)).filter((i) => i >= 0);
+
+// ── combinations of travel modes ────────────────────────────────────
+// Train and tube alone is the time map itself (timemap.json). Where the build has them (the server
+// lists them), car alone and car with train and tube come from modes/, each fetched the first time
+// it is switched on. With no mode on the map is the real map.
+const combos = {};
+function addCombo(id, cdoc) {
+  const keys = keyframes(cdoc);
+  const mainKey = [];
+  keys.forEach((k, j) => { if (k.main !== null) mainKey[k.main] = j; });
+  combos[id] = { id, doc: cdoc, frames: cdoc.frames, keys, mainKey, cum: pathLengths(keys, inner), placer: null, motion: null };
+  return combos[id];
+}
+addCombo("train", doc);
+const real = combos.train.keys[0].nodes;
+let index = null;            // modes/modes.json: the modes, their files, which switches go straight across
+if (city.modes && city.modes[win]) {
+  try {
+    index = await load(`/api/whole-city/${win}/modes/modes.json`, "json");
+  } catch {
+    index = null;
+  }
+}
+const on = new Set(["train"]);
+let cur = "train";            // "train", "car", "car-train", or "none" (the real map)
 
 // A public page's line about where this comes from (the build's own notice is for its report).
 $("notice").textContent = `Made from London's public transport timetables for ${label[win]}: typical times, ` +
@@ -164,43 +192,55 @@ if (!renderer.supported) {
   if (landBuf) scene = buildLand(decodeLand(landBuf, doc.land), doc.land, real, STYLE_ID);
 }
 const smoothBox = $("smooth");
-const placer = scene ? createPlacer(scene, keys, { triangles: tri, smooth: smoothBox.checked }) : null;
+let roadsLoaded = false;
 
-// The Metropolitan line, carried like the land: on every keyframe its exact and smoothed
-// vertices, and each segment's width factor (thinner where the map squeezes it).
-const maps = keys.map((k) => triangleMaps(tri, real, k.nodes));
-const routes = doc.lines.map((ln) => {
-  const nv = ln.c.length / 3;
-  const segC = new Uint16Array(6 * Math.max(0, nv - 1));
-  for (let i = 0; i + 1 < nv; i++) segC.set(ln.c.slice(3 * i, 3 * i + 6), 6 * i);
-  const pinned = Uint8Array.from({ length: nv }, (_, i) => (ln.c[3 * i] === ln.c[3 * i + 1] && ln.c[3 * i + 1] === ln.c[3 * i + 2] ? 1 : 0));
-  const realXY = placeLine(ln, doc.weight_scale, real);
-  const realSeg = new Float64Array(4 * Math.max(0, nv - 1));
-  for (let i = 0; i + 1 < nv; i++) realSeg.set(realXY.subarray(2 * i, 2 * i + 4), 4 * i);
-  const segTri = segmentTriangles(segC, tri);
-  const at = keys.map((k) => placeLine(ln, doc.weight_scale, k.nodes));
-  return { ...ln, at, smoothed: at.map((xy) => smoothLine(realXY, xy, pinned)), wf: maps.map((mp) => widthFactors(realSeg, segTri, mp)) };
-});
+// The land placed on a combination's keyframes (and the roads too, once Car has been on): one
+// placer per combination, made when it is first drawn.
+function placerOf(c) {
+  if (!scene) return null;
+  if (!c.placer) c.placer = createPlacer(scene, c.keys, { triangles: tri, smooth: smoothBox.checked });
+  return c.placer;
+}
+
+// What the renderer draws: rail and tube only while Train and tube is on, the car's roads only while
+// Car is on (`modes`: the modes on, or both ends' while switching).
+function visiblePasses(modes) {
+  const out = {};
+  for (const [name, p] of Object.entries(scene.passes)) {
+    if (name === "rail" && !modes.has("train")) continue;
+    if (name === "road" && !modes.has("car")) continue;
+    out[name] = p;
+  }
+  return out;
+}
 
 // ── view ────────────────────────────────────────────────────────────
 const view = { cx: 0, cy: 0, zoom: 10, w: 1, h: 1 };
 let v = 0;                   // where the map is drawn: 0 the real map … last the end of the slider
-let uploaded = -1;           // the blend whose layouts the renderer holds
+let uploaded = "";           // the blend whose layouts the renderer holds
 let seg = { k: 0, s: 0 };
+let morphS = 0;              // the renderer's morph between the two layouts it holds
 let dragging = false;        // the slider is being dragged (the readout stays quiet until it is let go)
 let picked = -1;             // the station "Show a station" picked: ringed until the map moves
-// One move at a time, driven by one animation-frame callback (carry.js createMotion).
-const motion = createMotion({
-  keys, cum, last, playMs: PLAY_MS, stepMs: STEP_MS, reduceMotion,
-  now: () => performance.now(), schedule: (f) => requestAnimationFrame(f), cancel: (h) => cancelAnimationFrame(h),
-  onMove: moveTo, onSettle: settled,
-});
+let switching = null;        // a switch between combinations under way: {from, to}
+let afterSettle = null;      // what a switch does next, once a glide comes to rest
 const nodes = new Float64Array(real.length);
-let routeXY = routes.map((r) => r.at[0]), routeWF = routes.map((r) => r.wf[0]);
+
+// One move at a time per combination, driven by one animation-frame callback (carry.js createMotion).
+function motionOf(c) {
+  c.motion ||= createMotion({
+    keys: c.keys, cum: c.cum, last, playMs: PLAY_MS, stepMs: STEP_MS, reduceMotion,
+    now: () => performance.now(), schedule: (f) => requestAnimationFrame(f), cancel: (h) => cancelAnimationFrame(h),
+    onMove: moveTo, onSettle: settled,
+  });
+  return c.motion;
+}
+let C = combos.train;        // the combination the map is drawn from (the last one, with no mode on)
+let motion = motionOf(C);
 
 function bbox() {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const k of keys) for (const i of inner) {
+  for (const k of combos.train.keys) for (const i of inner) {
     x0 = Math.min(x0, k.nodes[2 * i]); x1 = Math.max(x1, k.nodes[2 * i]);
     y0 = Math.min(y0, k.nodes[2 * i + 1]); y1 = Math.max(y1, k.nodes[2 * i + 1]);
   }
@@ -246,26 +286,28 @@ function resize() {
 }
 
 // ── where the map is ────────────────────────────────────────────────
+function upload(key, placedA, placedB, modes) {
+  if (!scene || !renderer.supported || renderer.lost || uploaded === key) return;
+  loadSegment(scene, placedA, placedB);
+  renderer.setScene({ origin: frame.origin, passes: visiblePasses(modes), labels: [] });
+  uploaded = key;
+}
+
 function moveTo(value) {
   const to = Math.max(0, Math.min(last, value));
   const dir = Math.sign(to - v);
   v = to;
-  seg = segmentAt(keys, v);
-  const b = Math.min(seg.k + 1, keys.length - 1);
-  blend(keys[seg.k].nodes, keys[b].nodes, seg.s, nodes);
-  const which = smoothBox.checked ? "smoothed" : "at";
-  routeXY = routes.map((r) => blend(r[which][seg.k], r[which][b], seg.s));
-  routeWF = routes.map((r) => blend(r.wf[seg.k], r.wf[b], seg.s));
-  if (scene && renderer.supported && !renderer.lost && uploaded !== seg.k) {
-    loadSegment(scene, placer.placed(seg.k), placer.placed(b));
-    renderer.setScene({ origin: frame.origin, passes: scene.passes, labels: [] });
-    uploaded = seg.k;
-  }
+  seg = segmentAt(C.keys, v);
+  morphS = seg.s;
+  const b = Math.min(seg.k + 1, C.keys.length - 1);
+  blend(C.keys[seg.k].nodes, C.keys[b].nodes, seg.s, nodes);
+  const p = placerOf(C);
+  if (p) upload(`${C.id}:${seg.k}:${[...on].join()}`, p.placed(seg.k), p.placed(b), on);
   ahead(dir);
   slider.value = String(v);
   const text = where();
   if (slider.getAttribute("aria-valuetext") !== text) slider.setAttribute("aria-valuetext", text);
-  const live = motion.moving || dragging;
+  const live = motion.moving || dragging || Boolean(switching);
   const politeness = live ? "off" : "polite";
   if (readout.getAttribute("aria-live") !== politeness) readout.setAttribute("aria-live", politeness);
   if (live) showLive(); else showReadout();
@@ -277,15 +319,16 @@ function moveTo(value) {
 // into the next blend only copies and uploads.
 let aheadTimer = 0, aheadFor = "";
 function ahead(dir) {
+  const placer = placerOf(C);
   if (!placer || !dir) return;
   const want = dir > 0 ? [seg.k + 2, seg.k + 3] : [seg.k - 1, seg.k - 2];
-  if (aheadFor === want.join()) return;           // already on its way: let it finish
-  aheadFor = want.join();
+  if (aheadFor === C.id + want.join()) return;   // already on its way: let it finish
+  aheadFor = C.id + want.join();
   clearTimeout(aheadTimer);
   const next = () => {
     const k = want.shift();
     if (k === undefined) return;
-    if (k < 0 || k >= keys.length || placer.has(k)) { next(); return; }
+    if (k < 0 || k >= C.keys.length || placer.has(k)) { next(); return; }
     placer.placed(k);
     aheadTimer = setTimeout(next, 0);
   };
@@ -299,18 +342,22 @@ function onMain() {
 
 // ρ to three significant figures, so neighbouring keyframes read apart (44.9 and 45.2).
 const fmt = (rho) => String(Number(rho.toPrecision(3)));
+const NAMES = { train: "Train and tube", car: "Car", "car-train": "Car with train and tube", none: "No way of travelling" };
 
-// Where the map is, in plain words; with ?details=1, in the build's own terms (the train
-// springs' strength, and where the layout jumps).
+// Where the map is, in plain words; with ?details=1, in the build's own terms (the springs'
+// strength, and where the layout jumps).
 function where() {
+  if (switching) return `Switching to ${NAMES[switching.to].toLowerCase()}`;
+  if (cur === "none") return "The real map: no way of travelling is on";
   const i = onMain();
   if (i === 0) return "The real map";
   if (!DETAILS) {
     if (i === last) return "The time map";
     return `On the way to the time map, ${Math.round((100 * v) / last)}% of the way`;
   }
-  if (i !== null) return `Train springs ${fmt(doc.frames[i].rho)} times the grid's strength`;
-  const a = keys[seg.k], b = keys[Math.min(seg.k + 1, keys.length - 1)];
+  const springs = cur === "train" ? "Train springs" : cur === "car" ? "Car springs" : "Springs";
+  if (i !== null) return `${springs} ${fmt(C.frames[i].rho)} times the grid's strength`;
+  const a = C.keys[seg.k], b = C.keys[Math.min(seg.k + 1, C.keys.length - 1)];
   if (a.settling || b.settling || a.rho === b.rho) {
     return `At ${fmt(b.rho)} times the grid's strength the layout jumps to another arrangement; the map follows ` +
       "the solver's own steps";
@@ -323,7 +370,7 @@ function where() {
 // the colours blend from one to the other (an in-between layout has no stress of its own).
 function stressAt(i) {
   const i0 = Math.floor(v + 1e-9), i1 = Math.min(last, i0 + 1), f = v - i0;
-  const a = doc.frames[i0].stress[i], b = doc.frames[i1].stress[i];
+  const a = C.frames[i0].stress[i], b = C.frames[i1].stress[i];
   return f < 1e-9 ? a : a + (b - a) * f;
 }
 
@@ -344,12 +391,12 @@ function stressColour(x) {
 
 // The map itself stays light (the renderer's background and land colours), so what is drawn on
 // it keeps the light map's colours too.
-const MAP = { met: "#9b0056", dotEdge: "#ffffff", halo: "rgba(255,255,255,0.85)", text: "#1b1b1f", ghost: "#4a4458", pick: "#2f4fd8" };
+const MAP = { dotEdge: "#ffffff", halo: "rgba(255,255,255,0.85)", text: "#1b1b1f", ghost: "#4a4458", pick: "#2f4fd8" };
 
 function draw() {
   tip.hidden = true;           // whatever it pointed at has moved
   const cam = camera();
-  if (renderer.supported && !renderer.lost) renderer.draw(cam, seg.s, { adaptive: false });
+  if (renderer.supported && !renderer.lost) renderer.draw(cam, morphS, { adaptive: false });
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const W = Math.round(view.w * dpr), H = Math.round(view.h * dpr);
   if (overlay.width !== W || overlay.height !== H) { overlay.width = W; overlay.height = H; }
@@ -369,23 +416,8 @@ function draw() {
     }
     g.stroke();
   }
-  if ($("line").checked) {
-    // Segment by segment, each as wide as the map leaves it (thinner where it is squeezed).
-    g.strokeStyle = MAP.met;
-    g.lineCap = "round";
-    routeXY.forEach((xy, r) => {
-      const wf = routeWF[r];
-      for (let k = 0; k + 1 < xy.length / 2; k++) {
-        const [x0, y0] = toScreen(cam, xy[2 * k], xy[2 * k + 1]);
-        const [x1, y1] = toScreen(cam, xy[2 * k + 2], xy[2 * k + 3]);
-        g.lineWidth = 3 * wf[k];
-        g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
-      }
-    });
-    g.lineCap = "butt";
-  }
   // Where the named stations really are: a faint ring there, and a dashed line to where they are now.
-  if ($("ghosts").checked && v > 0) {
+  if ($("ghosts").checked && (v > 0 || switching) && cur !== "none") {
     g.strokeStyle = MAP.ghost;
     g.lineWidth = 1;
     g.globalAlpha = 0.6;
@@ -444,18 +476,28 @@ function km(i, j, xy) {
 
 const pairText = (r, now, was) => `${r.name}: ${now.toFixed(1)} km apart here, ${was.toFixed(1)} km really`;
 
-// The full readout, for a map at rest: where the map is, and the distance between each checked
-// pair of stations here and really. ?details=1 adds the build's checks.
+// Each mode's springs at the nearest solved position: how many pull, and where (modes.json for
+// train and tube alone, the combination's own frames otherwise).
+function modeLines() {
+  if (!index || cur === "none") return [];
+  const i = Math.round(v);
+  const pulls = cur === "train" ? (index.train_pulls[i] || {}) : (C.frames[i].pulls || {});
+  return ["train", "car"].filter((m) => on.has(m)).map((m) => pullWords(m, pulls[m], i, index.overhead_min));
+}
+
+// The full readout, for a map at rest: where the map is, each mode's springs, and the distance
+// between each checked pair of stations here and really. ?details=1 adds the build's checks.
 function showReadout() {
   const i = onMain();
-  const m = i !== null ? doc.frames[i].metrics : null;
+  const m = i !== null && cur !== "none" ? C.frames[i].metrics : null;
   const lines = [];
-  if (!DETAILS) lines.push(`${where()}.`);
+  if (!DETAILS || cur === "none") lines.push(`${where()}.`);
   else if (i === 0) lines.push("The real map. Every triangle at its real size; 0 flipped.");
   else if (m) {
     lines.push(`${where()}. ${m.flipped} flipped triangles; the most squeezed keeps ` +
       `${(m.area_ratio_min * 100).toFixed(1)}% of its area${m.squeezed_near ? ` (near ${m.squeezed_near})` : ""}.`);
   } else lines.push(`${where()}. No triangle turns over anywhere on the way: every step was checked.`);
+  lines.push(...modeLines());
   for (const r of doc.ratios) {
     if (r.station === null || r.reference === null) { if (DETAILS) lines.push(`${r.name}: absent`); continue; }
     const now = km(r.station, r.reference, nodes), was = km(r.station, r.reference, real);
@@ -467,15 +509,17 @@ function showReadout() {
   holdReadout();
 }
 
-// While the map moves, only the distances change: they update in place, so nothing jumps.
+// While the map moves, only the first line and the distances change: they update in place, so
+// nothing jumps.
 function showLive() {
   const shown = doc.ratios.filter((r) => DETAILS || (r.station !== null && r.reference !== null));
+  const skip = modeLines().length;
   const divs = readout.children;
-  if (divs.length !== shown.length + 1) { showReadout(); return; }
+  if (divs.length !== shown.length + 1 + skip) { showReadout(); return; }
   divs[0].textContent = `${where()}…`;
   shown.forEach((r, k) => {
     if (r.station === null || r.reference === null) return;
-    divs[k + 1].textContent = pairText(r, km(r.station, r.reference, nodes), km(r.station, r.reference, real));
+    divs[k + 1 + skip].textContent = pairText(r, km(r.station, r.reference, nodes), km(r.station, r.reference, real));
   });
   holdReadout();
 }
@@ -498,6 +542,7 @@ function holdReadout() {
 
 // ── motion ──────────────────────────────────────────────────────────
 function settled() {
+  if (afterSettle) { const next = afterSettle; afterSettle = null; next(); return; }
   if (readout.getAttribute("aria-live") !== "polite") readout.setAttribute("aria-live", "polite");
   showReadout();
   updateToggle();
@@ -507,27 +552,170 @@ function settled() {
 // there, so its state is said once (aria-pressed), never in its name. Pressed mid-move it turns
 // round.
 function updateToggle() {
-  const pressed = String(motion.back);
+  const pressed = String(cur !== "none" && motion.back);
   if (toggle.getAttribute("aria-pressed") !== pressed) toggle.setAttribute("aria-pressed", pressed);
 }
 
-toggle.addEventListener("click", () => motion.toggle());
+toggle.addEventListener("click", () => { if (!switching && cur !== "none") motion.toggle(); });
 
 // Dragging the slider moves the map continuously, the readout's live distances quiet until it is
 // let go (change), when the full readout comes back once.
 slider.addEventListener("input", () => {
+  if (switching || cur === "none") return;
   dragging = true;
   motion.drag(Number(slider.value));
 });
 slider.addEventListener("change", () => {
   dragging = false;
-  settled();
+  if (!switching) settled();
 });
 
 // Arrow and page keys glide to the previous or next solved position; Home and End play to the ends.
 slider.addEventListener("keydown", (e) => {
+  if (switching || cur === "none") return;
   if (motion.key(e.key, e.repeat)) e.preventDefault();
 });
+
+// ── switching travel modes ──────────────────────────────────────────
+// A mode switched on or off moves the map to the combination of the modes now on, at a solved
+// position: the map glides to the nearest one, then blends straight across where the build
+// checked that blend, or else goes down its own path to the real map and up the new one. Every
+// blend drawn is one the build checked. The controls wait while it moves.
+const modeButtons = [...document.querySelectorAll("#modes button[data-mode]")];
+let remembered = 0;          // where the slider was when the last mode went off
+
+async function loadCombo(id) {
+  if (combos[id]) return combos[id];
+  const entry = index.combos[id];
+  const cdoc = await load(`/api/whole-city/${win}/modes/${entry.file}`, "json");
+  if (cdoc.build !== doc.build || cdoc.table_sha256 !== doc.table_sha256) throw new Error("another build");
+  return addCombo(id, cdoc);
+}
+
+async function loadRoads() {
+  if (roadsLoaded || !scene || !index.roads) return;
+  const buf = await load(`/api/whole-city/${win}/modes/roads.bin`, "bin");
+  const roads = buildLand(decodeLand(buf, index.roads), index.roads, real, STYLE_ID);
+  Object.assign(scene.passes, roads.passes);
+  Object.assign(scene.verts, roads.verts);
+  roadsLoaded = true;
+  for (const c of Object.values(combos)) c.placer = null;     // placed again with the roads
+  uploaded = "";
+}
+
+function setBusy(busy) {
+  $("controls").setAttribute("aria-busy", String(busy));
+  for (const b of modeButtons) b.disabled = busy || b.dataset.off === "1";
+  slider.disabled = busy || cur === "none";
+  toggle.disabled = busy || cur === "none";
+}
+
+function updateModeButtons() {
+  for (const b of modeButtons) b.setAttribute("aria-pressed", String(on.has(b.dataset.mode)));
+}
+
+function glide(m, x, then) {
+  afterSettle = then;
+  m.playTo(x);
+}
+
+// Blend straight from combination a to b at solved position i, in about SWITCH_MS (at once with
+// reduced motion), then call done.
+function crossBlend(a, b, i, done) {
+  const ka = a.mainKey[i], kb = b.mainKey[i];
+  const A = a.keys[ka].nodes, B = b.keys[kb].nodes;
+  const both = new Set([...a.id.split("-"), ...b.id.split("-")]);
+  if (scene) {
+    upload(`${a.id}>${b.id}:${i}:${[...both].join()}`, placerOf(a).placed(ka), placerOf(b).placed(kb), both);
+  }
+  const start = performance.now();
+  const step = (t) => {
+    const p = reduceMotion() ? 1 : Math.max(0, Math.min(1, (t - start) / SWITCH_MS));
+    morphS = ease(p);
+    blend(A, B, morphS, nodes);
+    showLive();
+    draw();
+    if (p < 1) requestAnimationFrame(step); else done();
+  };
+  requestAnimationFrame(step);
+}
+
+async function switchModes(mode) {
+  if (switching) return;
+  const next = new Set(on);
+  if (next.has(mode)) next.delete(mode); else next.add(mode);
+  const to = comboOf(next);
+  if (to !== "none") {
+    try {
+      status.textContent = combos[to] ? "" : "Getting the other map…";
+      const c = await loadCombo(to);
+      if (next.has("car")) await loadRoads();
+      status.textContent = "";
+      motionOf(c);
+    } catch {
+      status.textContent = "That map didn't load. Try again in a moment.";
+      return;
+    }
+  }
+  const from = cur;
+  motion.stop();
+  const i = Math.round(motion.v);
+  const plan = switchPlan(index && index.cross, from, to, i);
+  switching = { from, to };
+  setBusy(true);
+  const enter = (id, x) => {
+    cur = id;
+    for (const m of ["train", "car"]) { if (next.has(m)) on.add(m); else on.delete(m); }
+    updateModeButtons();
+    if (id !== "none") { C = combos[id]; motion = motionOf(C); }
+    uploaded = "";
+    motion.jump(x);
+  };
+  const finish = () => {
+    switching = null;
+    setBusy(false);
+    afterSettle = null;
+    uploaded = "";
+    moveTo(motion.v);
+    settled();
+  };
+  if (plan === "down") {
+    remembered = motion.v;
+    glide(motion, 0, () => { enter("none", 0); finish(); });
+  } else if (plan === "up") {
+    enter(to, 0);
+    glide(motion, remembered, finish);
+  } else if (plan === "swap") {
+    enter(to, 0);
+    finish();
+  } else if (plan === "straight") {
+    glide(motion, i, () => crossBlend(C, combos[to], i, () => { enter(to, i); finish(); }));
+  } else {
+    glide(motion, 0, () => { enter(to, 0); glide(motion, i, finish); });
+  }
+}
+
+if (index) {
+  const byId = Object.fromEntries(index.modes.map((m) => [m.id, m]));
+  for (const b of modeButtons) {
+    const m = byId[b.dataset.mode];
+    if (m && m.available) b.dataset.off = "0";
+    else if (m) { b.dataset.off = "1"; b.title = m.why; }
+  }
+  $("modes-note").textContent = "Car: typical weekday speeds from 13:00 to 14:00 (HERE Traffic4cast, 2019 to " +
+    `2020), with ${index.overhead_min} minutes once a trip for parking and getting to the car.`;
+  $("modes-note").hidden = false;
+  $("modes-report-link").href = `/api/whole-city/${win}/modes/report.md`;
+  $("modes-report-item").hidden = false;
+  $("checked").hidden = false;
+} else {
+  for (const b of modeButtons) {
+    if (b.dataset.mode === "car") { b.dataset.off = "1"; b.title = "This map was built without the car."; }
+  }
+}
+for (const b of modeButtons) b.disabled = b.dataset.off === "1";
+updateModeButtons();
+for (const b of modeButtons) b.addEventListener("click", () => switchModes(b.dataset.mode));
 
 function zoomBy(dz) {
   view.zoom += dz;
@@ -536,10 +724,10 @@ function zoomBy(dz) {
 $("fit").addEventListener("click", () => { picked = -1; fit(); draw(); });
 $("zoom-in").addEventListener("click", () => zoomBy(0.5));
 $("zoom-out").addEventListener("click", () => zoomBy(-0.5));
-for (const id of ["labels", "line", "mesh", "ghosts"]) $(id).addEventListener("change", draw);
+for (const id of ["labels", "mesh", "ghosts"]) $(id).addEventListener("change", draw);
 smoothBox.addEventListener("change", () => {
-  if (placer) placer.setSmooth(smoothBox.checked);
-  uploaded = -1;
+  for (const c of Object.values(combos)) if (c.placer) c.placer.setSmooth(smoothBox.checked);
+  uploaded = "";
   moveTo(motion.v);
 });
 
@@ -558,7 +746,7 @@ stationSel.addEventListener("change", () => {
 });
 
 // Marks under the slider (?details=1): the first solved position where Wembley Park passes its
-// check against Baker Street, and any place where the layout jumps.
+// check against Baker Street, and any place where the layout jumps (train and tube alone).
 function markSlider() {
   const add = (at, text, title, cls) => {
     const m = document.createElement("span");
@@ -638,10 +826,10 @@ function showTip(i) {
     tip.textContent = `${doc.nodes.label[i]}: ${fitWords(stressAt(i))}.`;
   } else {
     tip.textContent = k !== null
-      ? `${doc.nodes.label[i]}: leftover stress ${doc.frames[k].stress[i].toFixed(2)}`
-      : `${doc.nodes.label[i]}: leftover stress ${doc.frames[Math.floor(v)].stress[i].toFixed(2)} at ` +
-        `${fmt(doc.frames[Math.floor(v)].rho)}, ${doc.frames[Math.ceil(v)].stress[i].toFixed(2)} at ` +
-        `${fmt(doc.frames[Math.ceil(v)].rho)} times the grid's strength (the solved positions either side)`;
+      ? `${doc.nodes.label[i]}: leftover stress ${C.frames[k].stress[i].toFixed(2)}`
+      : `${doc.nodes.label[i]}: leftover stress ${C.frames[Math.floor(v)].stress[i].toFixed(2)} at ` +
+        `${fmt(C.frames[Math.floor(v)].rho)}, ${C.frames[Math.ceil(v)].stress[i].toFixed(2)} at ` +
+        `${fmt(C.frames[Math.ceil(v)].rho)} times the grid's strength (the solved positions either side)`;
   }
   tip.hidden = false;
   tip.style.left = `${Math.max(0, Math.min(view.w - 220, sx + 10))}px`;
@@ -649,7 +837,7 @@ function showTip(i) {
 }
 
 function hover(x, y) {
-  if (motion.moving) return;
+  if (motion.moving || switching) return;
   const cam = camera();
   let best = -1, bd = 14;
   for (let i = 0; i < nStation; i++) {
@@ -665,7 +853,10 @@ if (DETAILS) markSlider();
 new ResizeObserver(resize).observe(glCanvas.parentElement);
 motion.jump(0);
 
-// For the headless checks (?test=1): the motion and the view.
+// For the headless checks (?test=1): the motion, the view and the travel modes.
 if (new URLSearchParams(location.search).get("test") === "1") {
-  window.__city = { motion, view, get v() { return v; }, win, doc };
+  window.__city = {
+    get motion() { return motion; }, view, get v() { return v; }, win, doc,
+    get combo() { return cur; }, get switching() { return switching; }, switchModes,
+  };
 }

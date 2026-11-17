@@ -40,7 +40,9 @@ export async function keptCityWhy() {
   } catch { return none; }
 }
 
-const FILES = ["timemap.json", "land.bin", "report.md", "shepard.svg"];
+const FILES = ["timemap.json", "land.bin", "report.md", "shepard.svg",
+  // the travel modes (#23), fetched when first switched on
+  "modes/modes.json", "modes/combo-car.json", "modes/combo-car-train.json", "modes/roads.bin", "modes/report.md"];
 
 // Keep the status a window was shown with (`win`, its files just fetched through the service
 // worker). Windows viewed earlier under the same build stay offered; when the build has

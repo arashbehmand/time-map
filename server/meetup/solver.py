@@ -88,7 +88,7 @@ FEW_STREETS_SHARE = 0.5
 FINEST_SEEDS = 3
 # When the best place has no street name, a place that has one is shown instead if it costs
 # at most this much more (minutes, in the objective's score), so people know where to go.
-NAMED_SLACK_MIN = 1.0
+NAMED_SLACK_MIN = 3.0
 # The shown point and name come from the first mode present: people meet on foot.
 MODE_ORDER = ("walking", "cycling", "driving", "driving-traffic")
 

@@ -338,7 +338,7 @@ See [transit/README.md](transit/README.md#full-london-time-map-6-l-02).
 
 Each answer is shown where the Matrix API snapped it onto the street network, with the
 street's name when Mapbox gives one. Mapbox often gives no name, for example on a footpath. When the best
-place has none, the best place that has one is shown instead if it costs at most a minute
+place has none, the best place that has one is shown instead if it costs at most three minutes
 more, from any stage (`diagnostics.named_over_best_min` says how much it cost, 0 when
 nothing was passed over). Each travel mode's times are to that mode's own snapped
 point; the point shown is the walking one (then cycling, then driving), and `snap_m` is its

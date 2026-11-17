@@ -15,7 +15,7 @@
 //                        the cut is left the slow ridges of transit's tables.
 //   squashField(field)   along each ray from the pin, radius = the place's own (cut) minutes
 //                        while they keep rising; where they drop below the slowest place met
-//                        so far (a pocket's shadow), the radius keeps climbing at `minSlope`
+//                        so far (a pocket's shadow), the radius keeps climbing at `minSlope` (MIN_SLOPE)
 //                        minutes per metre instead, until the minutes catch up. Holes in the
 //                        known ground are stepped over, not restarted from. A field without
 //                        pockets is drawn exactly as the fold, with round rings.
@@ -48,7 +48,12 @@ const known = (t) => t >= 0 && t < BEYOND;
 // walled-off ground (15–40 minutes above the streets around it) is lowered.
 export const CUT_MIN_DROP = 5;
 
-export function squashField(f, { minSlope = 0.003, maxSteps = 30 } = {}) {
+// The climb in a pocket's shadow: 5 minutes per km (W-03, #27). At 3 it was too gentle: places
+// behind a pocket were drawn almost on top of each other (median stretch up to 4.7:1 at
+// Heathrow); at 5 every test origin, window and directions setting is under 2.4:1.
+export const MIN_SLOPE = 0.005;
+
+export function squashField(f, { minSlope = MIN_SLOPE, maxSteps = 30 } = {}) {
   const { nx, ny, x0, y0, cell, minutes } = f;
   const n = nx * ny;
   const R = new Float32Array(n).fill(-1);

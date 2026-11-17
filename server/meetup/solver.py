@@ -86,6 +86,9 @@ MAX_UNRESOLVED_SHARE = 0.25
 FEW_STREETS_SHARE = 0.5
 # The third stage refines around this many of the best fine cells (their children only).
 FINEST_SEEDS = 3
+# When the best place has no street name, a place that has one is shown instead if it costs
+# at most this much more (minutes, in the objective's score), so people know where to go.
+NAMED_SLACK_MIN = 1.0
 # The shown point and name come from the first mode present: people meet on foot.
 MODE_ORDER = ("walking", "cycling", "driving", "driving-traffic")
 
@@ -339,6 +342,24 @@ def _distinct(ev: Evaluation, ranked: np.ndarray, k: int) -> list[int]:
     return picked
 
 
+def _named_near_best(named: list[tuple[str, Evaluation]], offered, objective: str,
+                     limit: float) -> tuple[str, Evaluation, int] | None:
+    """The best offered place with a street name scoring at most `limit`, from any stage.
+    Ties: a later stage, then that stage's ranking."""
+    found: tuple[tuple[float, int], str, Evaluation, int] | None = None
+    for s_idx, (name, ev) in enumerate(named):
+        scores = offered(ev)
+        for i in _ranked(ev, scores, objective):
+            if float(scores[i]) > limit + 1e-9:
+                break
+            if ev.shown[int(i)].name:
+                key = (round(float(scores[i]), 6), -s_idx)
+                if found is None or key < found[0]:
+                    found = (key, name, ev, int(i))
+                break
+    return None if found is None else found[1:]
+
+
 def _quickest(stages: list[Evaluation], offered, kept: Evaluation,
               best: int) -> tuple[Evaluation, int] | None:
     """Quickest on average among the places offered in either stage, when it is another
@@ -449,6 +470,18 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
     # ── Compile results ───────────────────────────────────────────────
     scores = offered(kept)
     ranked = _ranked(kept, scores, req.objective)
+    # A best place with no street name gives way to a named one at most NAMED_SLACK_MIN
+    # worse, from any stage (#26): a star on an unnamed path is hard to find.
+    named_cost = 0.0
+    if not kept.shown[int(ranked[0])].name:
+        unnamed_best = float(scores[ranked[0]])
+        found = _named_near_best(named, offered, req.objective, unnamed_best + NAMED_SLACK_MIN)
+        if found is not None:
+            stage, kept, idx = found
+            scores = offered(kept)
+            ranked = _ranked(kept, scores, req.objective)
+            ranked = np.concatenate(([idx], ranked[ranked != idx]))
+            named_cost = float(scores[idx]) - unnamed_best
     picks = _distinct(kept, ranked, req.search.top_k)
     top = [_make_result(i, kept, scores, participants) for i in picks]
     best_score = float(scores[ranked[0]])
@@ -523,6 +556,8 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
         "matrix_requests": allowance.sent_requests if allowance is not None else 0,
         "matrix_elements": allowance.sent_elements if allowance is not None else 0,
         "quickest_stage": quickest_stage,
+        # Minutes the shown place costs over an unnamed better one (0: none was passed over).
+        "named_over_best_min": round(named_cost, 2),
         "elapsed_ms": round((time.perf_counter() - started) * 1000),
     }
     return SolveResponse(

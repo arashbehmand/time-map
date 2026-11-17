@@ -595,3 +595,40 @@ def test_trips_ending_away_from_the_quickest_place_are_said():
     assert resp.quickest is not None and km_between((resp.quickest.lon, resp.quickest.lat), pair) < 1.0
     assert solver.NOTE_SPREAD_QUICKEST in resp.notes
     assert solver.NOTE_SPREAD not in resp.notes
+
+
+# ── a place with a street name over an unnamed one ──────────────────
+def _named_beyond(km):
+    """Places further than `km` from the middle are on High Street; nearer ones are unnamed."""
+    return lambda mode, d: Snap(d[0], d[1], "High Street" if km_between(d, at(0, 0)) > km else None)
+
+
+CYCLISTS = [person("a", -1, 0, "cycling"), person("b", 1, 0, "cycling")]
+
+
+def test_an_unnamed_best_place_gives_way_to_a_named_one_a_little_slower():
+    plain = run(CYCLISTS, FixedRouter(straight_line))
+    resp = run(CYCLISTS, FixedRouter(straight_line, snap_fn=_named_beyond(0.3)))
+    assert plain.best.name is None
+    assert resp.best.name == "High Street"
+    cost = resp.diagnostics["named_over_best_min"]
+    assert 0 < cost <= solver.NAMED_SLACK_MIN
+    assert resp.best.score == pytest.approx(plain.best.score + cost, abs=0.01)
+    assert all(km_between((c.lon, c.lat), best_point(resp)) * 1000 >= solver.MIN_ALT_GAP_M
+               for c in resp.top[1:])
+
+
+def test_a_named_place_too_much_slower_is_not_shown_instead():
+    plain = run(CYCLISTS, FixedRouter(straight_line))
+    resp = run(CYCLISTS, FixedRouter(straight_line, snap_fn=_named_beyond(3.0)))
+    assert resp.best.name is None
+    assert resp.diagnostics["named_over_best_min"] == 0
+    assert resp.best.score == plain.best.score
+
+
+def test_a_named_best_place_is_kept():
+    plain = run(CYCLISTS, FixedRouter(straight_line))
+    resp = run(CYCLISTS, FixedRouter(straight_line, snap_fn=_named_beyond(-1.0)))
+    assert resp.best.name == "High Street"
+    assert resp.diagnostics["named_over_best_min"] == 0
+    assert resp.best.score == plain.best.score

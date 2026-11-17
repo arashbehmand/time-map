@@ -87,7 +87,7 @@ def build_network(osm: Path, gtfs: list[Path], out_json: Path):
     m = r5py()
     cached_before = _cached_networks()
     try:
-        tn = m.TransportNetwork(str(osm), [str(p) for p in gtfs])
+        tn = m.TransportNetwork(str(r5_input(osm)), [str(r5_input(p)) for p in gtfs])
     finally:
         timer.cancel()
         done.set()
@@ -114,6 +114,27 @@ def build_network(osm: Path, gtfs: list[Path], out_json: Path):
     log.info("network %s in %.0f s, peak RSS %.1f GB", "built" if cold else "loaded", elapsed,
              info["peak_rss_bytes"] / 1e9)
     return tn, info
+
+
+def r5_input(p: Path) -> Path:
+    """
+    The file to give r5py for `p`: a link beside it named after its build folder too. r5py links
+    each input into its cache folder under the file's bare name, and keeps the first link of that
+    name for good (r5py.util.WorkingCopy). Every build's inputs are london.osm.pbf, gbt.gtfs.zip
+    and bods.gtfs.zip, so without this every later build is routed on the first build's
+    timetable (#30: build 2026-11-17 got build 2026-11-12's feeds, and no trains on its dates).
+    """
+    link = p.with_name(f"r5-{p.parent.name}-{p.name}")
+    if link.is_symlink() and link.resolve() == p.resolve():
+        return link
+    link.unlink(missing_ok=True)
+    link.symlink_to(p.name)
+    return link
+
+
+def has_services_on(tn, days) -> list:
+    """The days in `days` on which the network runs no public transport at all."""
+    return [d for d in days if not tn.transit_layer.covers(d)]
 
 
 def _cached_networks() -> dict[str, float]:
@@ -295,8 +316,10 @@ def table_window(tn, points, ok: np.ndarray, departure: datetime, out_path: Path
                  fingerprint: dict | None = None, force: bool = False, kind: str = "transit") -> dict:
     """
     Fill out_path (N x N uint8 .npy memmap) for one window. `kind` is what may carry the trip:
-    "transit" (every mode, the tables), "bus" (buses only, walking to and from them) or "walk"
-    (walking only, up to MAX_MINUTES): the last two are #23's per-mode times (#30). Rows already listed in the
+    "transit" (every mode, the tables), "bus" (buses, walking to and from them) or "walk"
+    (walking only, up to MAX_MINUTES): the last two are #23's per-mode times (#30). Like the
+    tables, "bus" is the faster of that and walking straight there (up to max_time_walking_min):
+    R5 keeps the walk-only option whatever the modes. Rows already listed in the
     done-list next to it are skipped, so a stopped build resumes where it was, but only when
     the table's fingerprint (settings, points, feeds, network, departure, code) is the one
     given: otherwise, or with `force`, the table starts again. The fingerprint file records

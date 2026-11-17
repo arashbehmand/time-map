@@ -635,6 +635,51 @@ def test_the_manifest_lists_mode_tables_only_when_complete_and_current(tmp_path,
         build.stage_manifest(b, None)
 
 
+def test_r5_gets_inputs_named_after_their_build(tmp_path):
+    """r5py links inputs into its cache by bare file name, once: every build's gbt.gtfs.zip would
+    be read from the first build's (#30). Each build hands R5 a name of its own."""
+    from transit import r5
+
+    a, b = tmp_path / "2026-11-12", tmp_path / "2026-11-17"
+    for d in (a, b):
+        d.mkdir()
+        (d / "gbt.gtfs.zip").write_text(d.name)
+    la, lb = r5.r5_input(a / "gbt.gtfs.zip"), r5.r5_input(b / "gbt.gtfs.zip")
+    assert (la.name, lb.name) == ("r5-2026-11-12-gbt.gtfs.zip", "r5-2026-11-17-gbt.gtfs.zip")
+    assert lb.read_text() == "2026-11-17" and r5.r5_input(b / "gbt.gtfs.zip") == lb    # kept
+    lb.unlink()
+    lb.symlink_to(a / "gbt.gtfs.zip")                                                   # a stale link
+    assert r5.r5_input(b / "gbt.gtfs.zip").read_text() == "2026-11-17"
+
+
+def test_a_network_without_services_on_the_dates_is_named():
+    from types import SimpleNamespace
+
+    from transit import r5
+
+    runs = {date(2026, 12, 9), date(2026, 12, 12)}
+    tn = SimpleNamespace(transit_layer=SimpleNamespace(covers=lambda d: d in runs))
+    assert r5.has_services_on(tn, (date(2026, 12, 9), date(2026, 12, 12))) == []
+    assert r5.has_services_on(tn, (date(2026, 12, 16), date(2026, 12, 19))) == [date(2026, 12, 16),
+                                                                                date(2026, 12, 19)]
+
+
+def test_kept_dates_before_not_before_are_refused(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from transit import build, settings
+
+    for attr in ("RAW", "WORK", "OUT"):
+        monkeypatch.setattr(settings, attr, tmp_path / attr.lower())
+    b = build.Build("2026-11-17")
+    (b.out / "dates.json").write_text(json.dumps({"weekday": "2026-12-02", "saturday": "2026-12-05"}))
+    args = SimpleNamespace(redate=False, today=None, not_before="2026-12-14", no_tfl=True)
+    with pytest.raises(SystemExit, match="before --not-before 2026-12-14: add --redate"):
+        build.stage_dates(b, args)
+    build.stage_dates(b, SimpleNamespace(redate=False, today=None, not_before="2026-12-01", no_tfl=True))
+    build.stage_dates(b, SimpleNamespace(redate=False, today=None, not_before=None, no_tfl=True))
+
+
 def test_accepted_ranking_rates_complete_groups_only():
     from transit.tables import accepted_ranking
 

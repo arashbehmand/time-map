@@ -195,6 +195,11 @@ def stage_dates(b: Build, args) -> None:
 
     if (b.out / "dates.json").exists() and not args.redate:
         # The gate's cached TfL replies are for these dates: never re-pick them by accident.
+        kept = b.read_json("dates.json")
+        bound = getattr(args, "not_before", None)
+        if bound and min(kept["weekday"], kept["saturday"]) < date.fromisoformat(bound).isoformat():
+            raise SystemExit(f"dates.json keeps {kept['weekday']} and {kept['saturday']}, before "
+                             f"--not-before {bound}: add --redate (or use a new build id)")
         log.info("keeping the service dates in dates.json (--redate picks new ones)")
         return
     today = date.fromisoformat(args.today) if args.today else date.today()
@@ -290,6 +295,9 @@ def stage_prep(b: Build, args) -> None:
 
     england = b.raw / "osm" / "england-latest.osm.pbf"
     stamp = osm_timestamp(england)
+    if not england.exists() and clip_is_current(b) and (b.out / "prep.json").exists():
+        # A rerun after the England file was deleted: the clip, and so its date, are unchanged.
+        stamp = b.read_json("prep.json").get("osm", {}).get("data_as_of") or stamp
     poly_text, identity = clip_identity(b)
     clip_json = b.work / "clip.json"
     if b.osm_clip.exists() and clip_json.exists() and json.loads(clip_json.read_text()) != identity:
@@ -408,6 +416,14 @@ def network(b: Build):
         from transit.r5 import build_network, station_access
 
         _network, _ = build_network(b.osm_clip, [b.prepped(f) for f in FEEDS], b.out / "network.json")
+        # A network without services on the service dates routes everything on foot, and the
+        # tables stage then masks nearly every point as cut off: refuse it here instead (#30).
+        from transit.r5 import has_services_on
+
+        missing = has_services_on(_network, b.dates())
+        if missing:
+            raise SystemExit(f"R5's network runs no public transport on {', '.join(map(str, missing))}: "
+                             "it was not built from this build's prepared feeds")
         if settings.R5["station_access_m"]:
             station_access(_network, settings.R5["station_access_m"])
     return _network
@@ -641,6 +657,10 @@ def stage_tables(b: Build, args):
         iso = set.intersection(*(set(isolated_points(t, ok, settings.ISOLATED_SHARE).tolist())
                                  for t in tables.values()))
         iso = np.array(sorted(iso), dtype=int)
+        if len(iso) > 0.5 * ok.sum():
+            raise SystemExit(f"{len(iso)} of {int(ok.sum())} points look cut off from the network in every "
+                             "window: the network is wrong (no public transport on the service dates?), "
+                             "not the points")
         for t in tables.values():
             if len(iso):
                 t[iso, :] = settings.UNREACHABLE
@@ -688,7 +708,8 @@ def mode_table_fingerprint(b: Build, kind: str) -> dict:
 
 def stage_modetimes(b: Build, args):
     """
-    #23's per-mode times (#30): a bus-only table (buses, walking to and from them) and a
+    #23's per-mode times (#30): a bus table (buses with walking to and from them, or walking
+    straight there if that is faster, as in the tables: R5 keeps the walk-only option) and a
     walking-only one (up to MAX_MINUTES), for CAR_WINDOW, on the same points, mask and encoding
     as the tables. The app doesn't read them; Whole city's Walking and Bus will (#23 part 2).
     """

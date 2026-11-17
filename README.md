@@ -284,10 +284,9 @@ The page draws the field two ways (`static/warp/app.js`):
   places never come back closer, the rings bend through the first place that many minutes away,
   and quicker places near stations can sit past their ring. The page says what share does, and
   what share of the places inside a ring is slower; colours and taps keep each place's own
-  minutes. It is offered at 30 and 45 minutes, the rings that passed its checks; further out
-  public transport keeps the real map (#27; checks and numbers in
-  [docs/warp-time-polar.md](docs/warp-time-polar.md), "W-03"). `?layout=fold` shows the fold,
-  and `?polar=1` bends at any ring.
+  minutes. It bends at every time setting; past 45 minutes, where it didn't pass its checks
+  everywhere, a footnote says the map bends more (#27; checks and numbers in
+  [docs/warp-time-polar.md](docs/warp-time-polar.md), "W-03"). `?layout=fold` shows the fold.
 
 Panning, zooming and resizing never send a request; a new pin, mode or window sends one, and
 the old picture stays up until the new one is ready.

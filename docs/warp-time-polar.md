@@ -453,9 +453,10 @@ Fixed here before any new number:
   segment sweeps is judged.
 - **C5 not drawn ≤ 2%:** the share of the places within the ring's minutes that squash draws
   nowhere (past its reach). A layout can't pass by dropping places.
-- **Every offered ring is checked.** Public transport's time map is offered at an outer ring
-  (30, 45, 60, 90, 120 minutes) only if all 40 rows at that ring pass C1–C3 and C5. The others
-  keep the normal map, and the page says so.
+- **Every offered ring is checked.** The rule was that public transport's time map is offered at
+  an outer ring (30, 45, 60, 90, 120 minutes) only if all 40 rows at that ring pass C1–C3 and C5.
+  **The owner overruled it after the run (2026-11-17):** every ring bends, and past the checked
+  ones a footnote says the map bends more.
 - **C3 goes back to 1%** if every row passes it there under the corrected reading; otherwise it
   stays at the owner's 2.5%, and the rows over 1% are listed.
 - **C4 states** the share of the places within the ring's minutes drawn past it or not drawn,
@@ -582,18 +583,18 @@ fetch more tiles.
   page states that figure, cut patches included.
 - **Every offered ring, 40 rows each:**
 
-| Outer ring | Rows passing | What fails | Public transport's time map |
+| Outer ring | Rows passing | What fails | On the page |
 |---|---|---|---|
-| 30 min | 40 | none (stretch 1.63–2.51:1, slower inside ≤ 0.4%, not drawn ≤ 1.7%) | offered |
-| 45 min | 40 | none | offered |
-| 60 min | 38 | Heathrow C2 by reach, weekday 08–09 and 13–14 (4.18:1) | normal map only |
-| 90 min | 4 | C2 and C3 at most origins (stretch up to 19.7:1, slower inside up to 21%) | normal map only |
-| 120 min | 0 | C2 and C3 everywhere (stretch up to 54.5:1) | normal map only |
+| 30 min | 40 | none (stretch 1.63–2.51:1, slower inside ≤ 0.4%, not drawn ≤ 1.7%) | bends |
+| 45 min | 40 | none | bends |
+| 60 min | 38 | Heathrow C2 by reach, weekday 08–09 and 13–14 (4.18:1); the others 1.9–2.7:1 | bends, with the footnote |
+| 90 min | 4 | C2 and C3 at most origins (stretch 3.4–19.7:1, slower inside 1.7–21%) | bends, with the footnote |
+| 120 min | 0 | C2 and C3 everywhere (stretch 4.8–54.5:1, slower inside 1.9–7.7%) | bends, with the footnote |
 
   90 and 120 were measured at reach cap 4; the cap changes only the places not drawn, not
-  their C2 or C3. At 60, 90 and 120 minutes the page has no Time map button and says "The time
-  map for public transport is shown for 30 and 45 minutes only: further out it bends too much
-  to read." (`views.js BEND_OUTERS`). `?polar=1` bends at any ring, for testing.
+  their C2 or C3. Past 45 minutes the page adds "Past 45 minutes the time map bends more: rings
+  get rougher, and more places sit on the wrong side of them." (`views.js CHECKED_OUTERS`,
+  `words.js roughNote`). The owner's call: the long rings stay, with that footnote.
 - **Why the 5 min/km climb halved the stretch.** In a station's shadow squash's radius grows
   exactly at the climb rate, while the scale across the ray doesn't change, so a shadow cell's
   stretch is about 11 ÷ the climb (min/km) at Baker Street: 3.7:1 at 3, 2.2:1 at 5. The median
@@ -624,8 +625,8 @@ fetch more tiles.
 - **Looked at, after these changes:** the opening example normal and Time map (unchanged);
   King's Cross, Baker Street and Heathrow by public transport, Time map, no flags (squash, the new
   line; Heathrow's first view as before, the smeared streaks east of the airport still there);
-  Baker Street with 60 minutes picked while bent (back to the real map, no Time map button, the
-  note shown).
+  Baker Street with 60 minutes picked while bent (then still back to the real map; since the
+  owner's call every ring bends).
 
 ## Done when
 

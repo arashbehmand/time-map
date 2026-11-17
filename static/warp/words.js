@@ -80,10 +80,9 @@ export function givesUp(outer, past, slow = null) {
   return `Rings follow the main reach, not every place: ${a} within ${outer} minutes lie past the ${outer} min ring, and ${b}. Zoom out to see the whole ring. Colours and taps give each place's own time.`;
 }
 
-// Why there is no Time map button at this outer ring (views.js BEND_OUTERS).
-export function bendLimit(mode, outers) {
-  const list = outers.length > 1 ? `${outers.slice(0, -1).join(", ")} and ${outers[outers.length - 1]}` : `${outers[0]}`;
-  return `The time map for ${mode === "transit" ? "public transport" : "this mode"} is shown for ${list} minutes only: further out it bends too much to read.`;
+// A footnote past the checked rings (views.js CHECKED_OUTERS): the map still bends, more roughly.
+export function roughNote(checkedUpTo) {
+  return `Past ${checkedUpTo} minutes the time map bends more: rings get rougher, and more places sit on the wrong side of them.`;
 }
 
 export const LAYOUT_NOTES = {

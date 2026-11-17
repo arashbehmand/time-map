@@ -19444,10 +19444,6 @@
      ]
     }
    },
-   "offered_transit_outers": [
-    30,
-    45
-   ],
    "first_scene_ms_baker_street_21_runs": {
     "runs": [
      {
@@ -19676,6 +19672,20 @@
      "pastOrOff": 0.269,
      "slowInside": 0.013
     }
+   },
+   "transit_outers": {
+    "bend": [
+     30,
+     45,
+     60,
+     90,
+     120
+    ],
+    "checked": [
+     30,
+     45
+    ],
+    "note": "The owner kept every ring (2026-11-17); past 45 minutes the page adds a footnote."
    }
   }
  }

@@ -7,8 +7,9 @@
 //   bent      the mesh renderer (static/shared/mesh/): each place keeps its direction from
 //             the pin (by reach or true compass). Walking, cycling and driving use the fold:
 //             distance proportional to minutes, so the rings are exact circles. Public
-//             transport uses squash (layouts.js), whose rings bend; it is offered only at the
-//             outer rings that passed W-03's checks (views.js BEND_OUTERS). Experimental.
+//             transport uses squash (layouts.js), whose rings bend; past the outer rings that
+//             passed W-03's checks (views.js CHECKED_OUTERS) a footnote says it bends more.
+//             Experimental.
 // "Time map" dissolves the real map into the unbent mesh, then morphs it. Pan, zoom
 // and resize never fetch; a new pin, mode or window fetches one field, and the old picture
 // stays up until the new one is ready.
@@ -450,7 +451,7 @@ function labelsFor(m) {
 
 // ── Bending ──────────────────────────────────────────────────────────
 // The bent map needs both workers: the scene, and the band layer with its tap index.
-function bendOffered() { return S.renderer && S.renderer.supported && S.fieldWorker && V.bendOffered(S.mode, location.search, S.outer); }
+function bendOffered() { return S.renderer && S.renderer.supported && S.fieldWorker && V.bendOffered(S.mode, location.search); }
 
 function setBent(on) {
   S.bent = !!(on && bendOffered());
@@ -718,9 +719,7 @@ function updateLegend() {
   // One label, "Time map"; the state is aria-pressed alone, so a screen reader says it once.
   if (toggleBtn.getAttribute("aria-pressed") !== String(S.bent)) toggleBtn.setAttribute("aria-pressed", String(S.bent));
   show($("time-map-note"), offered && S.bent);
-  const limited = !offered && S.renderer && S.renderer.supported && S.fieldWorker && V.bendOffered(S.mode, location.search);
-  show($("bend-limit"), !!limited);
-  if (limited) setText($("bend-limit"), T.bendLimit(S.mode, V.BEND_OUTERS[S.mode]));
+
   show($("direction-chips"), offered && S.bent);
   const layouts = Q.get("layouts") === "1" || V.LAYOUTS.includes(Q.get("layout"));
   show($("layout-chips"), offered && S.bent && layouts);
@@ -739,6 +738,11 @@ function updateLegend() {
     const rc = S.mesh.layers && S.mesh.layers.ringCounts;
     setText($("gives-up"), T.givesUp(S.mesh.outer, rc ? rc.pastRing : null, rc ? rc.slowInside : null));
   }
+  // Past the rings W-03 checked, a footnote: it bends more there.
+  const checked = givesUp ? V.CHECKED_OUTERS[S.mesh.entry.json.mode] : null;
+  const rough = !!(checked && S.mesh.outer > Math.max(...checked));
+  show($("rough-note"), rough);
+  if (rough) setText($("rough-note"), T.roughNote(Math.max(...checked)));
   setText($("overlap-note"), T.OVERLAP_NOTE);
   show($("when-field"), S.mode === "transit" && S.transit.available);
 }
@@ -1011,10 +1015,7 @@ function setOuter(m) {
   S.outer = m;
   updateBands();
   frameView();
-  // Public transport bends only at the rings that passed W-03's checks (views.js BEND_OUTERS):
-  // another ring goes back to the real map, and the page says why.
-  if (S.bent && !bendOffered()) { S.bent = false; S.pendingMesh = null; flatNow(); }
-  else if (S.bent) prepareMesh();
+  if (S.bent) prepareMesh();
   dirty = true;
 }
 

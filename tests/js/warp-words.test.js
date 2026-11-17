@@ -90,16 +90,11 @@ test("the time map says what squash gives up, with the shares counted for the vi
   assert.ok(!/wedges/.test(T.directionNote("compass", "squash")));
 });
 
-test("public transport bends only at the rings that passed W-03's checks", () => {
-  assert.deepEqual(V.BEND_OUTERS.transit, [30, 45]);
-  for (const m of [30, 45]) assert.equal(V.bendOffered("transit", "", m), true);
-  for (const m of [60, 90, 120]) {
-    assert.equal(V.bendOffered("transit", "", m), false);
-    assert.equal(V.bendOffered("transit", "?polar=1", m), true);     // for testing
-  }
-  for (const m of [15, 30, 45, 60]) assert.equal(V.bendOffered("walking", "", m), true);
-  assert.equal(T.bendLimit("transit", V.BEND_OUTERS.transit),
-    "The time map for public transport is shown for 30 and 45 minutes only: further out it bends too much to read.");
+test("public transport bends at every ring; past the checked ones a footnote says it bends more", () => {
+  assert.equal(V.bendOffered("transit"), true);
+  assert.deepEqual(V.CHECKED_OUTERS.transit, [30, 45]);
+  assert.equal(T.roughNote(45),
+    "Past 45 minutes the time map bends more: rings get rougher, and more places sit on the wrong side of them.");
 });
 
 test("tables expire the day after valid_until, in London", () => {

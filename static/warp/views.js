@@ -14,17 +14,14 @@ export const MODES = {
 // A mode set to "hidden" is offered only with ?polar=1.
 export const TIME_POLAR = { walking: "experimental", cycling: "experimental", driving: "experimental", transit: "experimental" };
 
-// The outer rings a mode may bend at, where not every ring: public transport's squash passed
-// W-03's checks at 30 and 45 minutes (all five test origins, four windows, both directions
-// settings); at 60 Heathrow's stretch is over 4:1, and 90 and 120 fail almost everywhere
-// (docs/warp-time-polar.md, "W-03"). ?polar=1 bends at any ring, for testing.
-export const BEND_OUTERS = { transit: [30, 45] };
-
-export function bendOffered(mode, query = "", outer = null) {
-  if (new URLSearchParams(query).get("polar") === "1") return true;
-  if (TIME_POLAR[mode] === "hidden") return false;
-  return outer === null || !BEND_OUTERS[mode] || BEND_OUTERS[mode].includes(outer);
+export function bendOffered(mode, query = "") {
+  return TIME_POLAR[mode] !== "hidden" || new URLSearchParams(query).get("polar") === "1";
 }
+
+// The outer rings where public transport's squash passed W-03's checks at all five test origins,
+// four windows and both directions settings (docs/warp-time-polar.md, "W-03"). Every ring bends;
+// past these the page adds a footnote that the map bends more (words.js roughNote).
+export const CHECKED_OUTERS = { transit: [30, 45] };
 
 // Directions on the bent map: by reach (the default, the owner's choice) or true compass.
 export const DIRECTIONS = { reach: 0.5, compass: 0 };

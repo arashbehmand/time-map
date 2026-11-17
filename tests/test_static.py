@@ -124,6 +124,13 @@ def test_warp_page_has_every_element_the_legend_writes_to():
         assert f'id="{el}"' in html, el
 
 
+def test_offline_cache_has_every_mesh_module():
+    # The worker imports these; an offline reload serves only what the service worker listed.
+    sw = (ROOT / "sw.js").read_text()
+    for f in sorted((ROOT / "shared/mesh").glob("*.js")):
+        assert f'"/shared/mesh/{f.name}"' in sw, f.name
+
+
 def test_logo_is_plain_svg():
     svg = (ROOT / "icons/mapbox-logo.svg").read_text()
     assert svg.lstrip().startswith("<?xml") and "<svg" in svg

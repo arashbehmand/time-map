@@ -610,7 +610,10 @@ fetch more tiles.
   ring. Colours and taps give each place's own time." (Baker Street). On the page: Baker Street
   37%, Heathrow 74%, King's Cross 27%; the lab's shares for Baker Street and Heathrow match (0.374,
   0.742). Below 1% it says "under 1%"; before the count arrives, "Some places" and "a few places
-  inside it can be slower". "Mostly near stations" is gone: it wasn't measured.
+  inside it can be slower". "Mostly near stations" is gone: it wasn't measured. Where more than
+  2% of the places within the time sit on a bearing the ring doesn't reach (11–70% at 90 and
+  120 minutes, at most 1.8% at 30–60), the line gives no numbers, since they wouldn't cover
+  every place.
 - **First scene, Baker Street, 21 runs** (same setup as above): median 1,480 ms, 90th percentile
   3,454 ms, maximum 3,834 ms; 7 of 21 over 2 s. Every slow run is waiting for tiles: the last
   tile is in at 0.63–0.74 s in the 14 fast runs and 1.53–2.96 s in the 7 slow ones, while the

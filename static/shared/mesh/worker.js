@@ -324,7 +324,8 @@ function buildLayers(msg) {
     // lab's checks count them (diagnostics.js ringShares).
     const outerLine = lines ? lines.find((l) => l.minutes === msg.maxMinutes) : null;
     const shares = outerLine ? ringShares(warp, f, msg.maxMinutes, outerLine, { cut: cutMask(f, sq) }) : null;
-    const ringCounts = shares ? { pastRing: shares.pastOrOff, slowInside: shares.slowInside, judged: shares.counts.judged } : null;
+    const ringCounts = shares ? { pastRing: shares.pastOrOff, slowInside: shares.slowInside, unjudged: shares.unjudged,
+                                  judged: shares.counts.judged } : null;
     t0 = tick("shares", t0);
     const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped, reach, frame, lines, ms,
                       angles: sq ? sq.spec.angles : null, ringCounts };

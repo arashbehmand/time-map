@@ -736,7 +736,7 @@ function updateLegend() {
   show($("gives-up"), !!givesUp);
   if (givesUp) {
     const rc = S.mesh.layers && S.mesh.layers.ringCounts;
-    setText($("gives-up"), T.givesUp(S.mesh.outer, rc ? rc.pastRing : null, rc ? rc.slowInside : null));
+    setText($("gives-up"), T.givesUp(S.mesh.outer, rc ? rc.pastRing : null, rc ? rc.slowInside : null, rc ? rc.unjudged : 0));
   }
   // Past the rings W-03 checked, a footnote: it bends more there.
   const checked = givesUp ? V.CHECKED_OUTERS[S.mesh.entry.json.mode] : null;

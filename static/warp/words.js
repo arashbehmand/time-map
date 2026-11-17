@@ -70,11 +70,16 @@ export function directionNote(directions, layout = "fold") {
 // ring can lie past it, and a few slower ones inside it. `past` is the share of the places
 // within `outer` minutes drawn past the outer ring or not drawn (diagnostics.js ringShares
 // pastOrOff), `slow` the share of the places drawn inside it that are slower (slowInside, cut
-// patches included: they are drawn too); either is null while it is being counted. The outer
-// ring sits past the first view (it is framed on the places two thirds of the way out).
+// patches included: they are drawn too); either is null while it is being counted. Where the
+// ring has gaps (`unjudged`, the share of the places within `outer` minutes on a bearing it
+// doesn't reach: 11–70% at 90 and 120 minutes) neither number covers every place, so over
+// UNJUDGED_MAX the line gives none. The outer ring sits past the first view (it is framed on
+// the places two thirds of the way out).
+export const UNJUDGED_MAX = 0.02;
 const pct = (x) => (x < 0.01 ? "under 1%" : `${Math.round(x * 100)}%`);
 const known = (x) => x !== null && x !== undefined && x >= 0;
-export function givesUp(outer, past, slow = null) {
+export function givesUp(outer, past, slow = null, unjudged = 0) {
+  if (known(unjudged) && unjudged > UNJUDGED_MAX) { past = null; slow = null; }
   const a = known(past) ? `${pct(past)} of the places` : "Some places";
   const b = known(slow) ? `${pct(slow)} of the places inside it are slower` : "a few places inside it can be slower";
   return `Rings follow the main reach, not every place: ${a} within ${outer} minutes lie past the ${outer} min ring, and ${b}. Zoom out to see the whole ring. Colours and taps give each place's own time.`;

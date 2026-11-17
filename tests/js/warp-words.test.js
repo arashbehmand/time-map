@@ -84,6 +84,9 @@ test("the time map says what squash gives up, with the shares counted for the vi
   assert.match(T.givesUp(45, 0.03, 0.021), /: 3% of the places within 45 minutes .* and 2% of the places inside it are slower/);
   assert.match(T.givesUp(60, null, null), /: Some places within 60 minutes lie past the 60 min ring, and a few places inside it can be slower/);
   assert.ok(!/0%/.test(T.givesUp(45, null, null)), "no number before it is counted");
+  // Where the ring has gaps (90 and 120 minutes), the shares don't cover every place: no numbers.
+  assert.equal(T.givesUp(120, 0.03, 0.03, 0.12), T.givesUp(120, null, null));
+  assert.match(T.givesUp(60, 0.22, 0.004, 0.018), /: 22% of the places/);
   // Squash doesn't keep distance as minutes, so its direction note doesn't promise it.
   assert.match(T.directionNote("reach", "fold"), /Minutes stay exact/);
   assert.ok(!/exact/i.test(T.directionNote("reach", "squash")));

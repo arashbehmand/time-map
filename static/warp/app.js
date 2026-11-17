@@ -1055,6 +1055,7 @@ function initControls() {
   // A tab left open: check the tables again when it comes back (they may have been withdrawn),
   // and say again how old the timetable is (past its valid-until day it may have changed, #30).
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { loadTransitStatus(); updateLegend(); } });
+  setInterval(() => { if (!document.hidden) updateLegend(); }, 60 * 60_000);
   toggleBtn.addEventListener("click", () => setBent(!S.bent));
   $("tap-close").addEventListener("click", hideTapList);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("tap-list").hidden) hideTapList(); });

@@ -179,10 +179,18 @@ const on = new Set(["train"]);
 let cur = "train";            // "train", "car", "car-train", or "none" (the real map)
 
 // A public page's line about where this comes from (the build's own notice is for its report).
-$("notice").textContent = `Made from London's public transport timetables for ${label[win]}: typical times, ` +
-  "not live ones." + (timetableLine(dateOf[win], city.valid_until) ? ` ${timetableLine(dateOf[win], city.valid_until)}` : "") +
-  (city.development_only ? " Shown on this computer only: this build's licences aren't cleared." : "") +
-  (offline ? " You're offline: this is the map from your last visit." : "");
+// Said again when a tab left open comes back, and hourly while it stays in view: past the
+// build's valid-until day it adds that services may have changed (#30).
+function showNotice() {
+  const age = timetableLine(dateOf[win], city.valid_until);
+  $("notice").textContent = `Made from London's public transport timetables for ${label[win]}: typical times, ` +
+    "not live ones." + (age ? ` ${age}` : "") +
+    (city.development_only ? " Shown on this computer only: this build's licences aren't cleared." : "") +
+    (offline ? " You're offline: this is the map from your last visit." : "");
+}
+showNotice();
+document.addEventListener("visibilitychange", () => { if (!document.hidden) showNotice(); });
+setInterval(() => { if (!document.hidden) showNotice(); }, 60 * 60_000);
 const credits = [...new Set((Array.isArray(doc.attribution) ? doc.attribution : []).map((c) => String(c).replace("(c)", "©")))];
 $("credits").textContent = credits.length ? "Credits: " + credits.join("; ") + "." : "";
 if (city.report && city.report[win]) {

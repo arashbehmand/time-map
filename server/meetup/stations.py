@@ -648,6 +648,7 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
         window=window,
         window_label=window_label(data.windows[window]),
         service_date=data.window_date(window),
+        service_dates=data.service_dates,
         valid_until=data.valid_until.isoformat(),
         credits=credits(data.manifest),
         venue=g.venue,

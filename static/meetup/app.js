@@ -54,6 +54,15 @@ let map = null;
 const markers = new Map();     // id → maplibre Marker
 let resultMarkers = [];
 let lastAnswer = null;         // {data, snap, reach} for the answer on screen
+
+// How old the answer's timetable is (#30): said again when a tab left open comes back, and hourly
+// while it stays in view, so the "services may have changed" sentence appears on its day.
+function refreshTimetableAge() {
+  const el = document.getElementById("timetable-age");
+  if (el && lastAnswer) el.textContent = timetableLine(lastAnswer.data.service_date, lastAnswer.data.valid_until);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshTimetableAge(); });
+setInterval(() => { if (!document.hidden) refreshTimetableAge(); }, 60 * 60_000);
 let reachShown = false;
 const reachLayers = new Set(); // person ids with drawn reach layers
 const solves = createLatest();
@@ -746,13 +755,14 @@ function renderStations() {
   // When every alternative is a tie, one sentence says so instead of a label on each.
   const allTies = alts.length > 0 && alts.every((c) => c.tie);
   const credits = Array.isArray(data.credits) ? data.credits.filter((c) => typeof c === "string") : [];
+  const age = timetableLine(data.service_date, data.valid_until);
   answerEl.innerHTML = `
     <div class="answer-card">
       <p class="headline">${esc(placeHeadline(data.best))}</p>
       <p class="hint">${esc(meaning("minimax"))}</p>
       ${answerNotes(data).map((n) => `<p class="hint answer-note">${esc(n)}</p>`).join("")}
       ${tripRows(data.best, snap)}
-      ${timetableLine(data.service_date, data.valid_until) ? `<p class="hint">${esc(timetableLine(data.service_date, data.valid_until))}</p>` : ""}
+      ${age ? `<p class="hint" id="timetable-age">${esc(age)}</p>` : ""}
       <p class="hint">${esc(journeyNote(data.window_label, data.best))}</p>
       ${isVenue(data.best) ? `<p class="hint">${esc(OPEN_HOURS_HINT)}</p>` : ""}
     </div>

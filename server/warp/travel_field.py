@@ -146,7 +146,7 @@ class TravelFieldService:
             return {"origin": {"lon": lon, "lat": lat}, "mode": mode, "window": None,
                     "window_label": None, **body, "sources": "mapbox",
                     "limit_minutes": MAPBOX_LIMIT_MINUTES, "approximate": True,
-                    "valid_until": None, "service_date": None, "notes": notes, "credits": [],
+                    "valid_until": None, "service_date": None, "service_dates": None, "notes": notes, "credits": [],
                     "development_only": False}
 
         if not data.covered(lon, lat):
@@ -177,7 +177,8 @@ class TravelFieldService:
                 "sources": "mapbox+tables" if features else "tables",
                 "limit_minutes": TABLES_LIMIT_MINUTES, "approximate": True,
                 "valid_until": data.valid_until.isoformat(),
-                "service_date": data.window_date(window), "notes": notes,
+                "service_date": data.window_date(window), "service_dates": data.service_dates,
+                "notes": notes,
                 "credits": data.status()["credits"], "development_only": data.development_only,
                 "smoothed": smooth}
 

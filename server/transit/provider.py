@@ -23,7 +23,7 @@ import logging
 import math
 import time
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -61,10 +61,6 @@ class TransitUnavailable(Exception):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
-
-
-def london_today() -> date:
-    return datetime.now(LONDON).date()
 
 
 def window_label(spec: dict) -> str:
@@ -224,8 +220,7 @@ class TransitData:
     # ── loading ──────────────────────────────────────────────────────
     @classmethod
     def load(cls, directory: str | Path, *, allow_uncleared: bool = False,
-             on_railway: bool = False, today: date | None = None,
-             verify_hashes: bool = True) -> TransitData:
+             on_railway: bool = False, verify_hashes: bool = True) -> TransitData:
         d = Path(directory)
         try:
             manifest = json.loads((d / "manifest.json").read_text())
@@ -689,7 +684,7 @@ class TransitHolder:
         finally:
             self.loading = False
 
-    def usable(self, today: date | None = None, *, local: bool = False) -> TransitData | None:
+    def usable(self, *, local: bool = False) -> TransitData | None:
         """The build, if it may be served to this request: if its licences are not cleared (the
         development override), only to a request from this machine. A build never expires: past
         its valid_until the pages say services may have changed (#30)."""

@@ -18,9 +18,14 @@ REQUIRED_KEYS = ("schema", "build", "built_at", "timezone", "service_dates", "wi
 
 
 def valid_until(build_day: date, feed_ends: list[date], days: int = settings.VALID_DAYS) -> date:
-    """The earlier of the earliest feed calendar end and build day + `days`."""
-    cap = build_day + timedelta(days=days)
-    return min([cap, *feed_ends]) if feed_ends else cap
+    """
+    The day after which the pages say services may have changed: the earliest of the feeds'
+    calendar ends (and the day before the next timetable change, which stage_manifest adds to
+    them). Advisory only (#30): a build is served until it is replaced. Build day + `days` only
+    when there is no feed end at all; it no longer caps the others, since a warning a month
+    after the build said nothing about the timetable.
+    """
+    return min(feed_ends) if feed_ends else build_day + timedelta(days=days)
 
 
 def output_entry(path: Path, **extra) -> dict:

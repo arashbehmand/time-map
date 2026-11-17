@@ -355,9 +355,10 @@ def test_checks_find_duplicates_and_missing_lines(tmp_path):
 
 
 # ── manifest ────────────────────────────────────────────────────────
-def test_valid_until_is_the_earlier_end():
-    assert manifest.valid_until(date(2026, 11, 12), []) == date(2026, 12, 17)
+def test_valid_until_is_the_earliest_feed_end_with_no_monthly_cap():
+    assert manifest.valid_until(date(2026, 11, 12), []) == date(2026, 12, 17)      # no feed end known
     assert manifest.valid_until(date(2026, 11, 12), [date(2026, 12, 1)]) == date(2026, 12, 1)
+    assert manifest.valid_until(date(2026, 11, 17), [date(2027, 2, 17), date(2027, 5, 15)]) == date(2027, 2, 17)
 
 
 def test_manifest_has_required_keys(tmp_path):

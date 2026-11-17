@@ -660,6 +660,7 @@ tar -czf /tmp/timemap-$ID.tgz -C $OUT/timemap/$ID .
 railway ssh -- sh -c "mkdir -p /data/transit/$ID && tar -xzf - -C /data/transit/$ID" < /tmp/transit-$ID.tgz
 railway ssh -- sh -c "mkdir -p /data/timemap/$ID && tar -xzf - -C /data/timemap/$ID" < /tmp/timemap-$ID.tgz
 railway ssh -- sh -c "cd /data/transit/$ID && sha256sum *"     # compare with: cd $OUT/$ID && shasum -a 256 <the same files>
+railway ssh -- sh -c "cd /data/timemap/$ID && find . -type f | sort | xargs sha256sum"   # and: cd $OUT/timemap/$ID && find . -type f | sort | xargs shasum -a 256
 railway variables --set TRANSIT_DIR=/data/transit/$ID --set TIMEMAP_DIR=/data/timemap/$ID
 ```
 

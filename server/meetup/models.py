@@ -98,6 +98,7 @@ class SolveResponse(BaseModel):
     # Public transport: the date the timetable's times are for (YYYY-MM-DD), and the day after
     # which the pages say services may have changed (advisory: the tables never expire).
     service_date: Optional[str] = None
+    service_dates: Optional[dict] = None    # the build's {"weekday": ..., "saturday": ...}
     valid_until: Optional[str] = None
     # Stations: the data credits the tables' licences ask for.
     credits: list[str] = Field(default_factory=list)

@@ -111,7 +111,8 @@ def notice(manifest: dict, lane: str = "L-01") -> str:
         lic = "not cleared for publication"
     if lane == "L-02":
         return ("Derived from the transit tables and kept out of git. The app shows it as Whole city only while "
-                f"those tables may be served: unexpired, with their licences cleared. This build's tables: {lic}.")
+                f"those tables may be served: with their licences cleared, and made from exactly those tables. "
+                f"This build's tables: {lic}.")
     return f"Local use only (#6, {lane}): kept out of git and off the site. This build's tables: {lic}."
 
 

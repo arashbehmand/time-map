@@ -281,6 +281,7 @@ class _FakeData:
                         for w in ("wd08", "wd13", "wd19", "sa13")}
         self.manifest, self.build, self._n = {}, "fake", 0
         self.valid_until = date(2026, 12, 12)
+        self.service_dates = {"weekday": "2026-12-09"}
 
     def window_date(self, window):
         return "2026-12-09"
@@ -480,6 +481,7 @@ def test_three_on_public_transport_meet_at_a_named_station(mapbox, tiny_client):
     assert data["best"]["name"] in ("Alpha Road", "Bravo") and data["best"]["kind"] == "station"
     assert data["window"] == "wd19" and data["window_label"] == "a weekday, 19:00–20:00"
     assert data["service_date"] == "2026-12-09" and data["valid_until"]
+    assert data["service_dates"] == {"weekday": "2026-12-09", "saturday": "2026-12-12"}
     assert data["meeting_area_geojson"] is None
     assert data["credits"] == ["Powered by TfL Open Data", "© OpenStreetMap contributors"]
     assert data["notes"][0] == "Public transport times are for a weekday, 19:00–20:00."

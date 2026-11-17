@@ -228,12 +228,11 @@ class WholeCityHolder:
         finally:
             self.loading = False
 
-    def usable(self, transit: TransitHolder, *, local: bool = False,
-               today: date | None = None) -> dict[str, CityWindow]:
+    def usable(self, transit: TransitHolder, *, local: bool = False) -> dict[str, CityWindow]:
         """The windows that may be served to this request: made from the tables that may be."""
         if not self.windows:
             return {}
-        data = transit.usable(today, local=local)
+        data = transit.usable(local=local)
         if data is None:
             return {}
         outputs = data.manifest.get("outputs", {})
@@ -251,23 +250,23 @@ class WholeCityHolder:
                 log.warning("whole city: window %s not served with tables %s: %s", w, data.build, why)
         return out
 
-    def reason_for(self, transit: TransitHolder, *, local: bool = False, today: date | None = None) -> str:
+    def reason_for(self, transit: TransitHolder, *, local: bool = False) -> str:
         if not self.configured:
             return "not_configured"
         if self.loading:
             return "loading"
         if not self.windows:
             return self.reason or "missing"
-        data = transit.usable(today, local=local)
+        data = transit.usable(local=local)
         if data is None:
             return "loading" if transit.loading else transit.reason_for(local)
         return "build_mismatch"
 
-    def status(self, transit: TransitHolder, *, local: bool = False, today: date | None = None) -> dict:
-        windows = self.usable(transit, local=local, today=today)
+    def status(self, transit: TransitHolder, *, local: bool = False) -> dict:
+        windows = self.usable(transit, local=local)
         if not windows:
-            return {"available": False, "reason": self.reason_for(transit, local=local, today=today)}
-        data = transit.usable(today, local=local)
+            return {"available": False, "reason": self.reason_for(transit, local=local)}
+        data = transit.usable(local=local)
         first = next(iter(windows.values()))
         return {
             "available": True, "reason": "", "build": first.build,

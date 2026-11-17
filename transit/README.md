@@ -20,7 +20,7 @@ It writes, per build, into `transit/out/<build>/` (git-ignored):
 | `tt_*.fingerprint.json` | What each table was built from (settings, code, points, feeds, OSM clip, departure) and whether it is complete. A table made from anything else is rebuilt, never resumed |
 | `point_ok.npy` | False where a point could not be snapped to a street, or is cut off from the network (it reaches, and is reached by, under 10% of the others in every window); its row and column, diagonal included, are 255. `points.json` lists them |
 | `walksheds.npz` | Access points and the H3 res-10 cells reached from them on foot: each usable station to the cells within 2 km, each usable table cell to the cells within 1 km (a cell's row carries its bus access). Cell centres with no street within 150 m (water, large parks) are left out (`points`, `indptr`, `cells`, `minutes`; see `transit/tables.py`, `Walksheds`) |
-| `tt_wd13_bus.npy`, `tt_wd13_walk.npy` | #23's per-mode times (`modetimes` stage): the same points, mask and encoding as `tt_wd13.npy`, buses only (walking to and from them) and walking only (one departure, up to 180 min). The app doesn't read them and they aren't packaged; Whole city's Walking and Bus will use them (#23 part 2) |
+| `tt_wd13_bus.npy`, `tt_wd13_walk.npy` | #23's per-mode times (`modetimes` stage): the same points, mask and encoding as `tt_wd13.npy`. **Bus:** the faster of a bus trip (buses only, walking to and from the stops) and walking straight there within 30 min, as the tables are the faster of transit and walking: R5 keeps the walk-only option whatever the modes (`transit/calibrate.py`). A pair whose bus time equals its walking time has no bus in it. **Walk:** walking only, one departure, up to 180 min (255 beyond). The app doesn't read them and they aren't packaged; Whole city's Walking and Bus will use them (#23 part 2) |
 | `manifest.json` | Service dates, every input's URL, version, sha256 and "timetable as of" date, every routing setting, versions, output hashes, `valid_until` |
 | `feeds-check.md`, `gonogo.md`, `gate/<sample>/report.md` | The feed audit, the go/no-go and the gate |
 
@@ -145,7 +145,7 @@ python -m transit.build <stage> --build <id>      # id defaults to today's date
 | `tables` | The four tables (`--window`, `--limit-origins` for a pilot, `--threads`); resumes a table only if its fingerprint matches, restarts it otherwise or with `--force`; then masks points cut off from the network. A pilot leaves the stage incomplete |
 | `walksheds` | Station and cell walksheds |
 | `venues` | Named pubs, bars, cafés, restaurants and parks (0.5 ha or more) from the OSM clip, for the meetup (#19): `venues.csv` and `venues.json` (osmium; no Java). Runs on its own too: `python -m transit.venues --build <id>`, on any build that still has its clip |
-| `modetimes` | Bus-only and walking-only tables for wd13 (`tt_wd13_bus.npy`, `tt_wd13_walk.npy`), resumable and fingerprinted like the tables; stops at once if r5py has no `TransportMode.BUS` |
+| `modetimes` | Bus and walking-only tables for wd13 (`tt_wd13_bus.npy`, `tt_wd13_walk.npy`), resumable and fingerprinted like the tables; stops at once if r5py has no `TransportMode.BUS`. If it fails, `python -m transit.build manifest package --build <id>` still makes a build without them (the manifest lists them only when they are complete) |
 | `manifest`, `package` | `manifest.json` (refuses incomplete tables; records the settings the tables were built with; lists the venue files when there are any); `transit-london-<id>.tar.xz` with `LICENSE-DATA.txt` (and the venue files) |
 
 `all` runs them in order and skips a stage whose inputs, settings and code have not changed.
@@ -225,8 +225,9 @@ being served: the pages say "Timetable as of <date>" (its service dates), and fr
 `valid_until` they add "Services may have changed since." `valid_until` is advisory, the earliest
 of:
 - the feeds' calendar end;
-- 35 days after the build;
 - the day before the next National Rail timetable change after the service dates.
+
+(Build day + 35 days only when no feed says when it ends; it no longer caps the others.)
 
 The changes are listed in `settings.TIMETABLE_CHANGES`; check new ones against Network Rail's
 calendar.

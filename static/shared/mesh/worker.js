@@ -8,7 +8,8 @@ import { createField, createTargetGrid, geometryField, sampleField } from "./fie
 import { censusTile, LINE_VERTS, packScene, spacingForZoom, tessellateTile, vectorTileFeatures } from "./pipeline.js";
 import { TILE_URL } from "./schema-streets-v8.js";
 import { meshSheetIndex } from "./hit.js";
-import { bentRings, squashLayout } from "./layouts.js";
+import { bentRings, cutMask, squashLayout } from "./layouts.js";
+import { ringShares } from "./diagnostics.js";
 import { makeEdgeTest, MAX_DEPTH, refineFills } from "./refine.js";
 import { createWarp, targetsFor } from "./warp.js";
 
@@ -158,8 +159,11 @@ async function buildScene(msg) {
   // Squash (layouts.js) bends by its own field: built here from the same field the band-layer
   // worker gets (filled flags included), so both build the same layout, and refined to the same
   // half pixel at its wider framing.
+  let squashMs = 0;
   if (msg.layout === "squash" && msg.refine) {
+    const ts = now();
     const sq = squashLayout(fieldOf(msg.refine.field), msg.refine.maxMinutes, msg.squash || {});
+    squashMs = now() - ts;
     const eps = msg.refine.eps * (sq.frame / msg.refine.maxMinutes), angles = sq.spec.angles;
     msg = { ...msg, refine: { ...msg.refine, field: sq.R, maxMinutes: sq.reach, eps, far: sq.frame, angles },
             warp: msg.warp ? { ...msg.warp, field: sq.R, maxMinutes: sq.reach, angles } : null };
@@ -171,13 +175,14 @@ async function buildScene(msg) {
   const loaded = new Array(tiles.length).fill(null);
   const settled = new Array(tiles.length).fill(false);
   const keys = new Set();
+  let tilesInMs = null;                          // when the last tile was in (fetched and tessellated)
 
   const pack = (partial) => {
     const meshes = loaded.filter(Boolean);
     const missingTiles = tiles.filter((t, i) => settled[i] && !loaded[i]).map(tileId);
     const scene = packScene(meshes, frame, { budget, warp, refine });
     scene.stats = { ...scene.stats, ...counters, cover: tiles.length, loaded: meshes.length,
-                    missing: missingTiles.length, missingTiles, partial, totalMs: now() - t0,
+                    missing: missingTiles.length, missingTiles, partial, totalMs: now() - t0, squashMs, tilesInMs,
                     resident, peakResident, backend: warp ? "cpu" : "gpu" };
     return scene;
   };
@@ -207,6 +212,7 @@ async function buildScene(msg) {
   };
   try {
     await Promise.all(Array.from({ length: Math.min(MAX_IN_FLIGHT, tiles.length) }, workerLoop));
+    tilesInMs = now() - t0;
   } finally {
     clearInterval(partialTimer);
   }
@@ -313,8 +319,16 @@ function buildLayers(msg) {
     // over the cut (walled-off) patches.
     const lines = sq ? bentRings(sq.ringSource, warp, msg.levels) : null;
     t0 = tick("rings", t0);
+    // What the page states squash gives up (W-03): the places within the outer ring's minutes
+    // drawn past it or not drawn, and the places drawn inside it that are slower, counted as the
+    // lab's checks count them (diagnostics.js ringShares).
+    const outerLine = lines ? lines.find((l) => l.minutes === msg.maxMinutes) : null;
+    const shares = outerLine ? ringShares(warp, f, msg.maxMinutes, outerLine, { cut: cutMask(f, sq) }) : null;
+    const ringCounts = shares ? { pastRing: shares.pastOrOff, slowInside: shares.slowInside, unjudged: shares.unjudged,
+                                  judged: shares.counts.judged } : null;
+    t0 = tick("shares", t0);
     const message = { type: "layers-result", key: msg.key, refined: r.added, skipped: r.skipped, reach, frame, lines, ms,
-                      angles: sq ? sq.spec.angles : null };
+                      angles: sq ? sq.spec.angles : null, ringCounts };
     // The index keeps pos and minutes, so the page gets copies.
     const copy = () => {
       const out = { pos: mesh.pos.slice(), minutes: mesh.minutes.slice(), index: mesh.index.slice(), targets: targets ? targets.slice() : null,

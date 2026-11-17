@@ -22,6 +22,16 @@ function notAPlace(f, skipFilled = true) {
 
 export const LIMITS = { folded: 0.10, stretch: 3 };
 
+// W-03 (#27): the checks squash must pass to be public transport's time map, fixed 2026-11-16
+// before any of them was measured (docs/warp-time-polar.md, "W-03"). Measured by layoutChecks at
+// T = 45: overlap ≤ 5%, median stretch ≤ 4:1, and at most 2.5% of the places drawn inside the
+// ring over half a minute slower than it (cut patches left out). A row with no sample fails.
+// The last was 1% when fixed; the owner relaxed it to 2.5% on 2026-11-17, after measuring, when
+// no setting got Heathrow under 1% (1.3–2.3%, 9–11 sampled places, all within 9 minutes of 45).
+// C5, added 2026-11-17 in the review round before re-measuring: at most 2% of the places within
+// T left undrawn (past squash's reach), so a layout can't pass by dropping places.
+export const LAYOUT_LIMITS = { overlap: 0.05, stretch: 4, slowInside: 0.025, omitted: 0.02 };
+
 // Fold and stretch on a polar field, as Direction 4 of #5 measures them:
 //   foldedShare    the share of the area inside the outer ring covered by folded sheets on the
 //                  bent map: the union of the folded cells' images, rasterised, so overlapping
@@ -146,19 +156,13 @@ export function ringRadius(spec, { n = 1000, seed = 20261113 } = {}) {
 //   slowInside  share of the places drawn inside the T ring that are over half a minute slower
 //               than T (the ring is drawn with a quarter-minute allowance)
 // `ring` is {xy} in layout units; places in a direction the ring doesn't cover are left out of
-// outside and slowInside.
-export function layoutChecks(spec, field, T, ring, { step = 2, raster = 800, bins = 720 } = {}) {
+// outside and slowInside. The counts come from ringShares (below), which also gives
+// slowInsideExCut with `cut` (layouts.js cutMask), the counts themselves and the ring's bearings;
+// its shares are null when nothing was counted, and a check reads that as a fail.
+export function layoutChecks(spec, field, T, ring, { step = 2, raster = 800, bins = 720, cut = null } = {}) {
   const warp = createWarp(spec);
   const f = field, skip = notAPlace(f);
   const ok = (k) => f.minutes[k] >= 0 && f.minutes[k] <= T && !skip(k);
-  // The ring's radius by drawn bearing.
-  const ringR = new Float64Array(bins).fill(NaN);
-  for (let i = 0; i + 1 < ring.xy.length; i += 2) {
-    const x = ring.xy[i], y = ring.xy[i + 1];
-    if (Number.isNaN(x)) continue;
-    const b = ((Math.round((Math.atan2(y, x) / (2 * Math.PI)) * bins) % bins) + bins) % bins;
-    ringR[b] = Number.isNaN(ringR[b]) ? Math.hypot(x, y) : Math.max(ringR[b], Math.hypot(x, y));
-  }
   const max = spec.maxMinutes, px = (2 * max) / raster;
   const cover = new Uint16Array(raster * raster);
   const fill = (a, b, c) => {
@@ -194,7 +198,65 @@ export function layoutChecks(spec, field, T, ring, { step = 2, raster = 800, bin
   }
   let drawn = 0, twice = 0;
   for (const c of cover) { if (c >= 1) drawn++; if (c >= 2) twice++; }
-  let within = 0, omitted = 0, judged = 0, outside = 0, inside = 0, slowInside = 0;
+  const c = ringShares(warp, f, T, ring, { step, bins, cut });
+  stretch.sort((a, b) => a - b);
+  return {
+    T, cells, overlap: drawn ? twice / drawn : 0,
+    stretch: stretch.length ? stretch[stretch.length >> 1] : null,
+    omitted: c.omitted, outside: c.outside, pastOrOff: c.pastOrOff, unjudged: c.unjudged, slowInside: c.slowInside,
+    slowInsideExCut: c.slowInsideExCut, counts: c.counts, bearings: c.bearings,
+  };
+}
+
+// The node counts of layoutChecks, without the overlap raster or the stretch: cheap enough for
+// the page (the field worker states what squash gives up from it, W-03's C4). `warp` is the
+// layout's warp, `ring` {xy} its ring for T, as drawn: vertices joined by straight segments,
+// broken at NaN. `cut` (optional, one flag per node): squash's cut patches, counted apart so C3
+// can leave them out. Shares are null when nothing was counted.
+//
+// Inside or outside is read the way the eye reads the drawn ring: along the place's drawn
+// bearing, the ring's segments are crossed some number of times beyond it; an odd number is
+// inside (a ring around the pin, spikes and dents included). Each segment is entered in every
+// bearing bin it sweeps, at its own radius there, so the gaps between vertices that directions
+// by reach open up are covered. A place within a quarter unit of a crossing counts as on it
+// (inside). Only bearings no segment sweeps are left unjudged.
+//   omitted          share of the places within T not placed at all (past the layout's reach)
+//   outside          share of the places within T, judged against the ring, drawn beyond it
+//   pastOrOff        share of the places within T drawn beyond the ring or not placed at all
+//                    (past its reach, so past the ring too): what the page states
+//   unjudged         share of the places within T placed on a bearing no ring segment sweeps
+//   slowInside       share of the places drawn inside the ring over half a minute slower than T
+//   slowInsideExCut  the same with the cut patches left out of both counts (C3)
+//   bearings         share of the bearing bins the ring sweeps
+export function ringShares(warp, f, T, ring, { step = 2, bins = 720, cut = null } = {}) {
+  const skip = notAPlace(f);
+  const TAU = 2 * Math.PI;
+  const wrap = (a) => ((a % TAU) + TAU + Math.PI) % TAU - Math.PI;       // into [-π, π)
+  const binOf = (x, y) => ((Math.round((Math.atan2(y, x) / TAU) * bins) % bins) + bins) % bins;
+  const cross = Array.from({ length: bins }, () => []);
+  const xy = ring.xy;
+  for (let i = 0; i + 3 < xy.length; i += 2) {
+    const px = xy[i], py = xy[i + 1], qx = xy[i + 2], qy = xy[i + 3];
+    if (Number.isNaN(px) || Number.isNaN(qx)) continue;
+    const a0 = Math.atan2(py, px), d = wrap(Math.atan2(qy, qx) - a0);
+    if (d === 0) continue;
+    // Bin centres θ with wrap(θ − a0) in [0, d) (or (d, 0]): half-open, so a vertex shared by two
+    // segments is counted once.
+    const b0 = Math.ceil((Math.min(a0, a0 + d) / TAU) * bins), b1 = Math.floor((Math.max(a0, a0 + d) / TAU) * bins);
+    for (let b = b0; b <= b1; b++) {
+      const th = (b / bins) * TAU, u = wrap(th - a0);
+      if (d > 0 ? !(u >= 0 && u < d) : !(u <= 0 && u > d)) continue;
+      // The ray at θ meets the segment p + s (q − p): r (cos θ, sin θ) = p + s (q − p).
+      const c = Math.cos(th), sn = Math.sin(th), ex = qx - px, ey = qy - py;
+      const den = c * ey - sn * ex;
+      if (Math.abs(den) < 1e-12) continue;
+      const r = (px * ey - py * ex) / den;
+      if (r > 0) cross[((b % bins) + bins) % bins].push(r);
+    }
+  }
+  let covered = 0;
+  for (const c of cross) if (c.length) covered++;
+  let within = 0, omitted = 0, judged = 0, outside = 0, unjudged = 0, inside = 0, slowInside = 0, insideCut = 0, slowCut = 0;
   for (let j = 0; j < f.ny; j += step) {
     for (let i = 0; i < f.nx; i += step) {
       const k = j * f.nx + i, t = f.minutes[k];
@@ -202,20 +264,27 @@ export function layoutChecks(spec, field, T, ring, { step = 2, raster = 800, bin
       const p = warp.target(f.x0 + i * f.cell, f.y0 + j * f.cell);
       if (t <= T) { within++; if (!p) { omitted++; continue; } }
       if (!p) continue;
-      const b = ((Math.round((Math.atan2(p[1], p[0]) / (2 * Math.PI)) * bins) % bins) + bins) % bins;
-      if (Number.isNaN(ringR[b])) continue;
-      const isInside = Math.hypot(p[0], p[1]) <= ringR[b] + 0.25;
+      const c = cross[binOf(p[0], p[1])];
+      if (!c.length) { if (t <= T) unjudged++; continue; }
+      const r = Math.hypot(p[0], p[1]);
+      let n = 0;
+      for (const rc of c) if (rc + 0.25 >= r) n++;
+      const isInside = n % 2 === 1;
       if (t <= T) { judged++; if (!isInside) outside++; }
-      if (isInside) { inside++; if (t > T + 0.5) slowInside++; }    // past the ring's own width
+      if (isInside) {
+        const isCut = !!(cut && cut[k]), slow = t > T + 0.5;      // past the ring's own width
+        inside++; if (slow) slowInside++;
+        if (isCut) { insideCut++; if (slow) slowCut++; }
+      }
     }
   }
-  stretch.sort((a, b) => a - b);
+  const share = (a, b) => (b ? a / b : null);
   return {
-    T, cells, overlap: drawn ? twice / drawn : 0,
-    stretch: stretch.length ? stretch[stretch.length >> 1] : null,
-    omitted: within ? omitted / within : 0,
-    outside: judged ? outside / judged : 0,
-    slowInside: inside ? slowInside / inside : 0,
+    omitted: share(omitted, within), outside: share(outside, judged),
+    pastOrOff: share(outside + omitted, judged + omitted), unjudged: share(unjudged, within),
+    slowInside: share(slowInside, inside), slowInsideExCut: share(slowInside - slowCut, inside - insideCut),
+    bearings: covered / bins,
+    counts: { within, omitted, judged, outside, unjudged, inside, slowInside, insideCut, slowCut },
   };
 }
 

@@ -15,7 +15,7 @@
 //                        the cut is left the slow ridges of transit's tables.
 //   squashField(field)   along each ray from the pin, radius = the place's own (cut) minutes
 //                        while they keep rising; where they drop below the slowest place met
-//                        so far (a pocket's shadow), the radius keeps climbing at `minSlope`
+//                        so far (a pocket's shadow), the radius keeps climbing at `minSlope` (MIN_SLOPE)
 //                        minutes per metre instead, until the minutes catch up. Holes in the
 //                        known ground are stepped over, not restarted from. A field without
 //                        pockets is drawn exactly as the fold, with round rings.
@@ -23,7 +23,7 @@
 //                        reached (the true minutes, as the colour bar counts them), at the
 //                        middle's own places per area; inside, radius = minutes.
 //   squashReach          how far out squash draws the places within the chosen time (99th
-//                        percentile, capped at 3 × the time): the view reaches that far.
+//                        percentile, capped at REACH_CAP × the time): the view reaches that far.
 //   bentRings(field, warp, levels)   the rings: along each of `bearings` directions, the first
 //                        place that many minutes away on the true minutes, drawn where the warp
 //                        puts it. Every vertex is a place exactly that many minutes away (no
@@ -48,7 +48,12 @@ const known = (t) => t >= 0 && t < BEYOND;
 // walled-off ground (15–40 minutes above the streets around it) is lowered.
 export const CUT_MIN_DROP = 5;
 
-export function squashField(f, { minSlope = 0.003, maxSteps = 30 } = {}) {
+// The climb in a pocket's shadow: 5 minutes per km (W-03, #27). At 3 it was too gentle: places
+// behind a pocket were drawn almost on top of each other (median stretch up to 4.7:1 at
+// Heathrow); at 5 every test origin, window and directions setting is under 2.4:1.
+export const MIN_SLOPE = 0.005;
+
+export function squashField(f, { minSlope = MIN_SLOPE, maxSteps = 30 } = {}) {
   const { nx, ny, x0, y0, cell, minutes } = f;
   const n = nx * ny;
   const R = new Float32Array(n).fill(-1);
@@ -170,7 +175,10 @@ export function cutPeaks(f, { minDrop = CUT_MIN_DROP } = {}) {
   return out;
 }
 
-export function squashReach(f, R, maxMinutes, { share = 0.99, cap = 3 } = {}) {
+// How far squash draws, at most, as a multiple of the chosen time (squashReach's cap).
+export const REACH_CAP = 6;
+
+export function squashReach(f, R, maxMinutes, { share = 0.99, cap = REACH_CAP } = {}) {
   const r = [];
   for (let k = 0; k < f.minutes.length; k++) {
     const t = f.minutes[k];
@@ -238,13 +246,14 @@ export function groundScale(f, inner = 15) {
 // `frame`: the radius the view is framed on: the reach for `scale: "minutes"`; with the ground
 // scale, the median radius at which places two thirds of maxMinutes away are drawn (the outer
 // rings sit far out: zoom out for them). `spread`: directions by reach (warp.js angularSpread).
-export function squashLayout(f, maxMinutes, { minSlope, spread = 0, scale = "minutes" } = {}) {
+// `inner`: the ground scale's middle, drawn at its own minutes (15 by default). `reachCap`: squashReach's cap.
+export function squashLayout(f, maxMinutes, { minSlope, spread = 0, scale = "minutes", inner = 15, reachCap = REACH_CAP } = {}) {
   const unsure = f.uncertain || null;
   const cut = cutPeaks(geometryField(f));
   let R = squashField(cut, minSlope > 0 ? { minSlope } : {});
-  let reach = squashReach(f, R, maxMinutes), frame = reach;
+  let reach = squashReach(f, R, maxMinutes, { cap: reachCap }), frame = reach;
   if (scale === "ground") {
-    const g = groundScale(f);
+    const g = groundScale(f, inner);
     const m = new Float32Array(R.minutes.length);
     for (let k = 0; k < m.length; k++) m[k] = known(R.minutes[k]) ? g(R.minutes[k]) : R.minutes[k];
     R = createField({ ...R, minutes: m });
@@ -265,4 +274,12 @@ export function squashLayout(f, maxMinutes, { minSlope, spread = 0, scale = "min
   }
   const ringSource = createField({ ...f, minutes: ringMinutes });
   return { R, reach, frame, cut, ringSource, spec: { kind: "polar", field: R, maxMinutes: reach, angles } };
+}
+
+// One flag per node: squash's cut patches (ground lowered by cutPeaks), the nodes its rings step
+// over. Uncertain patches aren't flagged: every check leaves them out already.
+export function cutMask(f, sq) {
+  const m = new Uint8Array(f.minutes.length), unsure = f.uncertain || null;
+  for (let k = 0; k < m.length; k++) m[k] = sq.cut.minutes[k] !== f.minutes[k] && !(unsure && unsure[k]) ? 1 : 0;
+  return m;
 }

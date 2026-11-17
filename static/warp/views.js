@@ -8,23 +8,34 @@ export const MODES = {
   transit: { label: "Public transport", outer: [30, 45, 60, 90, 120], defaultOuter: 45 },
 };
 
-// The time map (the bent view) is experimental everywhere. For public transport it stays hidden
-// until Direction 4's checks pass at all five test origins (docs/warp-time-polar.md);
-// ?polar=1 shows it anyway, for the comprehension test.
-export const TIME_POLAR = { walking: "experimental", cycling: "experimental", driving: "experimental", transit: "hidden" };
+// The time map (the bent view) is experimental everywhere. Public transport draws it with squash
+// (layoutFor, below), which passed W-03's checks at all five test origins, four windows and both
+// directions settings (#27, docs/warp-time-polar.md); its exact fold still fails Direction 4.
+// A mode set to "hidden" is offered only with ?polar=1.
+export const TIME_POLAR = { walking: "experimental", cycling: "experimental", driving: "experimental", transit: "experimental" };
 
 export function bendOffered(mode, query = "") {
   return TIME_POLAR[mode] !== "hidden" || new URLSearchParams(query).get("polar") === "1";
 }
+
+// The outer rings where public transport's squash passed W-03's checks at all five test origins,
+// four windows and both directions settings (docs/warp-time-polar.md, "W-03"). Every ring bends;
+// past these the page adds a footnote that the map bends more (words.js roughNote).
+export const CHECKED_OUTERS = { transit: [30, 45] };
 
 // Directions on the bent map: by reach (the default, the owner's choice) or true compass.
 export const DIRECTIONS = { reach: 0.5, compass: 0 };
 export const DEFAULT_DIRECTIONS = "reach";
 
 // How the bent map handles places that a fast line makes as quick as nearer ones (layouts.js).
-// A prototype: the choice shows with ?layouts=1 (or ?layout=…); the default stays "fold".
+// Public transport draws squash (W-03, #27): the fold overlaps itself along every fast line.
+// Walking, cycling and driving keep the fold, whose rings are exact. A pick (?layout=…, or the
+// trial chips that ?layouts=1 shows) wins.
 export const LAYOUTS = ["fold", "squash"];
-export const DEFAULT_LAYOUT = "fold";
+export function layoutFor(mode, pick = null) {
+  if (LAYOUTS.includes(pick)) return pick;
+  return mode === "transit" ? "squash" : "fold";
+}
 
 // The windows, expiry and coverage helpers every page shares live in /shared/transit.js (#28).
 export { WINDOWS, defaultWindow, expired, insideArea } from "../shared/transit.js";

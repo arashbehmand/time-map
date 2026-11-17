@@ -2,8 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BEYOND, createField, fieldFromFunction, NO_DATA, sampleField } from "../../static/shared/mesh/field.js";
-import { foldDiagnostics, layoutChecks } from "../../static/shared/mesh/diagnostics.js";
-import { bentRings, CUT_MIN_DROP, cutPeaks, squashField, squashLayout, squashReach } from "../../static/shared/mesh/layouts.js";
+import { foldDiagnostics, LAYOUT_LIMITS, layoutChecks, ringShares } from "../../static/shared/mesh/diagnostics.js";
+import { bentRings, CUT_MIN_DROP, cutMask, cutPeaks, squashField, squashLayout, squashReach } from "../../static/shared/mesh/layouts.js";
 import { createWarp } from "../../static/shared/mesh/warp.js";
 
 const WALK = 4000 / 60;
@@ -185,4 +185,76 @@ test("the reader-facing checks: what each layout gets right and wrong about T mi
   assert.ok(fc.overlap > 0.02, JSON.stringify(fc));
   assert.ok(sc.overlap < fc.overlap / 5, JSON.stringify(sc));
   assert.ok(sc.outside > 0.05, "the pocket lies beyond the 30 ring");
+});
+
+test("W-03: the page's ring counts are the checks' counts, and cut patches are counted apart", () => {
+  // The pocket field: ringShares (what the page states) agrees with layoutChecks (what the lab
+  // gates) on the same warp and ring.
+  const sq = squashLayout(field, 30);
+  const warp = createWarp(sq.spec);
+  const [ring] = bentRings(sq.ringSource, warp, [30]);
+  const lc = layoutChecks(sq.spec, field, 30, ring);
+  const rs = ringShares(warp, field, 30, ring);
+  assert.equal(rs.outside, lc.outside);
+  assert.equal(rs.slowInside, lc.slowInside);
+  assert.equal(rs.omitted, lc.omitted);
+  assert.ok(rs.counts.judged > 100 && rs.bearings > 0.99, JSON.stringify(rs));
+  assert.ok(rs.outside > 0.05, "the pocket's quick places are past the ring");
+
+  // A 40-minute dome 300 m north of the pin (a station's platforms), walled off: squash cuts it,
+  // so it is drawn inside the 15 ring though slower. Counted as cut, it leaves C3's share.
+  const walk = (x, y) => Math.hypot(x, y) / WALK;
+  const f = fieldFromFunction({ origin, cell: 100, halfSize: 3000 },
+    (x, y) => (Math.hypot(x, y + 300) < 150 ? walk(x, y) + 40 : walk(x, y)));
+  const s2 = squashLayout(f, 30);
+  const w2 = createWarp(s2.spec);
+  const [r15] = bentRings(s2.ringSource, w2, [15]);
+  const cut = cutMask(f, s2);
+  assert.ok(cut.reduce((a, b) => a + b, 0) > 3, "the dome is flagged");
+  const c = ringShares(w2, f, 15, r15, { step: 1, cut });
+  assert.ok(c.counts.slowCut > 0 && c.counts.slowCut === c.counts.slowInside, JSON.stringify(c.counts));
+  assert.ok(c.slowInside > 0 && c.slowInsideExCut === 0);
+  assert.ok(c.counts.insideCut >= c.counts.slowCut);
+});
+
+test("W-03: nothing to count is no share, never a pass at 0%", () => {
+  const empty = fieldFromFunction({ origin, cell: 100, halfSize: 1000 }, () => NO_DATA);
+  const warp = createWarp({ kind: "polar", field, maxMinutes: 45 });
+  const rs = ringShares(warp, empty, 30, { xy: new Float32Array(0) });
+  assert.equal(rs.outside, null);
+  assert.equal(rs.slowInside, null);
+  assert.equal(rs.bearings, 0);
+  // The shipped limits. slowInside was fixed at 0.01 before measuring and relaxed to 0.025 by
+  // the owner after it (diagnostics.js says so); omitted was added before the review re-run.
+  assert.deepEqual(LAYOUT_LIMITS, { overlap: 0.05, stretch: 4, slowInside: 0.025, omitted: 0.02 });
+});
+
+test("W-03: the ring is read as drawn: segments cover the gaps by reach opens, a spike is thin", () => {
+  // Directions by reach move the ring's vertices apart in drawn bearing; the segments between
+  // them still cover every bearing, so no place goes unjudged.
+  const sq = squashLayout(field, 30, { spread: 0.5 });
+  const warp = createWarp(sq.spec);
+  const [ring] = bentRings(sq.ringSource, warp, [30]);
+  const rs = ringShares(warp, field, 30, ring);
+  assert.ok(rs.bearings > 0.99, `bearings ${rs.bearings}`);
+  assert.equal(rs.counts.unjudged, 0);
+
+  // A circle of radius 10 with one spike out to 20 at bearing 0. A place beside the spike's base
+  // at radius 15 is outside the ring; one in the spike is inside. (A largest-radius-per-bearing
+  // reading put both inside.) The mock warp draws every place where it is.
+  const n = 720, xy = [];
+  for (let b = 0; b <= n; b++) {
+    const a = (2 * Math.PI * b) / n, r = b % n === 0 ? 20 : 10;
+    xy.push(r * Math.cos(a), r * Math.sin(a));
+  }
+  const at = (deg, r) => [r * Math.cos((deg * Math.PI) / 180), r * Math.sin((deg * Math.PI) / 180)];
+  const places = [at(0, 15), at(0.5, 15), at(90, 5), at(90, 12)];
+  // Two rows, the second no data, since a field needs at least 2 × 2 nodes.
+  const f = createField({ origin, cell: 1, nx: places.length, ny: 2, x0: 0, y0: 0,
+                          minutes: new Float32Array([20, 20, 40, 20, NO_DATA, NO_DATA, NO_DATA, NO_DATA]) });
+  const mock = { target: (x) => places[Math.round(x)] };
+  const s = ringShares(mock, f, 30, { xy: Float32Array.from(xy) }, { step: 1 });
+  // Within 30: places 0, 1 and 3; 0 is in the spike (inside), 1 beside it and 3 past the circle
+  // (outside). Place 2 (40 minutes) is inside and slower.
+  assert.deepEqual([s.counts.judged, s.counts.outside, s.counts.inside, s.counts.slowInside], [3, 2, 2, 1]);
 });

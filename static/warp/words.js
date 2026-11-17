@@ -56,6 +56,40 @@ export const DIRECTION_NOTES = {
   compass: "True compass: every place keeps its direction from the pin. Fast lines squeeze into thin wedges.",
 };
 
+// Squash doesn't keep distance as minutes, so its notes don't promise that.
+export const SQUASH_DIRECTION_NOTES = {
+  reach: "By reach: directions with more places in reach get more room, so compass directions bend.",
+  compass: "True compass: every place keeps its direction from the pin.",
+};
+
+export function directionNote(directions, layout = "fold") {
+  return (layout === "squash" ? SQUASH_DIRECTION_NOTES : DIRECTION_NOTES)[directions];
+}
+
+// What squash gives up (W-03, #27): its rings follow the main reach, so places quicker than a
+// ring can lie past it, and a few slower ones inside it. `past` is the share of the places
+// within `outer` minutes drawn past the outer ring or not drawn (diagnostics.js ringShares
+// pastOrOff), `slow` the share of the places drawn inside it that are slower (slowInside, cut
+// patches included: they are drawn too); either is null while it is being counted. Where the
+// ring has gaps (`unjudged`, the share of the places within `outer` minutes on a bearing it
+// doesn't reach: 11–70% at 90 and 120 minutes) neither number covers every place, so over
+// UNJUDGED_MAX the line gives none. The outer ring sits past the first view (it is framed on
+// the places two thirds of the way out).
+export const UNJUDGED_MAX = 0.02;
+const pct = (x) => (x < 0.01 ? "under 1%" : `${Math.round(x * 100)}%`);
+const known = (x) => x !== null && x !== undefined && x >= 0;
+export function givesUp(outer, past, slow = null, unjudged = 0) {
+  if (known(unjudged) && unjudged > UNJUDGED_MAX) { past = null; slow = null; }
+  const a = known(past) ? `${pct(past)} of the places` : "Some places";
+  const b = known(slow) ? `${pct(slow)} of the places inside it are slower` : "a few places inside it can be slower";
+  return `Rings follow the main reach, not every place: ${a} within ${outer} minutes lie past the ${outer} min ring, and ${b}. Zoom out to see the whole ring. Colours and taps give each place's own time.`;
+}
+
+// A footnote past the checked rings (views.js CHECKED_OUTERS): the map still bends, more roughly.
+export function roughNote(checkedUpTo) {
+  return `Past ${checkedUpTo} minutes the time map bends more: rings get rougher, and more places sit on the wrong side of them.`;
+}
+
 export const LAYOUT_NOTES = {
   fold: "Fold: every place sits at its own minutes. Where a fast line makes far places as quick as nearer ones, the map overlaps itself.",
   squash: "Squash: going outward, places almost never come back closer, so the map hardly overlaps. The middle is drawn as it is; further out, distance isn't minutes, and the rings bend to follow them. Colour is always each place's own time: many quicker places near stations are drawn beyond their ring, a few much slower patches that are hard to get into are drawn inside one, and patches the route data leaves out (behind tracks, say) are drawn small and left uncoloured. Zoom out to see the outer rings.",
@@ -81,6 +115,22 @@ export function tapGeographic(node, label) {
   if (node.filled) return "No street here (water or parkland).";
   if (node.minutes >= 1e4) return "More than 3 hours, or no route in the timetable.";
   return `${minutesText(node.minutes)[0].toUpperCase()}${minutesText(node.minutes).slice(1)} from ${label}.`;
+}
+
+// One line per place under the finger: "name: about N min". A second sheet named after the same
+// station is said by where it is instead; one still said the same (within 50 m, same direction)
+// keeps its own line. Only the same sheet twice is dropped. `seen` collects the names said.
+export function placeLines(sheets, nameOf, seen = new Set()) {
+  const at = new Set(), items = [];
+  for (const s of sheets) {
+    let name = nameOf(s.x, s.y);
+    if (seen.has(name)) name = unnamedPlace(s.x, s.y);
+    const here = `${Math.round(s.x)},${Math.round(s.y)}`;
+    if (at.has(here)) continue;
+    seen.add(name); at.add(here);
+    items.push(`${name}: ${minutesText(s.minutes)}`);
+  }
+  return items;
 }
 
 export function tapHeading(sheets) {

@@ -5,17 +5,18 @@
 // spread=0..1 (directions by reach, default 0.5), style=plain, network=0, budget.
 // field=real takes the warp page's own field from the server (mode=transit|walking|cycling|
 // driving, window=wd08|wd13|wd19|sa13, smooth=0|1), for every test origin; with it,
-// __lab.directionChecks() reports Direction 4 of #5 (W-02) on real fields; __lab.uncertainChecks()
+// __lab.directionChecks() reports Direction 4 of #5 (W-02) on real fields; __lab.squashChecks() W-03's
+// checks on squash (#27); __lab.uncertainChecks()
 // the uncertain patches the server found and the bent map's wedges (enclosedFade), by mode.
 import { tileCover } from "../../shared/mesh/cover.js";
 import { fitFor, reachBox } from "../../shared/mesh/fit.js";
 import { cameraFromMap, localFrame, WORLD_PX } from "../../shared/mesh/frame.js";
 import { decodeField, geometryField, knownMinutes, sampleField } from "../../shared/mesh/field.js";
-import { directionFour, enclosedFade, ringRadius } from "../../shared/mesh/diagnostics.js";
+import { directionFour, enclosedFade, LAYOUT_LIMITS, layoutChecks, ringRadius } from "../../shared/mesh/diagnostics.js";
 import { buildTapIndex, LABEL_CAP, placeLabels, sortCandidates } from "../../shared/mesh/labels.js";
 import { DEFAULT_BUDGET, DEFAULT_SPACING_DIV } from "../../shared/mesh/pipeline.js";
 import { MAX_DEPTH } from "../../shared/mesh/refine.js";
-import { squashLayout } from "../../shared/mesh/layouts.js";
+import { bentRings, cutMask, squashLayout } from "../../shared/mesh/layouts.js";
 import { createMeshRenderer } from "../../shared/mesh/renderer.js";
 import { maplibreStyle } from "../../shared/mesh/schema-streets-v8.js";
 import { angularSpread, createWarp, dotScale, targetsFor } from "../../shared/mesh/warp.js";
@@ -659,6 +660,92 @@ async function directionChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spr
   };
 }
 
+// W-03's checks (#27) on squash, as public transport's time map draws it (rings spaced by places
+// reached), for every test origin, window and directions setting: C1 overlap, C2 median stretch,
+// C3 slower inside the ring (cut patches left out), C5 places not drawn, against LAYOUT_LIMITS;
+// `ring` is the outer ring checked (45 by default; each offered ring is checked); plus what C4 states
+// (the share drawn past the ring) and what is reported only. `settings` is a list of squash
+// options to try (minSlope in minutes per metre, inner); each field is fetched once for all of
+// them. The fold's figures come with the first setting, for reference. A row with nothing to
+// count fails. `rings`: other rings reported at the first window, by reach, first setting.
+async function squashChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spreads = [0.5, 0], ring = 45,
+                              settings = [{}], rings = [30, 60, 90, 120] } = {}) {
+  const t0 = performance.now();
+  const r3 = (v) => (v === null || v === undefined ? null : Math.round(v * 1000) / 1000);
+  const results = [], others = [];
+  for (const o of S.network.origins) {
+    for (const w of windows) {
+      const json = await fetchField(o, { mode: "transit", window: w, smooth: true });
+      const field = decodeField(json);
+      for (const sp of spreads) {
+        let foldRef = null;
+        for (const [si, set] of settings.entries()) {
+          const ta = performance.now();
+          const sq = squashLayout(field, ring, { scale: "ground", spread: sp, ...set });
+          const buildMs = Math.round(performance.now() - ta);
+          const warp = createWarp(sq.spec);
+          const [line] = bentRings(sq.ringSource, warp, [ring]);
+          const cut = cutMask(field, sq);
+          const c = layoutChecks(sq.spec, field, ring, line, { cut });
+          if (si === 0) {
+            const fs = { kind: "polar", field: geometryField(field), maxMinutes: ring };
+            if (sp > 0) fs.angles = angularSpread(field, ring, { spread: sp });
+            const fc = layoutChecks(fs, field, ring, bentRings(field, createWarp(fs), [ring])[0]);
+            foldRef = { overlap: r3(fc.overlap), stretch: r3(fc.stretch) };
+          }
+          // Off the first view: drawn further out than the view's short side reaches when framed
+          // (fit.js: the framed radius sits at 0.42 of the short side, so the edge is 1.19 × it).
+          let past = 0, n = 0;
+          for (let k = 0; k < field.minutes.length; k += 2) {
+            const t = field.minutes[k];
+            if (!(t >= 0 && t <= ring) || (field.filled && field.filled[k]) || (field.uncertain && field.uncertain[k])) continue;
+            const p = warp.target(field.x0 + (k % field.nx) * field.cell, field.y0 + Math.floor(k / field.nx) * field.cell);
+            if (!p) continue;
+            n++; if (Math.hypot(p[0], p[1]) > sq.frame / 0.84) past++;
+          }
+          const counted = c.cells > 0 && c.counts.judged > 0 && c.counts.inside - c.counts.insideCut > 0;
+          const pass = {
+            overlap: counted && c.overlap <= LAYOUT_LIMITS.overlap,
+            stretch: counted && c.stretch !== null && c.stretch <= LAYOUT_LIMITS.stretch,
+            slowInside: counted && c.slowInsideExCut !== null && c.slowInsideExCut <= LAYOUT_LIMITS.slowInside,
+            omitted: counted && c.omitted !== null && c.omitted <= LAYOUT_LIMITS.omitted,
+          };
+          results.push({
+            setting: si, origin: o.id, window: w, spread: sp, sources: json.sources, notes: json.notes,
+            overlap: r3(c.overlap), stretch: r3(c.stretch), slowInside: r3(c.slowInsideExCut),
+            slowInsideWithCut: r3(c.slowInside), slowInsideAt1pc: c.slowInsideExCut !== null && c.slowInsideExCut <= 0.01,
+            outside: r3(c.outside), pastOrOff: r3(c.pastOrOff), unjudged: r3(c.unjudged), omitted: r3(c.omitted),
+            bearings: r3(c.bearings), offFirstView: r3(n ? past / n : null), cells: c.cells, counts: c.counts,
+            reach: r3(sq.reach), frame: r3(sq.frame), buildMs, fold: foldRef,
+            pass, passAll: pass.overlap && pass.stretch && pass.slowInside && pass.omitted,
+          });
+          if (si === 0 && sp === spreads[0] && w === windows[0]) {
+            for (const T of rings) {
+              const sT = squashLayout(field, T, { scale: "ground", spread: sp, ...set }), wT = createWarp(sT.spec);
+              const [lT] = bentRings(sT.ringSource, wT, [T]);
+              const cT = layoutChecks(sT.spec, field, T, lT, { cut: cutMask(field, sT) });
+              others.push({ origin: o.id, window: w, spread: sp, ring: T, overlap: r3(cT.overlap), stretch: r3(cT.stretch),
+                            slowInside: r3(cT.slowInsideExCut), outside: r3(cT.outside), omitted: r3(cT.omitted) });
+            }
+          }
+        }
+      }
+    }
+  }
+  const summary = settings.map((set, si) => {
+    const rs = results.filter((r) => r.setting === si);
+    return { setting: si, options: set, rows: rs.length, passAll: rs.length > 0 && rs.every((r) => r.passAll),
+             byReachPasses: rs.filter((r) => r.spread > 0).every((r) => r.passAll),
+             compassPasses: rs.filter((r) => r.spread === 0).every((r) => r.passAll),
+             slowInsideAt1pcEverywhere: rs.length > 0 && rs.every((r) => r.slowInsideAt1pc),
+             failing: rs.filter((r) => !r.passAll).map((r) => `${r.origin} ${r.window} ${r.spread}: ${Object.keys(r.pass).filter((k) => !r.pass[k]).join(",")}`) };
+  });
+  const out = { kind: "squash-checks", at: new Date().toISOString(), ring, limits: LAYOUT_LIMITS,
+                ms: Math.round(performance.now() - t0), summary, results, otherRings: others };
+  storeResult("squash-checks", out);
+  return out;
+}
+
 // Uncertain patches (server/warp/field.py) and the bent map's wedges, on real fields: King's
 // Cross (the warp page's opening pin) and the five test origins, by mode. Per field: the patch
 // nodes (and how many hold no data), the patches, the largest rise of a patch's minutes over its
@@ -723,7 +810,7 @@ async function uncertainChecks({ modes = ["walking", "cycling", "driving"], ring
 const labApi = {
   S, OPT, camera, setOrigin, requestScene, waitScene, morphTo, fitFor, reachBox,
   storeResult, allResults, percentile,
-  runSelfTest: runSelfTestNow, runBench: runBenchNow, runCensus: runCensusNow, directionChecks, uncertainChecks,
+  runSelfTest: runSelfTestNow, runBench: runBenchNow, runCensus: runCensusNow, directionChecks, squashChecks, uncertainChecks,
   onFrame(fn) { (S.frameListeners = S.frameListeners || []).push(fn); return () => { S.frameListeners = S.frameListeners.filter((f) => f !== fn); }; },
   onDraw(fn) { (S.drawListeners = S.drawListeners || []).push(fn); return () => { S.drawListeners = S.drawListeners.filter((f) => f !== fn); }; },
 };

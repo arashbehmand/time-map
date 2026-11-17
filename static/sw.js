@@ -38,6 +38,7 @@ const APP_SHELL = [
   "/shared/mesh/caps.js",
   "/shared/mesh/contours.js",
   "/shared/mesh/cover.js",
+  "/shared/mesh/diagnostics.js",
   "/shared/mesh/field.js",
   "/shared/mesh/fit.js",
   "/shared/mesh/frame.js",

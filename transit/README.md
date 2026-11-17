@@ -20,6 +20,7 @@ It writes, per build, into `transit/out/<build>/` (git-ignored):
 | `tt_*.fingerprint.json` | What each table was built from (settings, code, points, feeds, OSM clip, departure) and whether it is complete. A table made from anything else is rebuilt, never resumed |
 | `point_ok.npy` | False where a point could not be snapped to a street, or is cut off from the network (it reaches, and is reached by, under 10% of the others in every window); its row and column, diagonal included, are 255. `points.json` lists them |
 | `walksheds.npz` | Access points and the H3 res-10 cells reached from them on foot: each usable station to the cells within 2 km, each usable table cell to the cells within 1 km (a cell's row carries its bus access). Cell centres with no street within 150 m (water, large parks) are left out (`points`, `indptr`, `cells`, `minutes`; see `transit/tables.py`, `Walksheds`) |
+| `tt_wd13_bus.npy`, `tt_wd13_walk.npy` | #23's per-mode times (`modetimes` stage): the same points, mask and encoding as `tt_wd13.npy`. **Bus:** the faster of a bus trip (buses only, walking to and from the stops) and walking straight there within 30 min, as the tables are the faster of transit and walking: R5 keeps the walk-only option whatever the modes (`transit/calibrate.py`). A pair whose bus time equals its walking time has no bus in it. **Walk:** walking only, one departure, up to 180 min (255 beyond). The app doesn't read them and they aren't packaged; Whole city's Walking and Bus will use them (#23 part 2) |
 | `manifest.json` | Service dates, every input's URL, version, sha256 and "timetable as of" date, every routing setting, versions, output hashes, `valid_until` |
 | `feeds-check.md`, `gonogo.md`, `gate/<sample>/report.md` | The feed audit, the go/no-go and the gate |
 
@@ -135,7 +136,7 @@ python -m transit.build <stage> --build <id>      # id defaults to today's date
 | Stage | Does |
 |---|---|
 | `fetch` | Downloads the inputs into `data/raw/<id>/` with sha256 and Last-Modified (`--with-tfl-txc` also gets TfL's TransXChange zip) |
-| `dates` | Picks the Wednesday and Saturday: at least 10 days ahead, no bank holiday, every feed running, fewest closures. Keeps an existing `dates.json` unless `--redate` (the gate's cached replies are for those dates) |
+| `dates` | Picks the Wednesday and Saturday: at least 10 days ahead, no bank holiday, every feed running, fewest closures. `--not-before YYYY-MM-DD` keeps them on or after a day (after a timetable change, say). Keeps an existing `dates.json` unless `--redate` (the gate's cached replies are for those dates) |
 | `prep` | Keeps only services on those days inside Greater London + 5 km, and one copy of a doubled trip (the newer timetable version); clips the OSM extract with osmium (again if the polygon or extract changed) |
 | `check` | The feed audit: missing lines (with minimum trip counts), doubled service, timezones, TfL's own line list, near-duplicate bus trips (reported), the age of gb-transit's TfL copy (fails past 21 days; `--allow-stale-tfl`). `--allow-missing` carries on |
 | `network` | Builds the R5 network (cached by r5py between runs); records time and peak memory |
@@ -144,6 +145,7 @@ python -m transit.build <stage> --build <id>      # id defaults to today's date
 | `tables` | The four tables (`--window`, `--limit-origins` for a pilot, `--threads`); resumes a table only if its fingerprint matches, restarts it otherwise or with `--force`; then masks points cut off from the network. A pilot leaves the stage incomplete |
 | `walksheds` | Station and cell walksheds |
 | `venues` | Named pubs, bars, cafés, restaurants and parks (0.5 ha or more) from the OSM clip, for the meetup (#19): `venues.csv` and `venues.json` (osmium; no Java). Runs on its own too: `python -m transit.venues --build <id>`, on any build that still has its clip |
+| `modetimes` | Bus and walking-only tables for wd13 (`tt_wd13_bus.npy`, `tt_wd13_walk.npy`), resumable and fingerprinted like the tables; stops at once if r5py has no `TransportMode.BUS`. If it fails, `python -m transit.build manifest package --build <id>` still makes a build without them: the manifest leaves out an incomplete mode table (and refuses one built from other inputs). It also stops if the bus table is ever faster than the tables, which means R5 ignored the bus-only setting |
 | `manifest`, `package` | `manifest.json` (refuses incomplete tables; records the settings the tables were built with; lists the venue files when there are any); `transit-london-<id>.tar.xz` with `LICENSE-DATA.txt` (and the venue files) |
 
 `all` runs them in order and skips a stage whose inputs, settings and code have not changed.
@@ -215,16 +217,30 @@ Each is the plain tables' worst window on the first quick look, rounded up, plus
 sampling standard error (`settings.ACCEPTED`). Tightening them is part of revisiting the
 tables.
 
-## Monthly rebuild
+## Rebuilding
 
-`python -m transit.build all --build <new id>`, then the gate, about once a month and in any
-case before `valid_until` in the manifest. That is the earliest of:
+**Who and when:** the owner (Arash), on the machine that has this environment, when something
+serious changes (a new line, a big timetable change). There is no schedule. A build never stops
+being served: the pages say "Timetable as of <date>" (its service dates), and from the day after
+`valid_until` they add "Services may have changed since." `valid_until` is advisory, the earliest
+of:
 - the feeds' calendar end;
-- 35 days after the build;
 - the day before the next National Rail timetable change after the service dates.
+
+(Build day + 35 days only when no feed says when it ends; it no longer caps the others.)
 
 The changes are listed in `settings.TIMETABLE_CHANGES`; check new ones against Network Rail's
 calendar.
+
+A rebuild, start to finish:
+
+1. `python -m transit.build all --build <new id>` (add `--not-before <day>` to keep the service
+   dates after a timetable change), then the quick look (`transit.gate --provisional`) before the
+   service dates pass.
+2. Whole city from the same build: `transit.layout.car --build <id>`, then
+   `transit.layout.timemap --build <id> --modes car`.
+3. Copy both onto the Railway volume and point `TRANSIT_DIR` and `TIMEMAP_DIR` at them (main
+   README, "How the tables reach Railway").
 
 ## Publishing
 
@@ -511,7 +527,7 @@ It stops with exit code 2, having written nothing, when:
 
 Everything it writes is derived from the tables, so it stays in the git-ignored output folder
 and never goes into git or `static/`. Unlike the stations-only layout, it is published: the app
-shows it as Whole city (#28), from `TIMEMAP_DIR`, under the tables' own expiry and licence gate.
+shows it as Whole city (#28), from `TIMEMAP_DIR`, under the tables' own licence gate.
 Its report and Shepard plot are linked from the page.
 
 ## Travel modes (#23, L-03)
@@ -520,8 +536,8 @@ Whole city has a toggle for each way of travelling: Walking, Bus, Train and tube
 is a family of pull-only springs like the train springs, at the same scale s, and the build solves
 each combination over the same 25 positions of ρ from the real map. Part 1 (this) is car with
 train and tube: three combinations (train alone, the time map above; car alone; car with train
-and tube) and the real map, with no mode on. Walking and Bus wait for walking-only and bus-only
-times from R5, which come with the next table rebuild; their toggles say so.
+and tube) and the real map, with no mode on. Walking and Bus wait for part 2, which uses the
+walking-only and bus-only tables the `modetimes` stage now builds; their toggles say so.
 
 ```bash
 export TRANSIT_OUT=<builds> TRANSIT_DATA=<their data> T4C_ZIP=<path>/LONDON_2022.zip

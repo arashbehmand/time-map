@@ -420,6 +420,58 @@ Checking the first build against its own outputs found, besides the calibration:
    published, never the source timetables. Run the UK2GTFS check.
 6. Tighten the accepted lines as the tables improve.
 
+## Go-live rebuild (T-03, #30): build 2026-11-17
+
+The build that went live. Service dates **Wednesday 16 and Saturday 19 December 2026**, after
+the 13 December rail timetable change (`dates --not-before 2026-12-14`); gb-transit release
+`feed-2026-11-17` (TfL's timetables as kept on 2026-11-03), BODS fetched 2026-11-17, OSM as of
+2026-11-16. Manifest: `licences_cleared: true`, `valid_until` 2027-02-17 (gb-transit's feed end;
+advisory, the pages keep serving and say "Services may have changed since." after it).
+
+- **Feed check:** one problem, accepted by the owner (`--allow-missing`): Thameslink London
+  Bridge - East Croydon has 64 trips on Saturday 19 December against a minimum of 100 (293 on
+  the Wednesday), which reads as planned weekend works; Southern runs the same corridor that day
+  (177). It was the only week after the change the dates stage accepted: the January weeks fail
+  the 85%-of-usual-trips rule.
+- **Station snaps on Mapbox's roads** (#4, #19): all 640 usable stations, at the street points the
+  meetup sends, through the Matrix API: driving median 19 m, largest 114 m (London Euston);
+  cycling and walking median 0 m, largest 82 m (Waddon). None over 150 m, none dropped at 400 m.
+- **Points:** 3,716 (640 stations, 3,076 cells); 7 not snapped and 130 cut off, as in build
+  2026-11-12. Wembley Park to Baker Street: 22 / 20 / 19 / 20 min (wd08 / wd13 / wd19 / sa13).
+- **Per-mode tables (#23):** `tt_wd13_bus` (47% of pairs have no time within 180 min) and
+  `tt_wd13_walk` (87%; walking only, up to 180 min). The bus table is never faster than the
+  all-transit table. The walking table is faster on 31,314 of 1,779,371 pairs both time, and
+  times 5,592 pairs the all-transit table doesn't, because the all-transit tables cap walking at
+  30 min (`max_time_walking_min`).
+- **A bug the first run hit, fixed:** r5py links inputs into its cache by bare file name and
+  keeps the first link, so the first run of this build was routed on build 2026-11-12's feeds
+  (no trains on its dates; 3,709 of 3,716 points masked). R5 now gets per-build names, and the
+  build refuses a network with no public transport on its dates or a tables stage that masks
+  over half the points (`transit/r5.py` `r5_input`, `transit/build.py` `network`).
+
+### Quick look (2026-11-17, 16:08-16:28, with a TfL key)
+
+Sample a, seed 20261118: 30 pairs per band, departures at 0, 20 and 40 min, 12 ranking groups,
+margin 5. 6,373 Journey Planner calls at 450 a minute (with a key, not keyless; same sample and
+rules). **Quick-look result: FAIL on the accepted lines; FAIL on the issue's lines.**
+
+| Window | <=20 (issue 2/5, accepted 3/8) | 20-45 (issue 3/7, accepted 7/14) | >45 (issue 4/10, accepted 7/17) |
+|---|---|---|---|
+| wd08 | 2.0 / 4.0, n=30 | 3.0 / 9.0, n=264 | 4.0 / 12.0, n=216 |
+| wd13 | 2.0 / 7.0, n=30 | 3.0 / 9.0, n=235 | 5.0 / 14.0, n=163 |
+| wd19 | 2.0 / 3.0, n=30 | 3.0 / 9.0, n=323 | 4.0 / 13.0, n=172 |
+| sa13 | 2.0 / 8.0, n=31 | 3.0 / 10.0, n=123 | 5.0 / 14.0, n=136 |
+
+- **Error bands:** every window within the accepted lines; the issue's lines fail from 20 min up
+  (p90 9-14), as on the first tables.
+- **Go/no-go journeys:** +6.5, +4.0, +2.0 min: within the accepted 8, not the issue's 3.
+- **Ranking:** 9 of the 12 complete groups within 3 min of TfL's best (the accepted line needs
+  half), but two groups are 13 min off, over the accepted cap of 11: Earlsfield picked where TfL
+  says Morden Road tram stop (wd08), and New Addington where TfL says Addington Village (sa13).
+  Both are Croydon tram stops; the trams in this build run as in build 2026-11-12 (706 weekday
+  trips). The first quick look's worst was 10. The owner kept the build live (2026-11-17); the
+  tram groups are followed up in #36.
+
 ## UK2GTFS on TfL's Underground files
 
 Not run yet (needs Docker and about 5 GB of disk for the R image): `transit/uk2gtfs/`.

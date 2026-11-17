@@ -15,7 +15,7 @@ import { createLatest } from "/shared/latest.js";
 import { locate, offerLocation } from "/shared/locate.js";
 import { updateSwitcher, watchCity } from "/shared/nav.js";
 import { MODE_LABEL } from "/shared/tools.js";
-import { expired, insideArea, windowOptions } from "/shared/transit.js";
+import { insideArea, timetableLine, windowOptions } from "/shared/transit.js";
 import { decodeGroup, encodeGroup, isGroupHash, linkAtLoad, reconcileGroup, STATE_KEY } from "./share.js";
 import {
   ALL_TIES_TEXT, altText, answerNotes, headline, isPlace, isVenue, journeyLink, journeyNote, meaning, mins,
@@ -54,6 +54,15 @@ let map = null;
 const markers = new Map();     // id → maplibre Marker
 let resultMarkers = [];
 let lastAnswer = null;         // {data, snap, reach} for the answer on screen
+
+// How old the answer's timetable is (#30): said again when a tab left open comes back, and hourly
+// while it stays in view, so the "services may have changed" sentence appears on its day.
+function refreshTimetableAge() {
+  const el = document.getElementById("timetable-age");
+  if (el && lastAnswer) el.textContent = timetableLine(lastAnswer.data.service_date, lastAnswer.data.valid_until);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshTimetableAge(); });
+setInterval(() => { if (!document.hidden) refreshTimetableAge(); }, 60 * 60_000);
 let reachShown = false;
 const reachLayers = new Set(); // person ids with drawn reach layers
 const solves = createLatest();
@@ -262,7 +271,7 @@ async function loadTransitStatus() {
   // Whole city may still be loading: the switcher asks alone, so this handler (and the people
   // list it redraws) runs once.
   if (!statusSeen) { statusSeen = true; watchCity(status); }
-  transit = status.available && !expired(status.valid_until) ? status : { available: false };
+  transit = status.available ? status : { available: false };
   $("transit-chip").hidden = !transit.available;
   if (!transit.available && addMode() === "transit") setAddMode("walking");
   if (transit.available) {
@@ -628,7 +637,7 @@ async function solve() {
     updateFind();
     // "No place works" names who is stuck; other errors use the server's own sentence.
     setStatus(noPlaceSentence(err, snap.people.map(nameOf)) || friendly(err), "error");
-    // The tables went away (expired, say) while the page was open: ask again, which takes
+    // The tables went away (withdrawn, say) while the page was open: ask again, which takes
     // public transport off the page and moves anyone on it to walking.
     if (err && err.code === "transit_unavailable") loadTransitStatus();
     return;
@@ -746,12 +755,14 @@ function renderStations() {
   // When every alternative is a tie, one sentence says so instead of a label on each.
   const allTies = alts.length > 0 && alts.every((c) => c.tie);
   const credits = Array.isArray(data.credits) ? data.credits.filter((c) => typeof c === "string") : [];
+  const age = timetableLine(data.service_date, data.valid_until);
   answerEl.innerHTML = `
     <div class="answer-card">
       <p class="headline">${esc(placeHeadline(data.best))}</p>
       <p class="hint">${esc(meaning("minimax"))}</p>
       ${answerNotes(data).map((n) => `<p class="hint answer-note">${esc(n)}</p>`).join("")}
       ${tripRows(data.best, snap)}
+      ${age ? `<p class="hint" id="timetable-age">${esc(age)}</p>` : ""}
       <p class="hint">${esc(journeyNote(data.window_label, data.best))}</p>
       ${isVenue(data.best) ? `<p class="hint">${esc(OPEN_HOURS_HINT)}</p>` : ""}
     </div>

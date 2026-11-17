@@ -86,12 +86,19 @@ def build_network(osm: Path, gtfs: list[Path], out_json: Path):
     threading.Thread(target=heartbeat, daemon=True).start()
     m = r5py()
     cached_before = _cached_networks()
+    inputs = [osm, *gtfs]
     try:
-        tn = m.TransportNetwork(str(osm), [str(p) for p in gtfs])
+        tn = m.TransportNetwork(str(r5_input(osm)), [str(r5_input(p)) for p in gtfs])
     finally:
         timer.cancel()
         done.set()
     elapsed = time.monotonic() - started
+    # The cause of #30's stale build, checked at its root: each name r5py keeps in its cache must
+    # lead to this build's own file (a copy, where links fail, or an old link would not).
+    wrong = [p.name for p in inputs if (settings.CACHE / "r5py" / r5_input(p).name).resolve() != p.resolve()]
+    if wrong:
+        raise SystemExit(f"r5py's cache folder does not lead to this build's {', '.join(wrong)}: "
+                         f"remove those entries from {settings.CACHE / 'r5py'} and run again")
     # r5py saves a network to its cache right after building it: a new or newer cache file
     # means this was a cold build; otherwise it was loaded from the cache.
     cold = _cached_networks() != cached_before
@@ -114,6 +121,27 @@ def build_network(osm: Path, gtfs: list[Path], out_json: Path):
     log.info("network %s in %.0f s, peak RSS %.1f GB", "built" if cold else "loaded", elapsed,
              info["peak_rss_bytes"] / 1e9)
     return tn, info
+
+
+def r5_input(p: Path) -> Path:
+    """
+    The file to give r5py for `p`: a link beside it named after its build folder too. r5py links
+    each input into its cache folder under the file's bare name, and keeps the first link of that
+    name for good (r5py.util.WorkingCopy). Every build's inputs are london.osm.pbf, gbt.gtfs.zip
+    and bods.gtfs.zip, so without this every later build is routed on the first build's
+    timetable (#30: build 2026-11-17 got build 2026-11-12's feeds, and no trains on its dates).
+    """
+    link = p.with_name(f"r5-{p.parent.name}-{p.name}")
+    if link.is_symlink() and link.resolve() == p.resolve():
+        return link
+    link.unlink(missing_ok=True)
+    link.symlink_to(p.name)
+    return link
+
+
+def days_without_service(tn, days) -> list:
+    """The days in `days` on which the network runs no public transport at all."""
+    return [d for d in days if not tn.transit_layer.covers(d)]
 
 
 def _cached_networks() -> dict[str, float]:
@@ -287,11 +315,18 @@ def fingerprint_path(out_path: Path) -> Path:
     return out_path.with_suffix(".fingerprint.json")
 
 
+TABLE_KINDS = ("transit", "bus", "walk")
+
+
 def table_window(tn, points, ok: np.ndarray, departure: datetime, out_path: Path,
                  threads: int = settings.MATRIX_THREADS, limit_origins: int | None = None,
-                 fingerprint: dict | None = None, force: bool = False) -> dict:
+                 fingerprint: dict | None = None, force: bool = False, kind: str = "transit") -> dict:
     """
-    Fill out_path (N x N uint8 .npy memmap) for one window. Rows already listed in the
+    Fill out_path (N x N uint8 .npy memmap) for one window. `kind` is what may carry the trip:
+    "transit" (every mode, the tables), "bus" (buses, walking to and from them) or "walk"
+    (walking only, up to MAX_MINUTES): the last two are #23's per-mode times (#30). Like the
+    tables, "bus" is the faster of that and walking straight there (up to max_time_walking_min):
+    R5 keeps the walk-only option whatever the modes. Rows already listed in the
     done-list next to it are skipped, so a stopped build resumes where it was, but only when
     the table's fingerprint (settings, points, feeds, network, departure, code) is the one
     given: otherwise, or with `force`, the table starts again. The fingerprint file records
@@ -326,8 +361,16 @@ def table_window(tn, points, ok: np.ndarray, departure: datetime, out_path: Path
     lon = points["snap_lon"].to_numpy(float)
     lat = points["snap_lat"].to_numpy(float)
     dest_idx = np.where(ok)[0]
+    if kind not in TABLE_KINDS:
+        raise ValueError(f"kind {kind!r} is not one of {TABLE_KINDS}")
+    if kind == "bus" and not hasattr(r5py().TransportMode, "BUS"):
+        raise SystemExit("r5py has no TransportMode.BUS; it has "
+                         f"{', '.join(m.name for m in r5py().TransportMode)}")
     task = regional_task(tn, _gdf(points["idx"].to_numpy()[dest_idx], lon[dest_idx], lat[dest_idx]),
-                         departure)
+                         departure, walking_only=kind == "walk",
+                         max_time_min=settings.MAX_MINUTES if kind == "walk" else None)
+    if kind == "bus":
+        task.transport_modes = [_mode("BUS")]
     todo = [int(i) for i in np.where(ok)[0] if int(i) not in done]
     if limit_origins is not None:
         todo = todo[:limit_origins]
@@ -335,7 +378,8 @@ def table_window(tn, points, ok: np.ndarray, departure: datetime, out_path: Path
     lock = threading.Lock()
     finished = 0
 
-    ride_cost = settings.R5.get("ride_cost_min", 0.0)
+    # The ride cost (off by default) is a costing of the all-mode tables only.
+    ride_cost = settings.R5.get("ride_cost_min", 0.0) if kind == "transit" else 0.0
     if ride_cost:
         from transit.calibrate import RIDE_LIMITS, costed, with_rides
 

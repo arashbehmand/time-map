@@ -96,8 +96,8 @@ async function networkFirst(request) {
 
 // Whole city's data (#28), kept for offline use once it has been viewed: the one tool that needs
 // nothing else from the network. Network first, so online the server's gate decides every time:
-// a refusal (the build expired, or its tables were withdrawn) drops everything kept. Offline, the
-// page checks the kept build's expiry date itself before drawing it (whole-city/app.js). Its own
+// a refusal (its tables were withdrawn, say) drops everything kept. Offline, the page draws the
+// kept build whatever its date, saying how old its timetable is (whole-city/app.js). Its own
 // cache name, so a new app build doesn't throw the map away.
 const CITY_CACHE = "whole-city-data";
 const CITY_DATA = "/api/whole-city/";

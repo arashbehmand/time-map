@@ -37,7 +37,6 @@ const ABSENT = ["not_configured", "missing", "missing_manifest"];
 export function cityUnavailable(reason) {
   if (reason === "loading") return "Checking for Whole city…";
   if (reason === "offline") return "You're offline, and Whole city hasn't been opened here before. Open it once online to keep it.";
-  if (reason === "expired") return "Whole city is out of date until the timetables are rebuilt.";
   if (UNPUBLISHED.includes(reason)) return "Whole city isn't published yet.";
   if (ABSENT.includes(reason)) return "Whole city isn't on this server yet.";
   return "Whole city isn't available right now.";
@@ -45,7 +44,6 @@ export function cityUnavailable(reason) {
 
 // The same, short enough for the switcher on a phone.
 export function cityShort(reason) {
-  if (reason === "expired") return "out of date";
   if (UNPUBLISHED.includes(reason)) return "not published yet";
   if (ABSENT.includes(reason)) return "not here yet";
   return "not available";

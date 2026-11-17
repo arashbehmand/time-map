@@ -1,5 +1,5 @@
 // What every page needs to know about London's public transport tables (#28): the timetable
-// windows, whether a build has expired, whether a pin is inside the area they cover, and the
+// windows, the date their timetable is for, whether a pin is inside the area they cover, and the
 // server's status. Pure apart from pollStatus, so the node tests read it as the pages do.
 
 export const WINDOWS = ["wd08", "wd13", "wd19", "sa13"];
@@ -14,11 +14,29 @@ export function defaultWindow(date = new Date()) {
   return h < 11 ? "wd08" : h < 16 ? "wd13" : "wd19";
 }
 
-// The day after `validUntil` (YYYY-MM-DD), in London, the tables are expired.
-export function expired(validUntil, date = new Date()) {
+// From the day after `validUntil` (YYYY-MM-DD), in London, the timetable may be out of date.
+// Advisory only (#30): the tables keep being served, and the pages say services may have changed.
+export function pastValidUntil(validUntil, date = new Date()) {
   if (!validUntil) return false;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(date);
   return today > validUntil;
+}
+
+// "2026-12-16" → "16 December 2026"; "" for anything else. Read as a calendar date (UTC), so
+// it never shifts a day with the reader's time zone.
+export function dateText(iso) {
+  if (typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== iso) return "";
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(d);
+}
+
+// The line beside a public transport answer: the date its timetable is for (#30), and, once
+// its valid-until day has passed in London, that services may have changed. "" without a date.
+export function timetableLine(serviceDate, validUntil, date = new Date()) {
+  const when = dateText(serviceDate);
+  if (!when) return "";
+  return `Timetable as of ${when}.` + (pastValidUntil(validUntil, date) ? " Services may have changed since." : "");
 }
 
 // Is (lon, lat) inside a GeoJSON Polygon or MultiPolygon (lon/lat)?

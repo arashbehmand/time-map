@@ -80,6 +80,8 @@ def test_transit_field_composes_without_matrix(mapbox, transit_client):
     assert body["window_label"] == "a weekday, 08:00–09:00"
     assert body["sources"] == "mapbox+tables" and body["limit_minutes"] == 180
     assert body["development_only"] is False and body["valid_until"]
+    assert body["service_date"] == "2026-12-09"           # the weekday the times are for (#30)
+    assert body["service_dates"] == {"weekday": "2026-12-09", "saturday": "2026-12-12"}
     assert "Powered by TfL Open Data" in body["credits"]
     assert mapbox.count("isochrone") == 2 and mapbox.count("matrix") == 0
     names = {s["name"]: s["minutes"] for s in body["stations"]}
@@ -91,9 +93,11 @@ def test_transit_field_composes_without_matrix(mapbox, transit_client):
 
 def test_walk_then_transit_at_one_pin_costs_two_requests(mapbox, transit_client):
     pin = {"longitude": A[0], "latitude": A[1]}
-    assert transit_client.post(FIELD, json={**pin, "mode": "walking"}).status_code == 200
+    walk = transit_client.post(FIELD, json={**pin, "mode": "walking"})
+    assert walk.status_code == 200 and walk.json()["service_date"] is None and walk.json()["service_dates"] is None
     assert transit_client.post(FIELD, json={**pin, "mode": "transit", "window": "wd13"}).status_code == 200
-    assert transit_client.post(FIELD, json={**pin, "mode": "transit", "window": "sa13"}).status_code == 200
+    sat = transit_client.post(FIELD, json={**pin, "mode": "transit", "window": "sa13"})
+    assert sat.status_code == 200 and sat.json()["service_date"] == "2026-12-12"
     assert mapbox.count("isochrone") == 2 and mapbox.count("matrix") == 0
 
 

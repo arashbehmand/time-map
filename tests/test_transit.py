@@ -355,9 +355,10 @@ def test_checks_find_duplicates_and_missing_lines(tmp_path):
 
 
 # ── manifest ────────────────────────────────────────────────────────
-def test_valid_until_is_the_earlier_end():
-    assert manifest.valid_until(date(2026, 11, 12), []) == date(2026, 12, 17)
+def test_valid_until_is_the_earliest_feed_end_with_no_monthly_cap():
+    assert manifest.valid_until(date(2026, 11, 12), []) == date(2026, 12, 17)      # no feed end known
     assert manifest.valid_until(date(2026, 11, 12), [date(2026, 12, 1)]) == date(2026, 12, 1)
+    assert manifest.valid_until(date(2026, 11, 17), [date(2027, 2, 17), date(2027, 5, 15)]) == date(2027, 2, 17)
 
 
 def test_manifest_has_required_keys(tmp_path):
@@ -577,6 +578,200 @@ def test_pilot_table_is_incomplete_and_manifest_refuses_it(tmp_path, monkeypatch
         build.stage_manifest(b, None)
 
 
+def test_mode_tables_route_by_bus_or_on_foot_and_never_resume_as_each_other(tmp_path, monkeypatch):
+    """#23's per-mode times (#30): walking only up to MAX_MINUTES, buses only, each its own file."""
+    import enum
+    from types import SimpleNamespace
+
+    from transit import r5, settings
+
+    r5_, calls = _stub_routing(monkeypatch)
+    tasks = []
+
+    def task(*a, **k):
+        tasks.append(k)
+        return SimpleNamespace(transport_modes=["TRANSIT"])
+
+    monkeypatch.setattr(r5, "regional_task", task)
+    monkeypatch.setattr(r5, "_mode", lambda name: name)
+    pts = pd.DataFrame({"idx": [0, 1, 2], "snap_lon": [0.0, 1.0, 2.0], "snap_lat": [0.0, 0.0, 0.0]})
+    ok, dep = np.array([True, True, True]), datetime(2026, 12, 9, 13)
+    out = tmp_path / "tt_wd13_walk.npy"
+    assert r5.table_window(None, pts, ok, dep, out, threads=1, fingerprint={"kind": "walk"}, kind="walk")["complete"]
+    assert tasks[-1] == {"walking_only": True, "max_time_min": settings.MAX_MINUTES}
+    monkeypatch.setattr(r5, "r5py", lambda: SimpleNamespace(TransportMode=enum.Enum("M", "BUS WALK TRANSIT")))
+    assert r5.table_window(None, pts, ok, dep, tmp_path / "tt_wd13_bus.npy", threads=1,
+                           fingerprint={"kind": "bus"}, kind="bus")["complete"]
+    assert tasks[-1] == {"walking_only": False, "max_time_min": None}
+    n = len(calls)
+    r5.table_window(None, pts, ok, dep, out, threads=1, fingerprint={"kind": "bus"}, kind="bus")
+    assert len(calls) == n + 3                  # a walk file is never resumed as a bus one
+    monkeypatch.setattr(r5, "r5py", lambda: SimpleNamespace(TransportMode=enum.Enum("M", "WALK TRANSIT")))
+    with pytest.raises(SystemExit, match="no TransportMode.BUS; it has WALK, TRANSIT"):
+        r5.table_window(None, pts, ok, dep, tmp_path / "x.npy", threads=1, fingerprint={}, kind="bus")
+    with pytest.raises(ValueError):
+        r5.table_window(None, pts, ok, dep, tmp_path / "y.npy", threads=1, fingerprint={}, kind="tram")
+
+
+def test_the_manifest_lists_mode_tables_only_when_complete_and_current(tmp_path, monkeypatch):
+    from transit import build, settings
+
+    r5, _ = _stub_routing(monkeypatch)
+    for attr in ("RAW", "WORK", "OUT"):
+        monkeypatch.setattr(settings, attr, tmp_path / attr.lower())
+    b = build.Build("2026-11-12")
+    (b.out / "dates.json").write_text(json.dumps({"weekday": "2026-12-09", "saturday": "2026-12-12"}))
+    for p in [b.out / "points.csv", b.osm_clip] + [b.prepped(f) for f in build.FEEDS]:
+        p.write_text("x")
+    pts = pd.DataFrame({"idx": [0, 1, 2], "snap_lon": [0.0, 1.0, 2.0], "snap_lat": [0.0, 0.0, 0.0]})
+    ok = np.array([True, True, True])
+    for w in settings.WINDOWS:
+        r5.table_window(None, pts, ok, b.window_start(w), b.out / f"tt_{w}.npy", threads=1,
+                        fingerprint={**build.table_fingerprint(b, None), "departure": b.window_start(w).isoformat()})
+    stale = {**build.mode_table_fingerprint(b, "walk"), "kind": "bus"}
+    r5.table_window(None, pts, ok, b.window_start("wd13"), build.mode_table_path(b, "walk"), threads=1,
+                    fingerprint=stale, kind="walk")
+    with pytest.raises(SystemExit, match="tt_wd13_walk.npy was built from other inputs"):
+        build.stage_manifest(b, None)
+
+
+def test_r5_gets_inputs_named_after_their_build(tmp_path):
+    """r5py links inputs into its cache by bare file name, once: every build's gbt.gtfs.zip would
+    be read from the first build's (#30). Each build hands R5 a name of its own."""
+    from transit import r5
+
+    a, b = tmp_path / "2026-11-12", tmp_path / "2026-11-17"
+    for d in (a, b):
+        d.mkdir()
+        (d / "gbt.gtfs.zip").write_text(d.name)
+    la, lb = r5.r5_input(a / "gbt.gtfs.zip"), r5.r5_input(b / "gbt.gtfs.zip")
+    assert (la.name, lb.name) == ("r5-2026-11-12-gbt.gtfs.zip", "r5-2026-11-17-gbt.gtfs.zip")
+    assert lb.read_text() == "2026-11-17" and r5.r5_input(b / "gbt.gtfs.zip") == lb    # kept
+    lb.unlink()
+    lb.symlink_to(a / "gbt.gtfs.zip")                                                   # a stale link
+    assert r5.r5_input(b / "gbt.gtfs.zip").read_text() == "2026-11-17"
+
+
+def test_a_network_without_services_on_the_dates_is_named():
+    from types import SimpleNamespace
+
+    from transit import r5
+
+    runs = {date(2026, 12, 9), date(2026, 12, 12)}
+    tn = SimpleNamespace(transit_layer=SimpleNamespace(covers=lambda d: d in runs))
+    assert r5.days_without_service(tn, (date(2026, 12, 9), date(2026, 12, 12))) == []
+    assert r5.days_without_service(tn, (date(2026, 12, 16), date(2026, 12, 19))) == [date(2026, 12, 16),
+                                                                                date(2026, 12, 19)]
+
+
+def test_kept_dates_before_not_before_are_refused(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from transit import build, settings
+
+    for attr in ("RAW", "WORK", "OUT"):
+        monkeypatch.setattr(settings, attr, tmp_path / attr.lower())
+    b = build.Build("2026-11-17")
+    (b.out / "dates.json").write_text(json.dumps({"weekday": "2026-12-02", "saturday": "2026-12-05"}))
+    args = SimpleNamespace(redate=False, today=None, not_before="2026-12-14", no_tfl=True)
+    with pytest.raises(SystemExit, match="before --not-before 2026-12-14: add --redate"):
+        build.stage_dates(b, args)
+    build.stage_dates(b, SimpleNamespace(redate=False, today=None, not_before="2026-12-01", no_tfl=True))
+    build.stage_dates(b, SimpleNamespace(redate=False, today=None, not_before=None, no_tfl=True))
+
+
+def test_a_network_without_trains_on_the_dates_is_refused_before_the_tables(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from transit import build, r5, settings
+
+    for attr in ("RAW", "WORK", "OUT"):
+        monkeypatch.setattr(settings, attr, tmp_path / attr.lower())
+    b = build.Build("2026-11-17")
+    (b.out / "dates.json").write_text(json.dumps({"weekday": "2026-12-16", "saturday": "2026-12-19"}))
+    stale = SimpleNamespace(transit_layer=SimpleNamespace(covers=lambda d: d == date(2026, 12, 9)))
+    monkeypatch.setattr(r5, "build_network", lambda *a: (stale, {}))
+    monkeypatch.setattr(build, "_network", None)
+    with pytest.raises(SystemExit, match="no public transport on 2026-12-16, 2026-12-19"):
+        build.network(b)
+
+
+def test_tables_that_cut_off_most_points_are_refused(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from transit import build, settings
+
+    r5, _ = _stub_routing(monkeypatch)
+    monkeypatch.setattr(r5, "one_origin", lambda *a: np.full(3, np.inf))      # nothing reachable
+    for attr in ("RAW", "WORK", "OUT"):
+        monkeypatch.setattr(settings, attr, tmp_path / attr.lower())
+    b = build.Build("2026-11-17")
+    (b.out / "dates.json").write_text(json.dumps({"weekday": "2026-12-16", "saturday": "2026-12-19"}))
+    for p in [b.osm_clip] + [b.prepped(f) for f in build.FEEDS]:
+        p.write_text("x")
+    pd.DataFrame({"idx": [0, 1, 2], "kind": "cell", "id": ["a", "b", "c"], "name": "", "lon": 0.0, "lat": 0.0,
+                  "inside_gl": True, "snap_lon": [0.0, 1.0, 2.0], "snap_lat": 0.0, "snap_m": 1.0,
+                  "ok": True}).to_csv(b.out / "points.csv", index=False)
+    monkeypatch.setattr(build, "network", lambda b: None)
+    with pytest.raises(SystemExit, match="3 of 3 points look cut off.*--force"):
+        build.stage_tables(b, SimpleNamespace(window=None, threads=1, limit_origins=None, force=False))
+
+
+def test_the_bus_table_is_never_faster_than_the_tables():
+    from transit import build
+
+    t = np.array([[0, 10, 255], [12, 0, 30], [255, 20, 0]], dtype=np.uint8)
+    ok = np.array([True, True, True])
+    assert build.bus_faster_than_tables(t, np.array([[0, 15, 255], [12, 0, 255], [255, 25, 0]], np.uint8), ok) == 0
+    assert build.bus_faster_than_tables(t, np.array([[0, 9, 40], [12, 0, 30], [255, 20, 0]], np.uint8), ok) == 2
+    assert build.bus_faster_than_tables(t, np.array([[0, 9, 40], [12, 0, 30], [255, 20, 0]], np.uint8),
+                                        np.array([True, False, True])) == 1          # masked rows don't count
+
+
+def test_an_incomplete_mode_table_is_left_out_of_the_manifest(tmp_path, monkeypatch, caplog):
+    from transit import build, settings
+
+    r5, _ = _stub_routing(monkeypatch)
+    for attr in ("RAW", "WORK", "OUT"):
+        monkeypatch.setattr(settings, attr, tmp_path / attr.lower())
+    b = build.Build("2026-11-12")
+    (b.out / "dates.json").write_text(json.dumps({"weekday": "2026-12-09", "saturday": "2026-12-12"}))
+    for p in [b.out / "points.csv", b.osm_clip] + [b.prepped(f) for f in build.FEEDS]:
+        p.write_text("x")
+    pts = pd.DataFrame({"idx": [0, 1, 2], "snap_lon": [0.0, 1.0, 2.0], "snap_lat": [0.0, 0.0, 0.0]})
+    ok = np.array([True, True, True])
+    for w in settings.WINDOWS:
+        r5.table_window(None, pts, ok, b.window_start(w), b.out / f"tt_{w}.npy", threads=1,
+                        fingerprint={**build.table_fingerprint(b, None), "departure": b.window_start(w).isoformat()})
+    r5.table_window(None, pts, ok, b.window_start("wd13"), build.mode_table_path(b, "walk"), threads=1,
+                    fingerprint=build.mode_table_fingerprint(b, "walk"), kind="walk", limit_origins=1)
+    with pytest.raises((SystemExit, FileNotFoundError, KeyError)) as exc:
+        build.stage_manifest(b, None)            # gets past the mode tables, then needs sources.json
+    assert "tt_wd13_walk.npy" not in str(exc.value)
+    assert "tt_wd13_walk.npy is incomplete: left out of the manifest" in caplog.text
+
+
+def test_a_prep_rerun_keeps_the_osm_date_once_the_england_file_is_gone(tmp_path, monkeypatch):
+    from transit import build, settings
+
+    for attr in ("RAW", "WORK", "OUT"):
+        monkeypatch.setattr(settings, attr, tmp_path / attr.lower())
+    b = build.Build("2026-11-17")
+    england = b.raw / "osm" / "england-latest.osm.pbf"
+    b.write_json("prep.json", {"osm": {"data_as_of": "2026-11-16T21:22:36Z"}})
+    monkeypatch.setattr(build, "clip_is_current", lambda b: True)
+    assert build.osm_date(b, england) == "2026-11-16T21:22:36Z"
+    monkeypatch.setattr(build, "clip_is_current", lambda b: False)     # a new clip needs the file
+    assert build.osm_date(b, england) is None
+
+
+def test_not_before_must_be_a_date():
+    from transit import build
+
+    with pytest.raises(SystemExit):
+        build.main(["dates", "--build", "2026-11-17", "--not-before", "mid-December"])
+
+
 def test_accepted_ranking_rates_complete_groups_only():
     from transit.tables import accepted_ranking
 
@@ -676,8 +871,10 @@ def test_stage_keys_include_options_and_the_region():
 
     from transit import build, settings
 
-    args = argparse.Namespace(redate=True, today=None, no_tfl=False, gb_transit_tag=None, with_tfl_txc=True)
-    assert build.stage_options("dates", args) == {"redate": True, "today": None, "no_tfl": False}
+    args = argparse.Namespace(redate=True, today=None, not_before="2026-12-14", no_tfl=False,
+                              gb_transit_tag=None, with_tfl_txc=True)
+    assert build.stage_options("dates", args) == {"redate": True, "today": None, "not_before": "2026-12-14",
+                                                  "no_tfl": False}
     assert build.stage_options("fetch", args)["with_tfl_txc"] is True
     assert build.stage_options("network", args) == {}
     b = argparse.Namespace(prepped=lambda f: f, raw_feed=lambda f: f, out=settings.OUT, raw=settings.RAW,

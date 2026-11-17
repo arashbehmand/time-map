@@ -43,7 +43,7 @@ TIMETABLE_CHANGES = (date(2026, 12, 13), date(2027, 5, 16), date(2027, 12, 12), 
 # (gb-transit kept TfL's on 2026-11-03 after TfL refused its download).
 TFL_COPY_MAX_AGE_DAYS = 21
 CANDIDATE_WEEKS = 4              # weeks compared for the fewest Saturday closures
-VALID_DAYS = 35                  # valid_until is at most build date + this
+VALID_DAYS = 35                  # valid_until = build date + this only when no feed says when it ends
 
 # ── Study area and points ───────────────────────────────────────────
 BNG_EPSG = 27700                 # British National Grid, metres

@@ -117,13 +117,29 @@ def test_a_cleared_build_needs_no_override(tmp_path):
     assert TransitData.load(make_build(tmp_path / "x"), allow_uncleared=True).development_only
 
 
-def test_expired_and_incomplete_builds_are_refused(tmp_path):
+def test_an_old_build_still_loads_and_an_incomplete_one_is_refused(tmp_path):
+    # Nothing expires (#30): past valid_until the pages say services may have changed.
     old = make_build(tmp_path / "old", valid_until=date.today() - timedelta(days=1))
-    with pytest.raises(TransitUnavailable, match="expired"):
-        TransitData.load(old, allow_uncleared=True)
+    data = TransitData.load(old, allow_uncleared=True)
+    assert data.valid_until < date.today()
     half = make_build(tmp_path / "half", complete=False)
     with pytest.raises(TransitUnavailable, match="incomplete"):
         TransitData.load(half, allow_uncleared=True)
+
+
+@pytest.mark.parametrize("dates", [None, "soon", {"weekday": "13 May", "saturday": "2026-12-12"}])
+def test_service_dates_label_the_times_and_never_refuse_a_build(tmp_path, dates):
+    d = make_build(tmp_path, cleared=True)
+    manifest = json.loads((d / "manifest.json").read_text())
+    if dates is None:
+        del manifest["service_dates"]
+    else:
+        manifest["service_dates"] = dates
+    (d / "manifest.json").write_text(json.dumps(manifest))
+    data = TransitData.load(d)
+    want = {"saturday": "2026-12-12"} if isinstance(dates, dict) else {}
+    assert data.service_dates == want
+    assert data.window_date("wd08") is None and data.window_date("sa13") == want.get("saturday")
 
 
 def test_a_published_package_loads_without_fingerprint_files(tmp_path):
@@ -158,6 +174,8 @@ def test_status_names_windows_and_credits_once(data):
     s = data.status()
     assert [w["id"] for w in s["windows"]] == ["wd08", "wd13", "wd19", "sa13"]
     assert s["windows"][0]["label"] == "a weekday, 08:00–09:00"
+    assert s["service_dates"] == {"weekday": "2026-12-09", "saturday": "2026-12-12"}
+    assert [w["date"] for w in s["windows"]] == ["2026-12-09"] * 3 + ["2026-12-12"]
     assert s["credits"] == ["Powered by TfL Open Data", "© OpenStreetMap contributors"]
     assert s["development_only"] is True
 

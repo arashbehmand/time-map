@@ -265,11 +265,12 @@ def report_md(rep: dict) -> str:
     h = rep["headlines"]
     frames = rep["frames"]
     out = [f"# Full London time map: build {rep['build']}, {rep['window']}", "", f"**{rep['notice']}**", "",
-           f"Departure {rep['departure']}; tables valid until {rep['valid_until']}; table sha256 "
+           f"Departure {rep['departure']}; timetable may change after {rep['valid_until']}; table sha256 "
            f"`{rep['table_sha256'][:16]}…`; code `{rep['code']}`. Definitions: `transit/README.md`, "
            "\"Full London time map\".", ""]
     if h["expired"]:
-        out += [f"**These tables expired on {rep['valid_until']}.** Rebuild them before relying on this map.", ""]
+        out += [f"**These tables' timetable may have changed since {rep['valid_until']}.** The map is still "
+                "served; rebuild the tables when it matters.", ""]
     mc, lc, st = rep["mesh"], rep["links"], rep["settings"]
     out += ["## Headlines", "",
             f"- **The grid:** {mc['stations']} station nodes and {mc['cells']} H3 cell centres between them, joined by "

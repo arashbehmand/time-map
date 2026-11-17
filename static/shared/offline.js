@@ -1,22 +1,21 @@
 // Whole city offline (#28). The service worker keeps the map's files after a view (sw.js,
 // cityData). Beside them the Whole city page keeps the status it was shown with, so an installed
-// app opens Whole city without the network: only while that build's own valid-until date hasn't
-// passed in London, and only the times of day whose files were kept. Online, the server decides
-// every time, and a refusal drops all of it (here, and in the service worker).
-import { expired } from "./transit.js";
+// app opens Whole city without the network: whatever its date (nothing expires, #30; the page
+// says services may have changed past the build's valid-until day), and only the times of day
+// whose files were kept. Online, the server decides every time, and a refusal drops all of it
+// (here, and in the service worker).
 
 export const CITY_CACHE = "whole-city-data";      // the service worker's name too
 const KEPT_STATUS = "/api/whole-city/offline-status";
 
 // The kept status, as /api/transit/status's whole_city part, with only the kept windows and
-// `offline: true`; null when there is none, it has expired (then it is dropped), or there is no
+// `offline: true`; null when there is none, it is unreadable (then it is dropped), or there is no
 // Cache API (a page that isn't secure, or storage blocked).
 export async function keptCity() {
   return (await keptCityWhy()).city;
 }
 
-// The same, with why there is none: "expired" (the kept build is out of date; dropped) or
-// "offline" (nothing kept).
+// The same, with why there is none: "offline" (nothing kept).
 export async function keptCityWhy() {
   const none = { city: null, reason: "offline" };
   try {
@@ -25,9 +24,9 @@ export async function keptCityWhy() {
     const kept = await cache.match(KEPT_STATUS);
     if (!kept) return none;
     const c = await kept.json();
-    if (!c || !c.available || !Array.isArray(c.windows) || expired(c.valid_until)) {
+    if (!c || !c.available || !Array.isArray(c.windows)) {
       await caches.delete(CITY_CACHE);
-      return { city: null, reason: c && c.valid_until && expired(c.valid_until) ? "expired" : "offline" };
+      return none;
     }
     // Only the windows viewed under this build: a window kept from an older build is never
     // offered with this build's dates.

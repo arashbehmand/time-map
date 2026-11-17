@@ -27,7 +27,7 @@ import { localFrame, makeCamera } from "/shared/mesh/frame.js";
 import { STYLE_ID } from "/shared/mesh/schema-streets-v8.js";
 import { cityUnavailable } from "/shared/tools.js";
 import { forgetCity, forgetModes, keepCity, keptCityWhy } from "/shared/offline.js";
-import { defaultWindow, pollStatus, statusLoading, windowText } from "/shared/transit.js";
+import { defaultWindow, pollStatus, statusLoading, timetableLine, windowText } from "/shared/transit.js";
 import {
   blend, buildLand, comboOf, createMotion, createPlacer, decodeLand, ease, keyframes, loadSegment, pathLengths,
   madeWith, modeAvailability, pullWords, runSteps, segmentAt, sha256Hex, switchPlan, switchSteps, thinPositions,
@@ -61,7 +61,7 @@ async function load(url, kind) {
 
 // ── which build, which time of day ──────────────────────────────────
 // One quick question first: no network at all means the map kept from the last visit, if there
-// is one and its build hasn't expired (/shared/offline.js). Otherwise,
+// is one (/shared/offline.js). Otherwise,
 // right after a deploy the server may still be loading the tables or this map: keep asking for a
 // couple of minutes, saying so, before giving up.
 let state = null, offline = null, noNetwork = "";
@@ -86,10 +86,11 @@ if (!city || !city.available) {
     $("unavailable").hidden = false;
     await new Promise(() => {});
   }
-  await unavailable(city ? city.reason : noNetwork);   // "expired", "offline", or "" (no answer, nothing kept)
+  await unavailable(city ? city.reason : noNetwork);   // "offline", or "" (no answer, nothing kept)
 }
 const built = city.windows.map((w) => w.id);
 const label = Object.fromEntries(city.windows.map((w) => [w.id, w.label]));
+const dateOf = Object.fromEntries(city.windows.map((w) => [w.id, w.date]));   // absent in an older kept copy
 // The time of day: one picked here (?window=, so it works with storage blocked too), else the
 // one handed on by From here or Meet up, if it's built. A fallback (the time in London now, else
 // the first built) doesn't overwrite what they asked for; a choice made here does.
@@ -178,10 +179,18 @@ const on = new Set(["train"]);
 let cur = "train";            // "train", "car", "car-train", or "none" (the real map)
 
 // A public page's line about where this comes from (the build's own notice is for its report).
-$("notice").textContent = `Made from London's public transport timetables for ${label[win]}: typical times, ` +
-  `not live ones. Valid until ${city.valid_until}.` +
-  (city.development_only ? " Shown on this computer only: this build's licences aren't cleared." : "") +
-  (offline ? " You're offline: this is the map from your last visit." : "");
+// Said again when a tab left open comes back, and hourly while it stays in view: past the
+// build's valid-until day it adds that services may have changed (#30).
+function showNotice() {
+  const age = timetableLine(dateOf[win], city.valid_until);
+  $("notice").textContent = `Made from London's public transport timetables for ${label[win]}: typical times, ` +
+    "not live ones." + (age ? ` ${age}` : "") +
+    (city.development_only ? " Shown on this computer only: this build's licences aren't cleared." : "") +
+    (offline ? " You're offline: this is the map from your last visit." : "");
+}
+showNotice();
+document.addEventListener("visibilitychange", () => { if (!document.hidden) showNotice(); });
+setInterval(() => { if (!document.hidden) showNotice(); }, 60 * 60_000);
 const credits = [...new Set((Array.isArray(doc.attribution) ? doc.attribution : []).map((c) => String(c).replace("(c)", "©")))];
 $("credits").textContent = credits.length ? "Credits: " + credits.join("; ") + "." : "";
 if (city.report && city.report[win]) {

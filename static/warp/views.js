@@ -38,7 +38,7 @@ export function layoutFor(mode, pick = null) {
 }
 
 // The windows, expiry and coverage helpers every page shares live in /shared/transit.js (#28).
-export { WINDOWS, defaultWindow, expired, insideArea } from "../shared/transit.js";
+export { WINDOWS, defaultWindow, insideArea, pastValidUntil, timetableLine } from "../shared/transit.js";
 
 export const MORPH_MS = 1800;     // ordinary → bent
 export const FADE_MS = 300;       // the ordinary map dissolves into the mesh before it moves

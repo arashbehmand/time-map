@@ -9,9 +9,10 @@ and TIMEMAP_DIR points the app at one build's folder.
 
 It is published only under the tables' own gate, not a copy of it: a window is served only
 while the loaded tables (server/transit/provider.py) may be served to the same request
-(unexpired; licences cleared, or TRANSIT_ALLOW_UNCLEARED for this machine only), and only if
-it was made from exactly those tables: the same build, and the same table file (its sha256).
-So withdrawing or expiring the tables withdraws the map with them.
+(licences cleared, or TRANSIT_ALLOW_UNCLEARED for this machine only), and only if it was made
+from exactly those tables: the same build, and the same table file (its sha256). So withdrawing
+the tables withdraws the map with them. Neither ever expires (#30): past valid_until the page
+says services may have changed.
 
 Nothing here imports transit.layout: the image ships only transit/__init__.py and tables.py.
 """
@@ -25,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
-from server.transit.provider import WINDOWS, TransitHolder, london_today, window_label
+from server.transit.provider import WINDOWS, TransitHolder, window_label
 
 log = logging.getLogger("time_map.whole_city")
 
@@ -227,21 +228,19 @@ class WholeCityHolder:
         finally:
             self.loading = False
 
-    def usable(self, transit: TransitHolder, *, local: bool = False,
-               today: date | None = None) -> dict[str, CityWindow]:
+    def usable(self, transit: TransitHolder, *, local: bool = False) -> dict[str, CityWindow]:
         """The windows that may be served to this request: made from the tables that may be."""
         if not self.windows:
             return {}
-        data = transit.usable(today, local=local)
+        data = transit.usable(local=local)
         if data is None:
             return {}
         outputs = data.manifest.get("outputs", {})
-        today = today or london_today()
         out = {}
         for w, cw in self.windows.items():
             why = ("made from build " + cw.build if cw.build != data.build
                    else "made from another table" if cw.table_sha256 != (outputs.get(f"tt_{w}") or {}).get("sha256")
-                   else f"expired on {cw.valid_until}" if cw.valid_until < today else "")
+                   else "")
             if not why:
                 out[w] = cw
             elif (w, data.build, why) not in self._told:
@@ -251,32 +250,30 @@ class WholeCityHolder:
                 log.warning("whole city: window %s not served with tables %s: %s", w, data.build, why)
         return out
 
-    def reason_for(self, transit: TransitHolder, *, local: bool = False, today: date | None = None) -> str:
+    def reason_for(self, transit: TransitHolder, *, local: bool = False) -> str:
         if not self.configured:
             return "not_configured"
         if self.loading:
             return "loading"
         if not self.windows:
             return self.reason or "missing"
-        data = transit.usable(today, local=local)
+        data = transit.usable(local=local)
         if data is None:
             return "loading" if transit.loading else transit.reason_for(local)
-        today = today or london_today()
-        same = [cw for cw in self.windows.values() if cw.build == data.build]
-        if same and all(cw.valid_until < today for cw in same):
-            return "expired"
         return "build_mismatch"
 
-    def status(self, transit: TransitHolder, *, local: bool = False, today: date | None = None) -> dict:
-        windows = self.usable(transit, local=local, today=today)
+    def status(self, transit: TransitHolder, *, local: bool = False) -> dict:
+        windows = self.usable(transit, local=local)
         if not windows:
-            return {"available": False, "reason": self.reason_for(transit, local=local, today=today)}
-        data = transit.usable(today, local=local)
+            return {"available": False, "reason": self.reason_for(transit, local=local)}
+        data = transit.usable(local=local)
         first = next(iter(windows.values()))
         return {
             "available": True, "reason": "", "build": first.build,
             "valid_until": min(w.valid_until for w in windows.values()).isoformat(),
-            "windows": [{"id": w, "label": window_label(data.windows[w])} for w in WINDOWS if w in windows],
+            "service_dates": data.service_dates,
+            "windows": [{"id": w, "label": window_label(data.windows[w]), "date": data.window_date(w)}
+                        for w in WINDOWS if w in windows],
             "report": {w: cw.report for w, cw in windows.items()},
             "development_only": data.development_only,
             # The travel modes (#23): the windows built with them.

@@ -111,10 +111,12 @@ Point the app at one build's folder with `TIMEMAP_DIR`. It reads every window it
 `land.bin`, `report.md`, `shepard.svg`; not `report.json` or `panels.svg`) from
 `/api/whole-city/<window>/<file>`, never from a static folder. A window left out against the
 loaded tables is logged once, with why. A window is served only while **the loaded
-tables may be served to the same request** (unexpired; `licences_cleared`, or
+tables may be served to the same request** (`licences_cleared`, or
 `TRANSIT_ALLOW_UNCLEARED=1` for this machine only, never on Railway) and only if it was made from
-exactly those tables: the same build id and the same table file (`table_sha256`). Withdrawing or
-expiring the tables withdraws Whole city with them. A new folder needs a restart.
+exactly those tables: the same build id and the same table file (`table_sha256`). Withdrawing the
+tables withdraws Whole city with them. Nothing expires (#30): the page says "Timetable as of
+<date>" for the window shown, and adds "Services may have changed since." once the build's
+`valid_until` has passed in London. A new folder needs a restart.
 
 When there is no usable build, the home card and the switcher say so in plain words and link
 nowhere, and `/whole-city/` itself (from a bookmark or the installed app's shortcut) says the same
@@ -125,10 +127,10 @@ and points to the other two tools. The page links its build's report and Shepard
 2026-11-16). The service worker keeps its files after a view, in their own cache
 (`whole-city-data`, network first, `static/sw.js`), and the page keeps the status it was shown
 with beside them (`static/shared/offline.js`). With no network, the page, the home card and the
-switcher use that copy, only while the build's own valid-until date hasn't passed in London, and
-only for the times of day that were opened. Online the server's gate decides every time: a refusal
-(404) or a status saying Whole city isn't available drops everything kept. A licence withdrawn
-while a device stays offline is only seen there once it is back online; expiry is seen offline.
+switcher use that copy, whatever its date, and only for the times of day that were opened. Online
+the server's gate decides every time: a refusal (404) or a status saying Whole city isn't
+available drops everything kept. A licence withdrawn while a device stays offline is only seen
+there once it is back online.
 Nothing is precached at install, so a server without a build still installs the app.
 
 On a local machine, with the tables of build 2026-11-12:
@@ -142,7 +144,7 @@ then open <http://127.0.0.1:8000/whole-city/>. The override is refused on Railwa
 requests from this machine through no proxy, as for the tables.
 
 **Travel modes (#23, L-03).** The page has a toggle for each way of travelling: Walking and Bus
-(off until the next table rebuild gives them their own times), Train and tube (the time map
+(off until the map uses the walking-only and bus-only times the build now makes, #23 part 2), Train and tube (the time map
 above) and Car. Car's typical speeds come from HERE's Traffic4cast data (used non-commercially,
 with the owner's permissions). A build made with `--modes car` (`transit/README.md`, "Travel
 modes") keeps the car in a `modes/` folder beside the window's files; the app serves it like the
@@ -183,7 +185,7 @@ server/                          # FastAPI backend
     └── solver.py                # Scoring, refinement, snapped and named answers
 static/                          # Frontend assets (vanilla JS modules, no build step)
 ├── shared/                      # ui.css, api.js (errors, search), latest.js (latest answer only),
-│   │                            #   tools.js (names, words), transit.js (windows, expiry, status),
+│   │                            #   tools.js (names, words), transit.js (windows, dates, status),
 │   │                            #   nav.js (switcher), locate.js (location), handoff.js (tool to tool)
 │   ├── mesh/                    # Mesh renderer: warp, tiles → mesh worker, WebGL2 renderer, bands, overlaps
 │   └── vendor/                  # pbf, @mapbox/vector-tile, point-geometry, earcut (ES modules)
@@ -238,7 +240,10 @@ Sources and licences: [docs/transit-sources.md](docs/transit-sources.md); result
 The warp map reads a build at runtime when `TRANSIT_DIR` points at one (a build folder, or a
 package from `transit.build`'s package stage, extracted)
 (`server/transit/provider.py`, using `transit/tables.py` only). It serves it only if the build is
-complete, unexpired, matches the hashes in its manifest and says `licences_cleared: true`.
+complete, matches the hashes in its manifest and says `licences_cleared: true`. A build never
+expires: every transit answer (From here's field, Meet up's station or venue, Whole city) says
+"Timetable as of <date>", the service date of the window shown (`service_dates` in the manifest),
+and adds "Services may have changed since." once the build's `valid_until` has passed in London.
 `TRANSIT_ALLOW_UNCLEARED=1` serves an uncleared build for local development: only to requests
 from this machine with no forwarding header, whatever the host, and never on Railway. Without a
 usable build, the page offers walk, cycle and drive only.
@@ -521,7 +526,7 @@ off than they are.
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/travel-time-field` | A travel-time field for a pin, mode and (transit) timetable window |
-| `GET`  | `/api/transit/status` | Whether public transport times are available: windows, coverage, credits, validity |
+| `GET`  | `/api/transit/status` | Whether public transport times are available: windows and their service dates, coverage, credits, `valid_until` |
 | `POST` | `/api/isochrones` | Raw isochrone polygons (via Mapbox Isochrone API; the meetup page uses it) |
 | `GET`  | `/tiles/{z}/{x}/{y}` | Mapbox vector tile proxy |
 | `GET`  | `/glyphs/{fontstack}/{range}` | Mapbox font glyph proxy |
@@ -619,16 +624,15 @@ Deploy checklist (the app logs a warning at startup for each item it can detect)
   data) that each gets its own per-IP limit, and that a forged `X-Forwarded-For` doesn't
   reset it.
 - A persistent volume with `USAGE_DB_PATH` on it. Otherwise this month's counters reset on
-  every redeploy.
+  every redeploy. On Railway it is `time-map-volume`, mounted at `/data`; the tables live there too.
 - One replica.
 - The caps checked against the Mapbox account's real remaining allowance. Other apps on the
   same account share it.
 - `GEOCODER_USER_AGENT` with a contact address, as Nominatim's policy asks.
 - `TRANSIT_DIR` pointing at a build whose manifest says `licences_cleared: true` (the owner
-  holds the rail and TfL licences, `docs/transit-sources.md`); build 2026-11-12 predates the
-  flag, so use the next monthly build. Never set `TRANSIT_ALLOW_UNCLEARED` on a server anyone
-  else can reach: a tunnel or a proxy on the same machine that adds no forwarding header
-  makes every visitor look local.
+  holds the rail and TfL licences, `docs/transit-sources.md`), copied onto the volume as below.
+  Never set `TRANSIT_ALLOW_UNCLEARED` on a server anyone else can reach: a tunnel or a proxy on
+  the same machine that adds no forwarding header makes every visitor look local.
 - For Whole city, `TIMEMAP_DIR` pointing at the time-map folder made from that same build
   (`transit/out/timemap/<build>/`); a folder made from other tables is never served.
 - The RSP clause 3.3.2 notice settled (`[publication] rsp_notice` in `transit/sources.toml`; until
@@ -636,6 +640,36 @@ Deploy checklist (the app logs a warning at startup for each item it can detect)
 - Mapbox's terms for drawing Streets tiles with our own renderer (the time map) confirmed
   (`docs/provider-terms.md`).
 - No CORS origin to configure: the API is same-origin only, so there is no allow-list.
+
+### How the tables reach Railway
+
+The tables and the Whole city map are copied once onto the service's volume (`/data`) from the
+machine that built them. They are not in git, not in the image and not published. `railway ssh`
+needs your SSH key registered (`railway ssh keys add`) and `ssh.railway.com` in `~/.ssh/known_hosts`
+(`ssh-keyscan ssh.railway.com >> ~/.ssh/known_hosts`, once). The service sleeps when idle, and
+`railway ssh` then answers with your account's details instead of a shell: open the site first
+(`curl https://time-map-production.up.railway.app/api/transit/status`) so there is a container.
+
+```bash
+ID=<build id>; OUT=<transit out folder>          # e.g. transit/out
+# The files the server reads (not the bus and walking tables, which only the build uses)
+export COPYFILE_DISABLE=1   # macOS: no ._ files or extended attributes in the archives
+tar --no-xattrs -czf /tmp/transit-$ID.tgz -C $OUT/$ID tt_wd08.npy tt_wd13.npy tt_wd19.npy tt_sa13.npy \
+  tt_wd08.fingerprint.json tt_wd13.fingerprint.json tt_wd19.fingerprint.json tt_sa13.fingerprint.json \
+  point_ok.npy points.csv walksheds.npz venues.csv venues.json manifest.json
+tar --no-xattrs -czf /tmp/timemap-$ID.tgz -C $OUT/timemap/$ID .
+railway ssh -- sh -c "mkdir -p /data/transit/$ID && tar -xzf - -C /data/transit/$ID" < /tmp/transit-$ID.tgz
+railway ssh -- sh -c "mkdir -p /data/timemap/$ID && tar -xzf - -C /data/timemap/$ID" < /tmp/timemap-$ID.tgz
+railway ssh -- sh -c "cd /data/transit/$ID && sha256sum *"     # compare with: cd $OUT/$ID && shasum -a 256 <the same files>
+railway ssh -- sh -c "cd /data/timemap/$ID && find . -type f | sort | xargs sha256sum"   # and: cd $OUT/timemap/$ID && find . -type f | sort | xargs shasum -a 256
+railway variables --set TRANSIT_DIR=/data/transit/$ID --set TIMEMAP_DIR=/data/timemap/$ID
+```
+
+Setting the variables redeploys. `/api/transit/status` then says `available`, with the build's
+`service_dates`, and its `whole_city` part says `available`. To replace a build, copy the new one
+beside the old, point the two variables at it, check the status, then delete the old folders
+(`railway ssh -- rm -rf /data/transit/<old> /data/timemap/<old>`). Pointing the variables back is
+the rollback.
 
 ## Privacy rules
 

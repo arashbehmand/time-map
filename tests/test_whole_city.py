@@ -12,7 +12,6 @@ import pytest
 from fastapi.testclient import TestClient
 from tiny_transit import make_build
 
-import server.transit.provider as provider
 import server.transit.whole_city as whole_city
 from server.transit.whole_city import WholeCityUnavailable, load_dir
 
@@ -70,7 +69,8 @@ def test_a_cleared_build_is_served(make_client, settings, cleared):
     c = _client(make_client, settings, *cleared)
     city = c.get("/api/transit/status").json()["whole_city"]
     assert city["available"] is True and city["build"] == "tiny" and city["report"] == {"wd13": True}
-    assert city["windows"] == [{"id": "wd13", "label": "a weekday, 13:00–14:00"}]
+    assert city["windows"] == [{"id": "wd13", "label": "a weekday, 13:00–14:00", "date": "2026-12-09"}]
+    assert city["service_dates"] == {"weekday": "2026-12-09", "saturday": "2026-12-12"}
     assert city["development_only"] is False
     resp = c.get(URL)
     assert resp.status_code == 200 and resp.json()["build"] == "tiny"
@@ -159,23 +159,16 @@ def test_a_map_made_from_other_tables_is_refused(make_client, settings, tmp_path
     assert c.get(URL).status_code == 404
 
 
-def test_an_expired_map_is_refused(make_client, settings, tmp_path):
-    build = make_build(tmp_path, cleared=True)
+def test_an_old_map_is_still_served(make_client, settings, tmp_path):
+    # Nothing expires (#30): past valid_until the page says services may have changed.
+    build = make_build(tmp_path, cleared=True, valid_until=date.today() - timedelta(days=3))
     city = make_city(tmp_path, build, valid_until=(date.today() - timedelta(days=2)).isoformat())
     c = _client(make_client, settings, build, city)
-    assert c.get("/api/transit/status").json()["whole_city"]["reason"] == "expired"
-    assert c.get(URL).status_code == 404
-
-
-def test_tables_that_expire_after_startup_take_the_map_with_them(make_client, settings, cleared, monkeypatch):
-    c = _client(make_client, settings, *cleared)
-    assert c.get(URL).status_code == 200
-    later = date.today() + timedelta(days=400)
-    monkeypatch.setattr(provider, "london_today", lambda: later)
-    monkeypatch.setattr(whole_city, "london_today", lambda: later)
-    assert c.get("/api/transit/status").json()["whole_city"] == {"available": False, "reason": "expired"}
+    status = c.get("/api/transit/status").json()
+    assert status["available"] is True and status["whole_city"]["available"] is True
+    assert status["whole_city"]["valid_until"] == (date.today() - timedelta(days=2)).isoformat()
     for name in ("timemap.json", "land.bin", "report.md", "shepard.svg"):
-        assert c.get(f"/api/whole-city/wd13/{name}").status_code == 404, name
+        assert c.get(f"/api/whole-city/wd13/{name}").status_code == 200, name
 
 
 def test_uncleared_tables_take_the_map_with_them(make_client, settings, tmp_path):

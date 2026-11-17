@@ -491,7 +491,7 @@ def test_build_end_to_end(job_env):
                   "Train springs only pull", "The end of the slider is where the ladder stops",
                   "Station triangles bent", "positive definite", "a test of the step size",
                   "Every position", "Train links", "Land", "The app shows it as Whole city only while those tables "
-                  "may be served", "not cleared for publication", "expired", "TIMEMAP_DIR"):
+                  "may be served", "not cleared for publication", "may have changed since", "TIMEMAP_DIR"):
         assert words in md, words
     assert "| — |" in md                                      # the real map's smallest area: nothing squeezed
 

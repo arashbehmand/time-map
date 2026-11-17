@@ -49,6 +49,8 @@ RAIL_MINOR = {"subway", "light_rail", "tram"}
 BOROUGHS = tuple(f"E090000{k:02d}" for k in range(1, 34))
 # Style names from static/shared/mesh/schema-streets-v8.js (tests check they exist there).
 STYLE_NAMES = ("water", "park", "boundary", "major_rail", "minor_rail", "rail_tunnel")
+# The car's main roads (#23, L-03), carried like the rail into their own file (roads.bin).
+ROAD_STYLES = ("motorway", "trunk", "primary")
 FILL_LAYERS = ("water", "park")
 LINE_LAYERS = ("boundary", "rail")
 MIN_PIECE_M2 = 1.0
@@ -302,13 +304,15 @@ def _area2(V: np.ndarray, idx: np.ndarray) -> np.ndarray:
     return (b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0])
 
 
-def carry(prepared: dict, P: np.ndarray, tri: np.ndarray, tol_m: float = 0.0, min_ha: float = 0.0) -> Carried:
-    """Cut each prepared layer along the mesh (real positions P, triangles tri)."""
+def carry(prepared: dict, P: np.ndarray, tri: np.ndarray, tol_m: float = 0.0, min_ha: float = 0.0,
+          styles: tuple = STYLE_NAMES) -> Carried:
+    """Cut each prepared layer along the mesh (real positions P, triangles tri). Lines come from
+    "boundary" (lines), "rail" and "roads" ((line, style) pairs); `styles` names the style indices."""
     import shapely
 
     tri_polys = shapely.polygons(P[tri])
     tree = shapely.STRtree(tri_polys)
-    style_id = {n: i for i, n in enumerate(STYLE_NAMES)}
+    style_id = {n: i for i, n in enumerate(styles)}
 
     f_style, f_nv, f_nt, f_c, f_w, f_idx = [], [], [], [], [], []
     for name in FILL_LAYERS:
@@ -348,12 +352,12 @@ def carry(prepared: dict, P: np.ndarray, tri: np.ndarray, tol_m: float = 0.0, mi
                 f_idx.append(idx.ravel())
 
     l_style, l_nv, l_c, l_w = [], [], [], []
-    for name in LINE_LAYERS:
+    for name in (*LINE_LAYERS, "roads"):
         items = prepared.get(name, [])
         if not items:
             continue
-        geoms = [g for g, _ in items] if name == "rail" else items
-        styles = [s for _, s in items] if name == "rail" else ["boundary"] * len(items)
+        geoms = [g for g, _ in items] if name in ("rail", "roads") else items
+        names = [s for _, s in items] if name in ("rail", "roads") else ["boundary"] * len(items)
         geoms = np.array(geoms, dtype=object)
         gi, ti = tree.query(geoms, predicate="intersects")
         pieces = shapely.intersection(geoms[gi], tri_polys[ti])
@@ -367,7 +371,7 @@ def carry(prepared: dict, P: np.ndarray, tri: np.ndarray, tol_m: float = 0.0, mi
                 keep[1:] = (np.diff(keys, axis=0) != 0).any(axis=1)
                 if keep.sum() < 2:
                     continue
-                l_style.append(style_id[styles[g]])
+                l_style.append(style_id[names[g]])
                 l_nv.append(int(keep.sum()))
                 l_c.append(C[keep])
                 l_w.append(Wq[keep])
@@ -379,17 +383,17 @@ def carry(prepared: dict, P: np.ndarray, tri: np.ndarray, tol_m: float = 0.0, mi
                 np.array(f_style, dtype=np.int64), np.array(f_nv, dtype=np.int64), np.array(f_nt, dtype=np.int64),
                 cat(f_c, (0, 3)), cat(f_w, (0, 2)), cat(f_idx, (0,)),
                 np.array(l_style, dtype=np.int64), np.array(l_nv, dtype=np.int64), cat(l_c, (0, 3)), cat(l_w, (0, 2)))
-    c.counts = counts(c)
+    c.counts = counts(c, styles)
     return c
 
 
-def counts(c: Carried) -> dict:
+def counts(c: Carried, styles: tuple = STYLE_NAMES) -> dict:
     return {"tol_m": c.tol_m, "min_ha": c.min_ha,
             "fill_pieces": int(len(c.fill_style)), "fill_vertices": int(len(c.fill_c)),
             "fill_triangles": int(len(c.fill_idx) // 3), "line_runs": int(len(c.line_style)),
             "line_vertices": int(len(c.line_c)),
             "by_style": {n: {"fill_pieces": int((c.fill_style == i).sum()),
-                             "line_runs": int((c.line_style == i).sum())} for i, n in enumerate(STYLE_NAMES)}}
+                             "line_runs": int((c.line_style == i).sum())} for i, n in enumerate(styles)}}
 
 
 def fill_triangles(c: Carried) -> np.ndarray:
@@ -438,17 +442,25 @@ def blend_slivers(layouts: list[np.ndarray], tri: np.ndarray, margin_m: float = 
     return bad
 
 
-def drop_blend_slivers(c: Carried, layouts: list[np.ndarray]) -> tuple[Carried, int]:
+def drop_blend_slivers(c: Carried, layouts: list[np.ndarray],
+                       pairs: list[tuple[np.ndarray, np.ndarray]] | None = None) -> tuple[Carried, int]:
     """Fill triangles as the page draws them (placed in float64, stored as Float32, mixed by the
     shader) must keep their orientation, with blend_slivers' margin, on every keyframe and all
-    along every blend between consecutive ones (`layouts`, in slider order). A sliver that doesn't
-    is dropped (it is far below a pixel); returns the land without them and how many there were."""
+    along every blend between consecutive ones (`layouts`, in slider order), and along every blend in
+    `pairs` (two layouts each: the travel modes' own slider and the switches between them, #23). A
+    sliver that doesn't is dropped (it is far below a pixel); returns the land without them and how
+    many there were."""
     if not len(c.fill_idx):
         return c, 0
     tri_all = fill_triangles(c)
-    V = [place(c.fill_c, c.fill_w, np.asarray(X, dtype=np.float64)).astype(np.float32).astype(np.float64)
-         for X in layouts]
+
+    def drawn(X):
+        return place(c.fill_c, c.fill_w, np.asarray(X, dtype=np.float64)).astype(np.float32).astype(np.float64)
+
+    V = [drawn(X) for X in layouts]
     bad = blend_slivers(V, tri_all)
+    for A, B in pairs or ():
+        bad |= blend_slivers([drawn(A), drawn(B)], tri_all)
     n_bad = int(bad.sum())
     if not n_bad:
         return c, 0
@@ -465,7 +477,7 @@ def drop_blend_slivers(c: Carried, layouts: list[np.ndarray]) -> tuple[Carried, 
 
 
 # ── the packed file the page reads ──────────────────────────────────
-def pack(c: Carried, n_nodes: int) -> tuple[bytes, dict]:
+def pack(c: Carried, n_nodes: int, styles: tuple = STYLE_NAMES, file: str = "land.bin") -> tuple[bytes, dict]:
     """land.bin and the header that describes it (for timemap.json). Little-endian arrays, each
     at a 4-byte boundary: styles uint8, counts uint32, nodes uint16 (three a vertex), weights
     uint16 (two a vertex), fill indices uint16 within each piece."""
@@ -492,7 +504,7 @@ def pack(c: Carried, n_nodes: int) -> tuple[bytes, dict]:
         blob += b"\0" * (-len(blob) % 4)
         header.append({"name": name, "dtype": dtype, "offset": len(blob), "length": int(a.size)})
         blob += a.tobytes()
-    return bytes(blob), {"file": "land.bin", "styles": list(STYLE_NAMES), "arrays": header, "weight_scale": Q,
+    return bytes(blob), {"file": file, "styles": list(styles), "arrays": header, "weight_scale": Q,
                          "tol_m": c.tol_m, "min_ha": c.min_ha, "counts": c.counts}
 
 

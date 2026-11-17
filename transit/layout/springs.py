@@ -1,7 +1,8 @@
 """
-The spring grid of the full London time map (#6, L-02), and its solve. Numpy only.
+The spring grid of the full London time map (#6, L-02; travel modes #23, L-03), and its solve.
+Numpy only.
 
-    E(ρ) = [ Σ_edges a·ψ(l/l₀) + ρ·Σ_links b·ψ₊(l/(s·t))
+    E(ρ) = [ Σ_edges a·ψ(l/l₀) + ρ·Σ_families Σ_links b·ψ₊(l/r)  + ρ·η·Σ_twins a_t·(d/r_t)²/2
              + Σ_triangles A₀·(κ·φ(J) + κₛ·μ(F)) ] ÷ (ΣA₀ / free nodes)
 
 - Grid springs on every mesh edge: rest length l₀ = the real length, weight a = a third of the
@@ -15,6 +16,18 @@ The spring grid of the full London time map (#6, L-02), and its solve. Numpy onl
   of them buckle into zigzags: the grid has no room for a line twice its length. Fast hops pull
   their stations together; slow hops leave the grid alone unless their stations end up further
   apart than s·t. ψ₊ is convex and once differentiable; its second derivative jumps at λ = 1.
+- Car springs (#23) sit on a road layer, so that the time it takes to park and get to the car is
+  paid once a trip, not at every node a road passes. Every node a main road touches has a twin:
+  a free point that is in no triangle and is never drawn. An *access* spring joins each node to
+  its twin (rest s·overhead/2), and *road* springs join the twins of nodes consecutive along a road
+  (rest s·drive time). Both only pull, like the train springs, so two places are held at most
+  s·(overhead + drive time along the roads) apart, however many nodes the road passes. A road
+  spring's weight follows the train rule (the real distance between its two nodes × the median
+  mesh edge); an access spring's is the sum of its twin's road springs'.
+- Each twin is tied to its node by a weak two-sided spring, ρ·η·a_t·(d/r_t)²/2 (d its distance
+  from the node, r_t and a_t its access spring's rest and weight, η = TETHER_ETA): it keeps the
+  Hessian positive definite where every car spring is slack, is zero on the real map, and pulls
+  in the same proportion to the car springs at every ρ.
 - ψ(λ) = ½(λ² − 1) − ln λ: zero and flat at rest, close to Hooke's law near it, and infinite as a
   spring shrinks to nothing, so no spring can be compressed fully.
 - φ(J) = ½(J + 1/J) − 1 on each triangle's area ratio J = A/A₀: infinite as a triangle's area goes
@@ -44,6 +57,7 @@ from transit.layout.mesh import Mesh
 
 KAPPA = 1.0                   # the area term's weight against the grid's
 KAPPA_SHAPE = 1.0             # the shape term's weight against the grid's
+TETHER_ETA = 1e-3             # a twin's tie to its node, against its access spring
 TOL = 1e-6                    # |gradient|∞ at a solution (normalised energy and coordinates)
 MAX_ITER = 2000
 STEP_CAP = 0.9                # a share of the step to the first zero area
@@ -78,14 +92,29 @@ def phi(J):
 
 
 @dataclass
+class Family:
+    """One kind of pull-only spring, on rows of X (normalised units)."""
+    name: str                 # "train", "car" (road springs) or "car_access"
+    links: np.ndarray         # (K, 2)
+    rest: np.ndarray          # (K,)
+    b: np.ndarray             # (K,)
+
+    @property
+    def mode(self) -> str:
+        """The travel mode it belongs to (the page's toggle)."""
+        return self.name.split("_")[0]
+
+
+@dataclass
 class Model:
-    """Everything the energy needs, in metres. Build it with `model()`."""
+    """Everything the energy needs, in metres. Build it with `model()`. Rows of P past `n_mesh`
+    are twins (the car's road layer): free, in no triangle, never shipped."""
     P: np.ndarray             # (N, 2) real positions
     fixed: np.ndarray         # (N,) bool
     edges: np.ndarray         # (E, 2)
     l0: np.ndarray            # (E,)
     a: np.ndarray             # (E,)
-    links: np.ndarray         # (K, 2)
+    links: np.ndarray         # (K, 2) the train springs
     rest: np.ndarray          # (K,) s·t, metres
     b: np.ndarray             # (K,)
     tri: np.ndarray           # (T, 3)
@@ -94,11 +123,23 @@ class Model:
     kappa_shape: float = KAPPA_SHAPE
     scale: float = 1.0        # metres per normalised unit (the median mesh edge)
     norm: float = 1.0         # energy divisor: the real area per free node, normalised units
+    families: list | None = None              # default: the train springs alone
+    tether: np.ndarray | None = None          # (Z, 2) (node, twin) rows
+    tether_w: np.ndarray | None = None        # (Z,) a_t / r_t², normalised
+    eta: float = TETHER_ETA
+    n_mesh: int | None = None                 # rows that are mesh nodes (default all)
     free: np.ndarray = field(init=False)
     dof: np.ndarray = field(init=False)
     shape_M: np.ndarray = field(init=False)   # (T, 3, 3): ‖F‖² = Σ M_ab x_a·x_b over each triangle's corners
 
     def __post_init__(self):
+        if self.families is None:
+            self.families = [Family("train", self.links, self.rest, self.b)] if len(self.links) else []
+        if self.tether is None:
+            self.tether = np.zeros((0, 2), dtype=np.int64)
+            self.tether_w = np.zeros(0)
+        if self.n_mesh is None:
+            self.n_mesh = len(self.P)
         self.shape_M = shape_matrices(self.P, self.tri)
         self.free = np.where(~self.fixed)[0]
         dof = np.full(2 * len(self.P), -1, dtype=np.int64)
@@ -109,6 +150,9 @@ class Model:
     @property
     def n_dof(self) -> int:
         return 2 * len(self.free)
+
+    def family(self, name: str) -> Family | None:
+        return next((f for f in self.families if f.name == name), None)
 
 
 def shape_matrices(P: np.ndarray, tri: np.ndarray) -> np.ndarray:
@@ -121,8 +165,20 @@ def shape_matrices(P: np.ndarray, tri: np.ndarray) -> np.ndarray:
     return D.T[None] @ S @ D[None]
 
 
+@dataclass
+class CarSprings:
+    """The car's road layer, in mesh terms: which nodes have a twin, the road springs between twins
+    (indices into `twins`) and their rest lengths, and the access springs' rest length."""
+    twins: np.ndarray         # (Z,) mesh node of each twin
+    hops: np.ndarray          # (H, 2) indices into twins
+    hop_rest_m: np.ndarray    # (H,) s·drive minutes
+    access_rest_m: float      # s·overhead/2
+
+
 def model(mesh: Mesh, links: np.ndarray, rest_m: np.ndarray, kappa: float = KAPPA,
-          kappa_shape: float = KAPPA_SHAPE) -> Model:
+          kappa_shape: float = KAPPA_SHAPE, car: CarSprings | None = None) -> Model:
+    """The energy on `mesh` with train springs (`links`, `rest_m`; may be empty) and, with `car`,
+    the car's road layer."""
     links = np.asarray(links, dtype=np.int64).reshape(-1, 2)
     rest_m = np.asarray(rest_m, dtype=np.float64).reshape(-1)
     if len(links) != len(rest_m) or (rest_m <= 0).any() or not np.isfinite(rest_m).all():
@@ -131,9 +187,36 @@ def model(mesh: Mesh, links: np.ndarray, rest_m: np.ndarray, kappa: float = KAPP
     real = np.hypot(*(mesh.P[links[:, 0]] - mesh.P[links[:, 1]]).T) if len(links) else np.zeros(0)
     b = real * L
     n_free = int((~mesh.fixed).sum())
-    return Model(P=mesh.P / L, fixed=mesh.fixed.copy(), edges=mesh.edges, l0=mesh.l0 / L, a=mesh.a_edge / L ** 2,
-                 links=links, rest=rest_m / L, b=b / L ** 2, tri=mesh.tri, A0=mesh.A0 / L ** 2, kappa=kappa,
-                 kappa_shape=kappa_shape, scale=L, norm=float(mesh.A0.sum()) / L ** 2 / max(n_free, 1))
+    common = dict(edges=mesh.edges, l0=mesh.l0 / L, a=mesh.a_edge / L ** 2, links=links, rest=rest_m / L,
+                  b=b / L ** 2, tri=mesh.tri, A0=mesh.A0 / L ** 2, kappa=kappa, kappa_shape=kappa_shape, scale=L,
+                  norm=float(mesh.A0.sum()) / L ** 2 / max(n_free, 1))
+    if car is None:
+        return Model(P=mesh.P / L, fixed=mesh.fixed.copy(), **common)
+    twins = np.asarray(car.twins, dtype=np.int64).reshape(-1)
+    hops = np.asarray(car.hops, dtype=np.int64).reshape(-1, 2)
+    hop_rest = np.asarray(car.hop_rest_m, dtype=np.float64).reshape(-1)
+    if len(hops) != len(hop_rest) or (hop_rest <= 0).any() or not np.isfinite(hop_rest).all():
+        raise ValueError("every road spring needs a positive, finite rest length")
+    if not (car.access_rest_m > 0 and math.isfinite(car.access_rest_m)):
+        raise ValueError("the access springs need a positive, finite rest length")
+    if (mesh.fixed[twins]).any():
+        raise ValueError("a guard node can't have a twin")
+    n = mesh.n
+    rows = n + np.arange(len(twins))
+    hop_b = np.hypot(*(mesh.P[twins[hops[:, 0]]] - mesh.P[twins[hops[:, 1]]]).T) * L if len(hops) else np.zeros(0)
+    acc_b = np.bincount(hops.ravel(), weights=np.repeat(hop_b, 2), minlength=len(twins)) if len(hops) else \
+        np.zeros(len(twins))
+    if len(twins) and not (acc_b > 0).all():
+        raise ValueError("every twin needs a road spring")
+    acc_rest = np.full(len(twins), car.access_rest_m / L)
+    fams = [Family("train", links, rest_m / L, b / L ** 2)] if len(links) else []
+    fams += [Family("car", rows[hops], hop_rest / L, hop_b / L ** 2),
+             Family("car_access", np.stack([twins, rows], axis=1), acc_rest, acc_b / L ** 2)]
+    P = np.vstack([mesh.P, mesh.P[twins]]) / L
+    fixed = np.concatenate([mesh.fixed, np.zeros(len(twins), dtype=bool)])
+    common["norm"] = float(mesh.A0.sum()) / L ** 2 / max(n_free, 1)        # per free mesh node, as without twins
+    return Model(P=P, fixed=fixed, families=fams, tether=np.stack([twins, rows], axis=1),
+                 tether_w=(acc_b / L ** 2) / acc_rest ** 2, n_mesh=n, **common)
 
 
 # ── energy, gradient, Hessian (normalised units) ─────────────────────
@@ -156,20 +239,40 @@ def mips(m: Model, X: np.ndarray) -> np.ndarray:
         return np.where(J > 0, shape_norm2(m, X) / np.where(J > 0, J, 1.0) - 2, np.inf)
 
 
+def _family_energy(X, f: Family) -> float:
+    if not len(f.links):
+        return 0.0
+    _, _, lk = _springs(X, f.links, f.rest, f.b)
+    return float((f.b * psi_pull(lk)).sum())
+
+
+def tether_energy(m: Model, X: np.ndarray) -> float:
+    if not len(m.tether):
+        return 0.0
+    d = X[m.tether[:, 1]] - X[m.tether[:, 0]]
+    return float((0.5 * m.eta * m.tether_w * (d ** 2).sum(axis=1)).sum())
+
+
 def parts(m: Model, X: np.ndarray, rho: float) -> dict:
-    """The energy's four terms at X (normalised), +inf where a spring or triangle has collapsed."""
+    """The energy's terms at X (normalised), +inf where a spring or triangle has collapsed: the grid,
+    the train springs, then with the car's road layer the road springs ("car"), the access springs
+    ("car_access") and the twins' ties ("tether"), then the triangles' area and shape terms."""
     _, _, lam = _springs(X, m.edges, m.l0, m.a)
     grid = float((m.a * psi(lam)).sum())
-    if len(m.links):
-        _, _, lk = _springs(X, m.links, m.rest, m.b)
-        train = float((m.b * psi_pull(lk)).sum())
-    else:
-        train = 0.0
+    out = {"grid": grid / m.norm}
+    train = m.family("train")
+    out["train"] = rho * (_family_energy(X, train) if train is not None else 0.0) / m.norm
+    for f in m.families:
+        if f.name != "train":
+            out[f.name] = rho * _family_energy(X, f) / m.norm
+    if len(m.tether):
+        out["tether"] = rho * tether_energy(m, X) / m.norm
     J = signed_areas(X, m.tri) / m.A0
     area = float((m.A0 * phi(J)).sum())
     shape = float((m.A0 * mips(m, X)).sum())
-    return {"grid": grid / m.norm, "train": rho * train / m.norm, "area": m.kappa * area / m.norm,
-            "shape": m.kappa_shape * shape / m.norm}
+    out["area"] = m.kappa * area / m.norm
+    out["shape"] = m.kappa_shape * shape / m.norm
+    return out
 
 
 def energy(m: Model, X: np.ndarray, rho: float) -> float:
@@ -177,15 +280,28 @@ def energy(m: Model, X: np.ndarray, rho: float) -> float:
     if not (J > 0).all():
         return math.inf
     p = parts(m, X, rho)
-    return p["grid"] + p["train"] + p["area"] + p["shape"]
+    if len(p) == 4:                              # the grid, the train springs, area and shape: L-02's sum
+        return p["grid"] + p["train"] + p["area"] + p["shape"]
+    return p["grid"] + p["train"] + p["area"] + p["shape"] + sum(v for k, v in p.items()
+                                                                  if k not in ("grid", "train", "area", "shape"))
+
+
+def taut(m: Model, X: np.ndarray, f: Family) -> np.ndarray:
+    """Which of a family's springs pull at X (stretched past their rest length)."""
+    if not len(f.links):
+        return np.zeros(0, dtype=bool)
+    _, _, lam = _springs(X, f.links, f.rest, f.b)
+    return lam >= 1
 
 
 def _spring_terms(X, ij, rest, w, coef, pull_only=False):
     """Gradient rows and 2×2 Hessian blocks of Σ coef·w·ψ(l/rest), or of ψ₊ with `pull_only`
-    (nothing from a spring shorter than its rest length)."""
+    (nothing from a spring shorter than its rest length, which may be of length zero: a twin on its
+    node). Returns (rows of ij used, g, H)."""
     d, ln, lam = _springs(X, ij, rest, w)
     if pull_only:
-        w = np.where(lam >= 1, w, 0.0)
+        on = lam >= 1
+        ij, d, ln, lam, rest, w = ij[on], d[on], ln[on], lam[on], rest[on], w[on]
     n = d / ln[:, None]
     dpsi = lam - 1 / lam
     d2psi = 1 + 1 / lam ** 2
@@ -194,7 +310,7 @@ def _spring_terms(X, ij, rest, w, coef, pull_only=False):
     tangent = coef * w * dpsi / (rest * ln)
     nn = n[:, :, None] * n[:, None, :]
     H = radial[:, None, None] * nn + tangent[:, None, None] * (np.eye(2)[None] - nn)
-    return g, H
+    return ij, g, H
 
 
 def grad_hess(m: Model, X: np.ndarray, rho: float, hessian: bool = True):
@@ -217,11 +333,19 @@ def grad_hess(m: Model, X: np.ndarray, rho: float, hessian: bool = True):
                 cols.append(np.tile(b2, (1, 2)).ravel())
                 vals.append((s * H).reshape(len(ij), 4).ravel())
 
-    g, H = _spring_terms(X, m.edges, m.l0, m.a, 1.0)
-    add_pairs(m.edges, g, H)
-    if len(m.links) and rho > 0:
-        g, H = _spring_terms(X, m.links, m.rest, m.b, rho, pull_only=True)
-        add_pairs(m.links, g, H)
+    ij, g, H = _spring_terms(X, m.edges, m.l0, m.a, 1.0)
+    add_pairs(ij, g, H)
+    if rho > 0:
+        for f in m.families:
+            if len(f.links):
+                ij, g, H = _spring_terms(X, f.links, f.rest, f.b, rho, pull_only=True)
+                add_pairs(ij, g, H)
+        if len(m.tether):
+            # ρ·η·w·|d|²/2 on (node, twin): gradient ±c·d, Hessian blocks ±c·I.
+            c = rho * m.eta * m.tether_w
+            d = X[m.tether[:, 0]] - X[m.tether[:, 1]]
+            Hc = c[:, None, None] * np.eye(2)[None]
+            add_pairs(m.tether, c[:, None] * d, Hc)
 
     t = m.tri
     x0, y0 = X[t[:, 0], 0], X[t[:, 0], 1]

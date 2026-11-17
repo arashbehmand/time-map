@@ -1,6 +1,6 @@
 // Whole city (#28): the full London time map of #6 (L-02), in the app. It draws the land with the
-// app's mesh renderer (/shared/mesh/, cpu back-end, a target per vertex) and the stations, names
-// and the Metropolitan line (carried through the mesh like the land) on a 2-D canvas above it.
+// app's mesh renderer (/shared/mesh/, cpu back-end, a target per vertex) and the stations and names
+// on a 2-D canvas above it.
 //
 // Its data is one build of `python -m transit.layout.timemap`, which the server serves only
 // under the transit tables' own gate (server/transit/whole_city.py): GET /api/transit/status says
@@ -13,19 +13,24 @@
 // mixing on the GPU. "Time map" plays the whole move at an even pace, and pressed again plays it
 // back; with reduced motion they jump. Faint rings mark where the named stations really are.
 //
-// Lines (rail, borough outlines, the Metropolitan line) get thinner where the map squeezes the
-// ground across them, and smooth lines round off the small bends they take where they cross a
-// mesh edge (carry.js says how). ?details=1 shows the build's own numbers as well.
+// Lines (rail, roads, borough outlines) get thinner where the map squeezes the ground across them,
+// and smooth lines round off the small bends they take where they cross a mesh edge (carry.js says
+// how). ?details=1 shows the build's own numbers as well.
+//
+// Travel modes (#23, L-03): Walking, Bus, Train and tube, Car. Train and tube alone is the time map
+// above. Where the build has them (the server lists them), car alone and car with train and tube
+// come from its modes/ folder, each fetched the first time it is switched on; a switch moves the
+// map only along blends the build checked.
 import { readHandoff, writeHandoff } from "/shared/handoff.js";
 import { createMeshRenderer } from "/shared/mesh/renderer.js";
 import { localFrame, makeCamera } from "/shared/mesh/frame.js";
 import { STYLE_ID } from "/shared/mesh/schema-streets-v8.js";
 import { cityUnavailable } from "/shared/tools.js";
-import { forgetCity, keepCity, keptCityWhy } from "/shared/offline.js";
+import { forgetCity, forgetModes, keepCity, keptCityWhy } from "/shared/offline.js";
 import { defaultWindow, pollStatus, statusLoading, windowText } from "/shared/transit.js";
 import {
-  blend, buildLand, createMotion, createPlacer, decodeLand, keyframes, loadSegment, pathLengths, placeLine,
-  segmentAt, segmentTriangles, smoothLine, triangleMaps, widthFactors,
+  blend, buildLand, comboOf, createMotion, createPlacer, decodeLand, ease, keyframes, loadSegment, pathLengths,
+  madeWith, modeAvailability, pullWords, runSteps, segmentAt, sha256Hex, switchPlan, switchSteps, thinPositions,
 } from "./carry.js";
 
 const $ = (id) => document.getElementById(id);
@@ -35,6 +40,7 @@ const DETAILS = new URLSearchParams(location.search).get("details") === "1";
 const TAP_PX = 5;            // a press that moves less than this is a tap, not a drag
 const PLAY_MS = 4500;        // the whole move, real map to the end; a part of it takes its share
 const STEP_MS = 450;         // the shortest glide with the arrow keys
+const SWITCH_MS = 900;       // a straight blend from one combination of travel modes to another
 const HANDOFF = readHandoff();
 
 // Say why there's no map here, and stop: nothing below runs (an unsettled await, not an error,
@@ -112,10 +118,18 @@ if (built.length > 1) {
   $("when-line").textContent = `When: ${label[win]}.`;
 }
 
-let doc = null, landBuf = null;
+let doc = null, landBuf = null, mapHash = null, landHash = null;
 try {
-  doc = await load(`/api/whole-city/${win}/timemap.json`, "json");
+  // Read as bytes, so the travel modes can be checked against this very file (madeWith).
+  const raw = await load(`/api/whole-city/${win}/timemap.json`, "bin");
+  doc = JSON.parse(new TextDecoder().decode(raw));
   landBuf = doc.land ? await load(`/api/whole-city/${win}/land.bin`, "bin") : null;
+  try {
+    mapHash = await sha256Hex(raw);
+    landHash = await sha256Hex(landBuf || new ArrayBuffer(0));
+  } catch {
+    mapHash = landHash = null;    // no Web Crypto here: the car stays off
+  }
 } catch {
   doc = null;
 }
@@ -129,12 +143,39 @@ const frame = localFrame({ lon: doc.frame.origin[0], lat: doc.frame.origin[1] })
 const kinds = doc.nodes.kind;
 const nStation = doc.nodes.stations;
 const tri = Uint32Array.from(doc.triangles);
-const keys = keyframes(doc);
-const last = doc.frames.length - 1;              // the slider runs 0 … last
-const real = keys[0].nodes;
-const inner = kinds.map((k, i) => (k !== 2 ? i : -1)).filter((i) => i >= 0);
-const cum = pathLengths(keys, inner);
+const last = doc.frames.length - 1;              // the slider runs 0 … last, the same in every combination
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const inner = kinds.map((k, i) => (k !== 2 ? i : -1)).filter((i) => i >= 0);
+
+// ── combinations of travel modes ────────────────────────────────────
+// Train and tube alone is the time map itself (timemap.json). Where the build has them (the server
+// lists them), car alone and car with train and tube come from modes/, each fetched the first time
+// it is switched on. With no mode on the map is the real map.
+const combos = {};
+function addCombo(id, cdoc) {
+  const keys = keyframes(cdoc);
+  const mainKey = [];
+  keys.forEach((k, j) => { if (k.main !== null) mainKey[k.main] = j; });
+  combos[id] = { id, doc: cdoc, frames: cdoc.frames, keys, mainKey, cum: pathLengths(keys, inner), placer: null, motion: null };
+  return combos[id];
+}
+addCombo("train", doc);
+const real = combos.train.keys[0].nodes;
+let index = null;            // modes/modes.json: the modes, their files, which switches go straight across
+if (city.modes && city.modes[win]) {
+  try {
+    index = await load(`/api/whole-city/${win}/modes/modes.json`, "json");
+    if (!madeWith(index, doc, mapHash, landHash)) {
+      // Kept offline from an earlier build of this map: never drawn with this one, and forgotten.
+      index = null;
+      await forgetModes(win);
+    }
+  } catch {
+    index = null;
+  }
+}
+const on = new Set(["train"]);
+let cur = "train";            // "train", "car", "car-train", or "none" (the real map)
 
 // A public page's line about where this comes from (the build's own notice is for its report).
 $("notice").textContent = `Made from London's public transport timetables for ${label[win]}: typical times, ` +
@@ -154,7 +195,12 @@ slider.max = String(last);
 const renderer = createMeshRenderer(glCanvas, {
   backend: "cpu",
   onLost: () => { status.textContent = "The land went missing for a moment. It comes back by itself."; draw(); },
-  onRestored: () => { status.textContent = ""; renderer.setWarp({ kind: "mesh", origin: frame.origin }); uploaded = -1; moveTo(motion.v); },
+  onRestored: () => {
+    status.textContent = "";
+    renderer.setWarp({ kind: "mesh", origin: frame.origin });
+    uploaded = "";
+    if (crossing) { uploadCross(); draw(); } else moveTo(motion.v);
+  },
 });
 let scene = null;
 if (!renderer.supported) {
@@ -164,43 +210,56 @@ if (!renderer.supported) {
   if (landBuf) scene = buildLand(decodeLand(landBuf, doc.land), doc.land, real, STYLE_ID);
 }
 const smoothBox = $("smooth");
-const placer = scene ? createPlacer(scene, keys, { triangles: tri, smooth: smoothBox.checked }) : null;
+let roadsLoaded = false;
 
-// The Metropolitan line, carried like the land: on every keyframe its exact and smoothed
-// vertices, and each segment's width factor (thinner where the map squeezes it).
-const maps = keys.map((k) => triangleMaps(tri, real, k.nodes));
-const routes = doc.lines.map((ln) => {
-  const nv = ln.c.length / 3;
-  const segC = new Uint16Array(6 * Math.max(0, nv - 1));
-  for (let i = 0; i + 1 < nv; i++) segC.set(ln.c.slice(3 * i, 3 * i + 6), 6 * i);
-  const pinned = Uint8Array.from({ length: nv }, (_, i) => (ln.c[3 * i] === ln.c[3 * i + 1] && ln.c[3 * i + 1] === ln.c[3 * i + 2] ? 1 : 0));
-  const realXY = placeLine(ln, doc.weight_scale, real);
-  const realSeg = new Float64Array(4 * Math.max(0, nv - 1));
-  for (let i = 0; i + 1 < nv; i++) realSeg.set(realXY.subarray(2 * i, 2 * i + 4), 4 * i);
-  const segTri = segmentTriangles(segC, tri);
-  const at = keys.map((k) => placeLine(ln, doc.weight_scale, k.nodes));
-  return { ...ln, at, smoothed: at.map((xy) => smoothLine(realXY, xy, pinned)), wf: maps.map((mp) => widthFactors(realSeg, segTri, mp)) };
-});
+// The land placed on a combination's keyframes (and the roads too, once Car has been on): one
+// placer per combination, made when it is first drawn.
+function placerOf(c) {
+  if (!scene) return null;
+  if (!c.placer) c.placer = createPlacer(scene, c.keys, { triangles: tri, smooth: smoothBox.checked });
+  return c.placer;
+}
+
+// What the renderer draws: rail and tube only while Train and tube is on, the car's roads only while
+// Car is on (`modes`: the modes on, or both ends' while switching).
+function visiblePasses(modes) {
+  const out = {};
+  for (const [name, p] of Object.entries(scene.passes)) {
+    if (name === "rail" && !modes.has("train")) continue;
+    if (name === "road" && !modes.has("car")) continue;
+    out[name] = p;
+  }
+  return out;
+}
 
 // ── view ────────────────────────────────────────────────────────────
 const view = { cx: 0, cy: 0, zoom: 10, w: 1, h: 1 };
 let v = 0;                   // where the map is drawn: 0 the real map … last the end of the slider
-let uploaded = -1;           // the blend whose layouts the renderer holds
+let uploaded = "";           // the blend whose layouts the renderer holds
 let seg = { k: 0, s: 0 };
+let morphS = 0;              // the renderer's morph between the two layouts it holds
 let dragging = false;        // the slider is being dragged (the readout stays quiet until it is let go)
 let picked = -1;             // the station "Show a station" picked: ringed until the map moves
-// One move at a time, driven by one animation-frame callback (carry.js createMotion).
-const motion = createMotion({
-  keys, cum, last, playMs: PLAY_MS, stepMs: STEP_MS, reduceMotion,
-  now: () => performance.now(), schedule: (f) => requestAnimationFrame(f), cancel: (h) => cancelAnimationFrame(h),
-  onMove: moveTo, onSettle: settled,
-});
+let switching = null;        // a switch between combinations under way: {from, to}
+let afterSettle = null;      // what a switch does next, once a glide comes to rest
 const nodes = new Float64Array(real.length);
-let routeXY = routes.map((r) => r.at[0]), routeWF = routes.map((r) => r.wf[0]);
+
+// One move at a time per combination, driven by one animation-frame callback (carry.js createMotion).
+function motionOf(c) {
+  c.motion ||= createMotion({
+    keys: c.keys, cum: c.cum, last, playMs: PLAY_MS, stepMs: STEP_MS, reduceMotion,
+    now: () => performance.now(), schedule: (f) => requestAnimationFrame(f), cancel: (h) => cancelAnimationFrame(h),
+    onMove: moveTo, onSettle: settled,
+  });
+  return c.motion;
+}
+let C = combos.train;        // the combination the map is drawn from (the last one, with no mode on)
+let motion = motionOf(C);
 
 function bbox() {
+  if (index && index.view_box) return index.view_box;     // every combination's keyframes fit
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const k of keys) for (const i of inner) {
+  for (const k of combos.train.keys) for (const i of inner) {
     x0 = Math.min(x0, k.nodes[2 * i]); x1 = Math.max(x1, k.nodes[2 * i]);
     y0 = Math.min(y0, k.nodes[2 * i + 1]); y1 = Math.max(y1, k.nodes[2 * i + 1]);
   }
@@ -246,26 +305,29 @@ function resize() {
 }
 
 // ── where the map is ────────────────────────────────────────────────
+function upload(key, placedA, placedB, modes) {
+  if (!scene || !renderer.supported || renderer.lost || uploaded === key) return;
+  loadSegment(scene, placedA, placedB);
+  renderer.setScene({ origin: frame.origin, passes: visiblePasses(modes), labels: [] });
+  uploaded = key;
+}
+
 function moveTo(value) {
+  if (crossing) return;      // a straight switch owns the map until it ends
   const to = Math.max(0, Math.min(last, value));
   const dir = Math.sign(to - v);
   v = to;
-  seg = segmentAt(keys, v);
-  const b = Math.min(seg.k + 1, keys.length - 1);
-  blend(keys[seg.k].nodes, keys[b].nodes, seg.s, nodes);
-  const which = smoothBox.checked ? "smoothed" : "at";
-  routeXY = routes.map((r) => blend(r[which][seg.k], r[which][b], seg.s));
-  routeWF = routes.map((r) => blend(r.wf[seg.k], r.wf[b], seg.s));
-  if (scene && renderer.supported && !renderer.lost && uploaded !== seg.k) {
-    loadSegment(scene, placer.placed(seg.k), placer.placed(b));
-    renderer.setScene({ origin: frame.origin, passes: scene.passes, labels: [] });
-    uploaded = seg.k;
-  }
+  seg = segmentAt(C.keys, v);
+  morphS = seg.s;
+  const b = Math.min(seg.k + 1, C.keys.length - 1);
+  blend(C.keys[seg.k].nodes, C.keys[b].nodes, seg.s, nodes);
+  const p = placerOf(C);
+  if (p) upload(`${C.id}:${seg.k}:${[...on].join()}`, p.placed(seg.k), p.placed(b), on);
   ahead(dir);
   slider.value = String(v);
   const text = where();
   if (slider.getAttribute("aria-valuetext") !== text) slider.setAttribute("aria-valuetext", text);
-  const live = motion.moving || dragging;
+  const live = motion.moving || dragging || Boolean(switching);
   const politeness = live ? "off" : "polite";
   if (readout.getAttribute("aria-live") !== politeness) readout.setAttribute("aria-live", politeness);
   if (live) showLive(); else showReadout();
@@ -277,15 +339,16 @@ function moveTo(value) {
 // into the next blend only copies and uploads.
 let aheadTimer = 0, aheadFor = "";
 function ahead(dir) {
+  const placer = placerOf(C);
   if (!placer || !dir) return;
   const want = dir > 0 ? [seg.k + 2, seg.k + 3] : [seg.k - 1, seg.k - 2];
-  if (aheadFor === want.join()) return;           // already on its way: let it finish
-  aheadFor = want.join();
+  if (aheadFor === C.id + want.join()) return;   // already on its way: let it finish
+  aheadFor = C.id + want.join();
   clearTimeout(aheadTimer);
   const next = () => {
     const k = want.shift();
     if (k === undefined) return;
-    if (k < 0 || k >= keys.length || placer.has(k)) { next(); return; }
+    if (k < 0 || k >= C.keys.length || placer.has(k)) { next(); return; }
     placer.placed(k);
     aheadTimer = setTimeout(next, 0);
   };
@@ -299,18 +362,22 @@ function onMain() {
 
 // ρ to three significant figures, so neighbouring keyframes read apart (44.9 and 45.2).
 const fmt = (rho) => String(Number(rho.toPrecision(3)));
+const NAMES = { train: "Train and tube", car: "Car", "car-train": "Car with train and tube", none: "No way of travelling" };
 
-// Where the map is, in plain words; with ?details=1, in the build's own terms (the train
-// springs' strength, and where the layout jumps).
+// Where the map is, in plain words; with ?details=1, in the build's own terms (the springs'
+// strength, and where the layout jumps).
 function where() {
+  if (switching) return `Switching to ${NAMES[switching.to].toLowerCase()}`;
+  if (cur === "none") return "The real map: no way of travelling is on";
   const i = onMain();
   if (i === 0) return "The real map";
   if (!DETAILS) {
     if (i === last) return "The time map";
     return `On the way to the time map, ${Math.round((100 * v) / last)}% of the way`;
   }
-  if (i !== null) return `Train springs ${fmt(doc.frames[i].rho)} times the grid's strength`;
-  const a = keys[seg.k], b = keys[Math.min(seg.k + 1, keys.length - 1)];
+  const springs = cur === "train" ? "Train springs" : cur === "car" ? "Car springs" : "Springs";
+  if (i !== null) return `${springs} ${fmt(C.frames[i].rho)} times the grid's strength`;
+  const a = C.keys[seg.k], b = C.keys[Math.min(seg.k + 1, C.keys.length - 1)];
   if (a.settling || b.settling || a.rho === b.rho) {
     return `At ${fmt(b.rho)} times the grid's strength the layout jumps to another arrangement; the map follows ` +
       "the solver's own steps";
@@ -322,16 +389,21 @@ function where() {
 // Each station's leftover stress where the map is: solved positions have their own; between two,
 // the colours blend from one to the other (an in-between layout has no stress of its own).
 function stressAt(i) {
+  if (crossing) {            // a straight switch: from one combination's colour to the other's
+    const a = crossing.a.frames[crossing.i].stress[i], b = crossing.b.frames[crossing.i].stress[i];
+    return a + (b - a) * morphS;
+  }
   const i0 = Math.floor(v + 1e-9), i1 = Math.min(last, i0 + 1), f = v - i0;
-  const a = doc.frames[i0].stress[i], b = doc.frames[i1].stress[i];
+  const a = C.frames[i0].stress[i], b = C.frames[i1].stress[i];
   return f < 1e-9 ? a : a + (b - a) * f;
 }
 
 // The same in words, for the tip: how well the station's distances match its travel times.
 function fitWords(x) {
   const t = x / doc.stress_scale[1];
-  return t < 1 / 3 ? "its distances match its travel times closely"
-    : t < 2 / 3 ? "its distances are somewhat off its travel times" : "its distances are far off its travel times";
+  return t < 1 / 3 ? "its distances match its public transport times closely"
+    : t < 2 / 3 ? "its distances are somewhat off its public transport times"
+      : "its distances are far off its public transport times";
 }
 
 // ── drawing ─────────────────────────────────────────────────────────
@@ -344,12 +416,12 @@ function stressColour(x) {
 
 // The map itself stays light (the renderer's background and land colours), so what is drawn on
 // it keeps the light map's colours too.
-const MAP = { met: "#9b0056", dotEdge: "#ffffff", halo: "rgba(255,255,255,0.85)", text: "#1b1b1f", ghost: "#4a4458", pick: "#2f4fd8" };
+const MAP = { dotEdge: "#ffffff", halo: "rgba(255,255,255,0.85)", text: "#1b1b1f", ghost: "#4a4458", pick: "#2f4fd8" };
 
 function draw() {
   tip.hidden = true;           // whatever it pointed at has moved
   const cam = camera();
-  if (renderer.supported && !renderer.lost) renderer.draw(cam, seg.s, { adaptive: false });
+  if (renderer.supported && !renderer.lost) renderer.draw(cam, morphS, { adaptive: false });
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const W = Math.round(view.w * dpr), H = Math.round(view.h * dpr);
   if (overlay.width !== W || overlay.height !== H) { overlay.width = W; overlay.height = H; }
@@ -369,23 +441,8 @@ function draw() {
     }
     g.stroke();
   }
-  if ($("line").checked) {
-    // Segment by segment, each as wide as the map leaves it (thinner where it is squeezed).
-    g.strokeStyle = MAP.met;
-    g.lineCap = "round";
-    routeXY.forEach((xy, r) => {
-      const wf = routeWF[r];
-      for (let k = 0; k + 1 < xy.length / 2; k++) {
-        const [x0, y0] = toScreen(cam, xy[2 * k], xy[2 * k + 1]);
-        const [x1, y1] = toScreen(cam, xy[2 * k + 2], xy[2 * k + 3]);
-        g.lineWidth = 3 * wf[k];
-        g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
-      }
-    });
-    g.lineCap = "butt";
-  }
   // Where the named stations really are: a faint ring there, and a dashed line to where they are now.
-  if ($("ghosts").checked && v > 0) {
+  if ($("ghosts").checked && (v > 0 || switching) && cur !== "none") {
     g.strokeStyle = MAP.ghost;
     g.lineWidth = 1;
     g.globalAlpha = 0.6;
@@ -444,18 +501,35 @@ function km(i, j, xy) {
 
 const pairText = (r, now, was) => `${r.name}: ${now.toFixed(1)} km apart here, ${was.toFixed(1)} km really`;
 
-// The full readout, for a map at rest: where the map is, and the distance between each checked
-// pair of stations here and really. ?details=1 adds the build's checks.
+// Each mode's springs at the nearest solved position: how many pull, and where (modes.json for
+// train and tube alone, the combination's own frames otherwise).
+function modeLines() {
+  if (!index || cur === "none") return [];
+  const i = Math.round(v);
+  const pulls = cur === "train" ? (index.train_pulls[i] || {}) : (C.frames[i].pulls || {});
+  const lines = ["train", "car"].filter((m) => on.has(m)).map((m) => pullWords(m, pulls[m], i, index.overhead_min));
+  const acc = pulls.car_access;
+  if (DETAILS && acc && on.has("car")) {
+    lines.push(`Car access springs (the ${index.overhead_min}-minute overhead): ${acc.n} of ${acc.of} pulling.`);
+  }
+  return lines;
+}
+
+// The full readout, for a map at rest: where the map is, each mode's springs, and the distance
+// between each checked pair of stations here and really. ?details=1 adds the build's checks.
 function showReadout() {
   const i = onMain();
-  const m = i !== null ? doc.frames[i].metrics : null;
+  const m = i !== null && cur !== "none" ? C.frames[i].metrics : null;
   const lines = [];
-  if (!DETAILS) lines.push(`${where()}.`);
+  if (!DETAILS || cur === "none") lines.push(`${where()}.`);
   else if (i === 0) lines.push("The real map. Every triangle at its real size; 0 flipped.");
   else if (m) {
     lines.push(`${where()}. ${m.flipped} flipped triangles; the most squeezed keeps ` +
       `${(m.area_ratio_min * 100).toFixed(1)}% of its area${m.squeezed_near ? ` (near ${m.squeezed_near})` : ""}.`);
   } else lines.push(`${where()}. No triangle turns over anywhere on the way: every step was checked.`);
+  lines.push(...modeLines());
+  const thin = i !== null && cur !== "none" ? thinPositions(C.frames).find((t) => t.i === i) : null;
+  if (thin) lines.push(`A few triangles at the edge of the map get very thin here (the thinnest ${Math.round(thin.ratio)}:1).`);
   for (const r of doc.ratios) {
     if (r.station === null || r.reference === null) { if (DETAILS) lines.push(`${r.name}: absent`); continue; }
     const now = km(r.station, r.reference, nodes), was = km(r.station, r.reference, real);
@@ -467,15 +541,17 @@ function showReadout() {
   holdReadout();
 }
 
-// While the map moves, only the distances change: they update in place, so nothing jumps.
+// While the map moves, only the first line and the distances change: they update in place, so
+// nothing jumps.
 function showLive() {
   const shown = doc.ratios.filter((r) => DETAILS || (r.station !== null && r.reference !== null));
+  const skip = modeLines().length;
   const divs = readout.children;
-  if (divs.length !== shown.length + 1) { showReadout(); return; }
+  if (divs.length !== shown.length + 1 + skip) { showReadout(); return; }
   divs[0].textContent = `${where()}…`;
   shown.forEach((r, k) => {
     if (r.station === null || r.reference === null) return;
-    divs[k + 1].textContent = pairText(r, km(r.station, r.reference, nodes), km(r.station, r.reference, real));
+    divs[k + 1 + skip].textContent = pairText(r, km(r.station, r.reference, nodes), km(r.station, r.reference, real));
   });
   holdReadout();
 }
@@ -498,6 +574,7 @@ function holdReadout() {
 
 // ── motion ──────────────────────────────────────────────────────────
 function settled() {
+  if (afterSettle) { const next = afterSettle; afterSettle = null; next(); return; }
   if (readout.getAttribute("aria-live") !== "polite") readout.setAttribute("aria-live", "polite");
   showReadout();
   updateToggle();
@@ -507,27 +584,179 @@ function settled() {
 // there, so its state is said once (aria-pressed), never in its name. Pressed mid-move it turns
 // round.
 function updateToggle() {
-  const pressed = String(motion.back);
+  const pressed = String(cur !== "none" && motion.back);
   if (toggle.getAttribute("aria-pressed") !== pressed) toggle.setAttribute("aria-pressed", pressed);
 }
 
-toggle.addEventListener("click", () => motion.toggle());
+toggle.addEventListener("click", () => { if (!switching && cur !== "none") motion.toggle(); });
 
 // Dragging the slider moves the map continuously, the readout's live distances quiet until it is
 // let go (change), when the full readout comes back once.
 slider.addEventListener("input", () => {
+  if (switching || cur === "none") return;
   dragging = true;
   motion.drag(Number(slider.value));
 });
 slider.addEventListener("change", () => {
   dragging = false;
-  settled();
+  if (!switching) settled();
 });
 
 // Arrow and page keys glide to the previous or next solved position; Home and End play to the ends.
 slider.addEventListener("keydown", (e) => {
+  if (switching || cur === "none") return;
   if (motion.key(e.key, e.repeat)) e.preventDefault();
 });
+
+// ── switching travel modes ──────────────────────────────────────────
+// A mode switched on or off moves the map to the combination of the modes now on, at a solved
+// position: the map glides to the nearest one, then blends straight across where the build
+// checked that blend, or else goes down its own path to the real map and up the new one
+// (carry.js switchPlan and switchSteps). Every blend drawn is one the build checked. The controls
+// wait from the first click until the map is at rest again, files loading included.
+const modeButtons = [...document.querySelectorAll("#modes button[data-mode]")];
+const available = modeAvailability(index);
+let remembered = 0;          // where the slider was when the last mode went off
+let crossing = null;         // a straight blend under way: {a, b, i, A, B}
+const loading = {};          // each file fetched once, however often it is asked for
+
+function loadCombo(id) {
+  if (combos[id]) return Promise.resolve(combos[id]);
+  loading[id] ||= load(`/api/whole-city/${win}/modes/${index.combos[id].file}`, "json").then((cdoc) => {
+    if (!madeWith(cdoc, doc, mapHash, landHash)) {
+      forgetModes(win);
+      throw new Error("made with another map");
+    }
+    return addCombo(id, cdoc);
+  }).finally(() => { delete loading[id]; });
+  return loading[id];
+}
+
+function loadRoads() {
+  if (roadsLoaded || !scene || !index.roads) return Promise.resolve();
+  loading.roads ||= load(`/api/whole-city/${win}/modes/roads.bin`, "bin").then((buf) => {
+    const roads = buildLand(decodeLand(buf, index.roads), index.roads, real, STYLE_ID);
+    Object.assign(scene.passes, roads.passes);
+    Object.assign(scene.verts, roads.verts);
+    roadsLoaded = true;
+    for (const c of Object.values(combos)) c.placer = null;     // placed again with the roads
+    uploaded = "";
+  }).finally(() => { delete loading.roads; });
+  return loading.roads;
+}
+
+function setBusy(busy) {
+  $("controls").setAttribute("aria-busy", String(busy));
+  for (const b of modeButtons) b.disabled = busy || !available[b.dataset.mode].on;
+  slider.disabled = busy || cur === "none";
+  toggle.disabled = busy || cur === "none";
+  smoothBox.disabled = busy;
+}
+
+function updateModeButtons() {
+  for (const b of modeButtons) b.setAttribute("aria-pressed", String(on.has(b.dataset.mode)));
+}
+
+// Upload the straight blend between combinations a and b at solved position i (again after a lost
+// context or a change of smoothing).
+function uploadCross() {
+  const { a, b, i } = crossing;
+  const both = new Set([...a.id.split("-"), ...b.id.split("-")]);
+  if (scene) upload(`${a.id}>${b.id}:${i}:${[...both].join()}`, placerOf(a).placed(a.mainKey[i]),
+    placerOf(b).placed(b.mainKey[i]), both);
+}
+
+// Blend straight from combination a to b at solved position i, in about SWITCH_MS (at once with
+// reduced motion), then call done. Station colours blend with it.
+function crossBlend(a, b, i, done) {
+  crossing = { a, b, i, A: a.keys[a.mainKey[i]].nodes, B: b.keys[b.mainKey[i]].nodes };
+  uploadCross();
+  const start = performance.now();
+  const step = (t) => {
+    const p = reduceMotion() ? 1 : Math.max(0, Math.min(1, (t - start) / SWITCH_MS));
+    morphS = ease(p);
+    blend(crossing.A, crossing.B, morphS, nodes);
+    showLive();
+    draw();
+    if (p < 1) { requestAnimationFrame(step); return; }
+    crossing = null;
+    done();
+  };
+  requestAnimationFrame(step);
+}
+
+async function switchModes(mode) {
+  if (switching || !available[mode] || !available[mode].on) return;
+  const next = new Set(on);
+  if (next.has(mode)) next.delete(mode); else next.add(mode);
+  const to = comboOf(next);
+  const from = cur;
+  switching = { from, to };                   // the lock, taken before anything loads
+  setBusy(true);
+  if (to !== "none") {
+    try {
+      status.textContent = combos[to] ? "" : "Getting the other map…";
+      const c = await loadCombo(to);
+      if (next.has("car")) await loadRoads();
+      status.textContent = "";
+      motionOf(c);
+    } catch {
+      status.textContent = "That map didn't load. Try again in a moment.";
+      switching = null;
+      setBusy(false);
+      return;
+    }
+  }
+  motion.stop();
+  const i = Math.round(motion.v);
+  const plan = switchPlan(index && index.cross, from, to, i);
+  if (plan === "down") remembered = motion.v;
+  runSteps(switchSteps(plan, from, to, i, motion.v, remembered), {
+    glide(x, done) { afterSettle = done; motion.playTo(x); },
+    cross({ at }, done) { crossBlend(C, combos[to], at, done); },
+    enter(id, x) {
+      cur = id;
+      for (const m of ["train", "car"]) { if (next.has(m)) on.add(m); else on.delete(m); }
+      updateModeButtons();
+      if (id !== "none") { C = combos[id]; motion = motionOf(C); markSlider(); }
+      uploaded = "";
+      motion.jump(x);
+    },
+    done() {
+      switching = null;
+      setBusy(false);
+      afterSettle = null;
+      uploaded = "";
+      moveTo(motion.v);
+      settled();
+    },
+  });
+}
+
+for (const b of modeButtons) {
+  const a = available[b.dataset.mode];
+  b.title = a.on ? "" : (b.dataset.mode === "car" && city.modes && city.modes[win]
+    ? "Car didn't load. Reload the page to try again." : a.why);
+}
+if (index) {
+  const box = index.data_box_lonlat;
+  const cov = index.coverage || {};
+  $("modes-note").textContent = "Car: typical weekday speeds from 13:00 to 14:00 (HERE Traffic4cast, 2019 to " +
+    `2020), with ${index.overhead_min} minutes once a trip for parking and getting to the car.` +
+    (box ? " The speeds cover London from about Hounslow to Woolwich only, so Car reshapes that band" +
+      (cov.motorway_inside_the_data_box != null && cov.motorway_inside_the_data_box < 0.5
+        ? ", and few motorways have a speed." : ".") : "");
+  $("modes-note").hidden = false;
+  $("modes-report-link").href = `/api/whole-city/${win}/modes/report.md`;
+  $("modes-report-item").hidden = false;
+  $("checked").hidden = false;
+  $("credits").textContent = [$("credits").textContent.replace(/\.$/, ""),
+    "Car speeds: HERE Traffic4cast (MeTS-10), academic and non-commercial use."].filter(Boolean).join("; ")
+    .replace(/^; /, "");
+}
+setBusy(false);
+updateModeButtons();
+for (const b of modeButtons) b.addEventListener("click", () => switchModes(b.dataset.mode));
 
 function zoomBy(dz) {
   view.zoom += dz;
@@ -536,11 +765,11 @@ function zoomBy(dz) {
 $("fit").addEventListener("click", () => { picked = -1; fit(); draw(); });
 $("zoom-in").addEventListener("click", () => zoomBy(0.5));
 $("zoom-out").addEventListener("click", () => zoomBy(-0.5));
-for (const id of ["labels", "line", "mesh", "ghosts"]) $(id).addEventListener("change", draw);
+for (const id of ["labels", "mesh", "ghosts"]) $(id).addEventListener("change", draw);
 smoothBox.addEventListener("change", () => {
-  if (placer) placer.setSmooth(smoothBox.checked);
-  uploaded = -1;
-  moveTo(motion.v);
+  for (const c of Object.values(combos)) if (c.placer) c.placer.setSmooth(smoothBox.checked);
+  uploaded = "";
+  if (crossing) { uploadCross(); draw(); } else moveTo(motion.v);
 });
 
 // "Show a station": what a tap on a dot shows, for the keyboard too. It centres the station,
@@ -557,9 +786,12 @@ stationSel.addEventListener("change", () => {
   showTip(picked);
 });
 
-// Marks under the slider (?details=1): the first solved position where Wembley Park passes its
-// check against Baker Street, and any place where the layout jumps.
+// Marks under the slider, for the combination shown: the solved positions where a few triangles get
+// very thin (always), and with ?details=1 the first solved position where Wembley Park passes its
+// check against Baker Street and any place where the layout jumps.
 function markSlider() {
+  $("marks").replaceChildren();
+  const frames = C.frames, mo = C.doc.motion;
   const add = (at, text, title, cls) => {
     const m = document.createElement("span");
     m.className = cls;
@@ -568,15 +800,24 @@ function markSlider() {
     m.title = title;
     $("marks").append(m);
   };
+  const thin = thinPositions(frames);
+  thin.forEach(({ i, ratio }, k) => {
+    // One label for a run of neighbouring positions, a tick for each.
+    const first = k === 0 || thin[k - 1].i !== i - 1;
+    add(i, first ? "Very thin triangles" : "", `At ${fmt(frames[i].rho)} times the grid's strength a few triangles ` +
+      `at the edge of the map get very thin (the thinnest ${Math.round(ratio)}:1); the rest of the map stays readable.`,
+      "mark thin");
+  });
+  if (!DETAILS) return;
   const passes = (f) => Boolean(f.metrics.ratios.wembley_park && f.metrics.ratios.wembley_park.status === "pass");
-  const first = doc.frames.findIndex(passes);
+  const first = frames.findIndex(passes);
   if (first > 0) {
-    const holds = doc.frames.slice(first).every(passes);
+    const holds = frames.slice(first).every(passes);
     add(first, "Wembley Park passes", "The first solved position where Wembley Park passes L-01's check against Baker " +
-      `Street (${fmt(doc.frames[first].rho)} times the grid's strength); ` +
+      `Street (${fmt(frames[first].rho)} times the grid's strength); ` +
       (holds ? "it passes at every solved position after it." : "it fails again at some later solved positions."), "mark");
   }
-  for (const j of (doc.motion && doc.motion.jumps) || []) {
+  for (const j of (mo && mo.jumps) || []) {
     add(j.at_from, "Jumps", `From ${fmt(j.from)} to ${fmt(j.rho)} times the grid's strength the layout jumps to another ` +
       `arrangement (${j.station} moves ${(j.move_m / 1000).toFixed(1)} km); the map follows the solver's own steps there.`,
       "mark jump");
@@ -638,10 +879,10 @@ function showTip(i) {
     tip.textContent = `${doc.nodes.label[i]}: ${fitWords(stressAt(i))}.`;
   } else {
     tip.textContent = k !== null
-      ? `${doc.nodes.label[i]}: leftover stress ${doc.frames[k].stress[i].toFixed(2)}`
-      : `${doc.nodes.label[i]}: leftover stress ${doc.frames[Math.floor(v)].stress[i].toFixed(2)} at ` +
-        `${fmt(doc.frames[Math.floor(v)].rho)}, ${doc.frames[Math.ceil(v)].stress[i].toFixed(2)} at ` +
-        `${fmt(doc.frames[Math.ceil(v)].rho)} times the grid's strength (the solved positions either side)`;
+      ? `${doc.nodes.label[i]}: leftover stress ${C.frames[k].stress[i].toFixed(2)}`
+      : `${doc.nodes.label[i]}: leftover stress ${C.frames[Math.floor(v)].stress[i].toFixed(2)} at ` +
+        `${fmt(C.frames[Math.floor(v)].rho)}, ${C.frames[Math.ceil(v)].stress[i].toFixed(2)} at ` +
+        `${fmt(C.frames[Math.ceil(v)].rho)} times the grid's strength (the solved positions either side)`;
   }
   tip.hidden = false;
   tip.style.left = `${Math.max(0, Math.min(view.w - 220, sx + 10))}px`;
@@ -649,7 +890,7 @@ function showTip(i) {
 }
 
 function hover(x, y) {
-  if (motion.moving) return;
+  if (motion.moving || switching) return;
   const cam = camera();
   let best = -1, bd = 14;
   for (let i = 0; i < nStation; i++) {
@@ -661,11 +902,14 @@ function hover(x, y) {
   showTip(best);
 }
 
-if (DETAILS) markSlider();
+markSlider();
 new ResizeObserver(resize).observe(glCanvas.parentElement);
 motion.jump(0);
 
-// For the headless checks (?test=1): the motion and the view.
+// For the headless checks (?test=1): the motion, the view and the travel modes.
 if (new URLSearchParams(location.search).get("test") === "1") {
-  window.__city = { motion, view, get v() { return v; }, win, doc };
+  window.__city = {
+    get motion() { return motion; }, view, get v() { return v; }, win, doc,
+    get combo() { return cur; }, get switching() { return switching; }, switchModes,
+  };
 }

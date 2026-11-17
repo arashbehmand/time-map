@@ -133,6 +133,31 @@ OpenStreetMap credit (<https://www.openstreetmap.org/copyright>) is covered by t
 The warp page shows the build's own credit list (its manifest's `attribution`) in the credit
 line whenever it draws public transport times.
 
+## HERE Traffic4cast speeds (Whole city's car, #23)
+
+Sources: HERE's sample data page (<https://developer.here.com/sample-data>, where
+`LONDON_2022.zip` is downloaded), the Traffic4cast 2022 README
+(<https://github.com/iarai/NeurIPS2022-traffic4cast>) and MeTS-10
+(<https://github.com/iarai/MeTS-10>, <https://arxiv.org/abs/2302.08761>). Read on 2026-11-17.
+HERE's page refused an automated read (403), so its wording below is as a search engine quotes it,
+not copied from the page: re-read it before relying on this note.
+
+- Requesting the Traffic4cast data from HERE's sample data page means agreeing to use it for
+  academic and non-commercial purposes only; HERE's standard terms cover every other use.
+- The Traffic4cast README says participants must, "for legal reasons", download the speed data
+  and make edge labels from it locally. It gives no separate licence for HERE's data.
+- MeTS-10's pipeline code is Apache-2.0; the road graph is OpenStreetMap (ODbL).
+
+**Where we stand:**
+
+- The zip stays where the owner put it (`transit/data/raw/t4c22/`, git-ignored), and the speeds
+  made from it (`transit/data/work/t4c22/`), the car links (`transit/out/car/`) and the time map's
+  `modes/` folder are all git-ignored (`tests/test_no_data_in_git.py`).
+- The use is non-commercial, and the owner has collected the permissions (2026-11-17). The app
+  serves `modes/` like the rest of Whole city, and the page credits HERE Traffic4cast.
+- A commercial use would need another source: Mapbox Traffic Data (typical speeds per road
+  segment, commercial licence, no redistribution; a conversation with Mapbox sales first).
+
 ## Nominatim (place search)
 
 Source: <https://operations.osmfoundation.org/policies/nominatim/>

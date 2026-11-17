@@ -33,7 +33,11 @@ export function place(c, w, Q, nodes, out, stride = 2) {
 }
 
 // Which renderer pass each land style is drawn in.
-export const PASS_OF = { water: "water", park: "park", boundary: "boundary", major_rail: "rail", minor_rail: "rail", rail_tunnel: "rail" };
+export const PASS_OF = {
+  water: "water", park: "park", boundary: "boundary", major_rail: "rail", minor_rail: "rail", rail_tunnel: "rail",
+  // the car's main roads (#23, L-03: roads.bin), in the renderer's road pass (casing and fill)
+  motorway: "road", trunk: "road", primary: "road",
+};
 
 // The renderer's scene passes for the land, on the real map (`real`: the first layout), plus what
 // moveLand needs to put them on another layout: {passes: {water, park, boundary, rail}, verts}.
@@ -507,4 +511,121 @@ export function loadSegment(scene, placedA, placedB) {
     }
   }
   return scene;
+}
+
+// ── travel modes (#23, L-03) ────────────────────────────────────────
+// The build solves each combination of modes over the same slider: train and tube alone (the time
+// map itself, timemap.json), car alone and car with train and tube (modes/combo-*.json). With no
+// mode on the map is the real map, which is also every combination's slider position 0.
+
+// The combination a set of modes on means: "train", "car", "car-train" or "none".
+export function comboOf(on) {
+  const ids = ["car", "train"].filter((m) => on.has(m));
+  return ids.length ? ids.join("-") : "none";
+}
+
+// How the page moves from combination `from` to `to` (they differ by one mode) with the map at
+// solved position i: "same"; "down" to the real map (no mode left on); "up" from it (the first mode
+// switched on); "swap" at the real map, where every combination is the same; "straight" across, when
+// the build checked that blend at i (cross: modes.json's flags, keyed "a|b" in either order); or
+// "via-real": back down the old combination to the real map and up the new one, both checked blends.
+export function switchPlan(cross, from, to, i) {
+  if (from === to) return "same";
+  if (to === "none") return "down";
+  if (from === "none") return "up";
+  if (i === 0) return "swap";
+  const flags = (cross && (cross[`${from}|${to}`] || cross[`${to}|${from}`])) || null;
+  const f = flags && flags[i];
+  return f && f.ok ? "straight" : "via-real";
+}
+
+const MODE_NAMES = { train: "Train and tube", car: "Car" };
+
+// One mode's line in the readout, from its pulls at a solved position (modes.json, combo frames):
+// how many of its springs pull and where. p: {n, of, share, top}; i: the position (0 is the real map).
+export function pullWords(mode, p, i, overheadMin = 0) {
+  const name = MODE_NAMES[mode] || mode;
+  const springs = mode === "car" ? "road springs" : "springs";
+  if (!p) return `${name}: on.`;
+  if (i === 0) return `${name}: on; on the real map no spring pulls yet.`;
+  if (!p.n) {
+    return `${name} moves nothing at this strength: none of its ${p.of} ${springs} is stretched past its time.`;
+  }
+  const pct = Math.max(1, Math.round(100 * p.share));
+  const top = p.top && p.top.length ? (mode === "car" ? `, mostly ${p.top.join(", ")}` : `, hardest ${p.top[0]}`) : "";
+  return `${name}: ${p.n} of ${p.of} ${springs} pulling (${pct}%)${top}.` +
+    (mode === "car" && overheadMin ? ` Car times include ${overheadMin} minutes once a trip for parking and getting to the car.` : "");
+}
+
+// The steps a switch takes, from the plan (switchPlan): glide along the current combination to a
+// slider value, enter a combination at a value (where both draw the same layout: the real map, or
+// the end of a straight blend), or blend straight across at solved position i. `v` is where the
+// map is; `remembered` where the slider was when the last mode went off. Every blend these steps
+// draw is one the build checked: a combination's own keyframes, or a straight switch it flagged.
+export function switchSteps(plan, from, to, i, v, remembered = 0) {
+  if (plan === "same") return [];
+  if (plan === "down") return [{ glide: 0 }, { enter: "none", at: 0 }];
+  if (plan === "up") return [{ enter: to, at: 0 }, { glide: remembered }];
+  if (plan === "swap") return [{ glide: 0 }, { enter: to, at: 0 }];
+  if (plan === "straight") return [{ glide: i }, { cross: { from, to, at: i } }, { enter: to, at: i }];
+  return [{ glide: 0 }, { enter: to, at: 0 }, { glide: i }];
+}
+
+// Run steps one after another: ops.glide(x, done), ops.cross({from, to, at}, done) and
+// ops.enter(id, x) (at once); then ops.done(). A glide or blend that ends at once (already there,
+// reduced motion) calls done synchronously, which is fine.
+export function runSteps(steps, ops) {
+  let k = 0;
+  const next = () => {
+    while (k < steps.length) {
+      const s = steps[k++];
+      if ("enter" in s) { ops.enter(s.enter, s.at); continue; }
+      if ("glide" in s) { ops.glide(s.glide, next); return; }
+      if ("cross" in s) { ops.cross(s.cross, next); return; }
+    }
+    ops.done();
+  };
+  next();
+}
+
+// Which mode buttons can be pressed: Train and tube always; Car only where the build has the car
+// (modes.json says so); Walking and Bus never yet. `index` is modes.json or null.
+export function modeAvailability(index) {
+  const listed = Object.fromEntries(((index && index.modes) || []).map((m) => [m.id, m]));
+  return {
+    walk: { on: false, why: (listed.walk && listed.walk.why) || "Comes with the next table rebuild." },
+    bus: { on: false, why: (listed.bus && listed.bus.why) || "Comes with the next table rebuild." },
+    train: { on: true, why: "" },
+    car: { on: Boolean(listed.car && listed.car.available), why: listed.car ? "" : "This map has no car." },
+  };
+}
+
+// Solved positions where some triangle gets very thin: its larger stretch over its smaller past
+// THIN_MARK (the build's metrics.stretch_max). The page marks them under the slider. On build
+// 2026-11-12 that is car with train and tube at its last two positions, a few triangles at the
+// mesh's south edge; train alone stays under 16:1 and car alone under 21:1.
+export const THIN_MARK = 50;
+
+export function thinPositions(frames, limit = THIN_MARK) {
+  const out = [];
+  frames.forEach((f, i) => {
+    const r = f.metrics && f.metrics.stretch_max;
+    if (i > 0 && r > limit) out.push({ i, ratio: r });
+  });
+  return out;
+}
+
+// The sha256 of a file's bytes, as hex (Web Crypto, in the page and in node).
+export async function sha256Hex(buffer) {
+  const d = await globalThis.crypto.subtle.digest("SHA-256", buffer);
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Whether a travel-mode file (modes.json or a combination) was made with this very map: the same
+// build and table, and the timemap.json and land.bin whose sha256 it names. A copy kept offline
+// from an earlier build of the same map fails, so the page never draws car layouts on land that
+// was never checked with them.
+export function madeWith(modeDoc, doc, mapHash, landHash) {
+  return Boolean(modeDoc) && modeDoc.build === doc.build && modeDoc.table_sha256 === doc.table_sha256 &&
+    modeDoc.timemap_sha256 === mapHash && modeDoc.land_sha256 === landHash;
 }

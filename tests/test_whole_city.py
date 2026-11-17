@@ -279,3 +279,84 @@ def test_the_loader_needs_nothing_the_image_doesnt_ship():
     mods = [n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
     mods += [a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names]
     assert not [m for m in mods if m and m.startswith("transit.layout")]
+
+
+# ── travel modes (#23, L-03) ────────────────────────────────────────
+def make_modes(city: Path, win: str = "wd13", **over) -> Path:
+    """A modes/ folder beside the window's map, made with it unless `over` says otherwise."""
+    d = city / win
+    doc = json.loads((d / "timemap.json").read_text())
+    doc.setdefault("nodes", {"kind": [0, 0, 1, 2]})
+    (d / "timemap.json").write_text(json.dumps(doc))
+    import hashlib
+    bound = {"timemap_sha256": hashlib.sha256((d / "timemap.json").read_bytes()).hexdigest(),
+             "land_sha256": hashlib.sha256((d / "land.bin").read_bytes()).hexdigest()}
+    common = {"build": doc["build"], "window": win, "table_sha256": doc["table_sha256"], "nodes": 4, **bound, **over}
+    md = d / "modes"
+    md.mkdir(exist_ok=True)
+    (md / "modes.json").write_text(json.dumps({"kind": "london-time-map-modes", **common}))
+    for cid in ("car", "car-train"):
+        (md / f"combo-{cid}.json").write_text(json.dumps({"kind": "london-time-map-combo", "id": cid, **common}))
+    (md / "roads.bin").write_bytes(bytes(range(60)))
+    (md / "report.md").write_text("# Travel modes\n")
+    return city
+
+
+MODES = "/api/whole-city/wd13/modes/modes.json"
+
+
+def test_the_travel_modes_are_served_like_the_map(make_client, settings, cleared):
+    build, city = cleared
+    make_modes(city)
+    c = _client(make_client, settings, build, city)
+    assert c.get("/api/transit/status").json()["whole_city"]["modes"] == {"wd13": True}
+    for name in ("modes.json", "combo-car.json", "combo-car-train.json", "roads.bin", "report.md"):
+        resp = c.get(f"/api/whole-city/wd13/modes/{name}")
+        assert resp.status_code == 200, name
+        assert resp.headers["cache-control"] == "no-cache"
+    assert c.get("/api/whole-city/wd13/modes/roads.bin").content == bytes(range(60))
+    for bad in ("/api/whole-city/wd13/modes/car_links.json", "/api/whole-city/wd13/modes/..%2Ftimemap.json",
+                "/api/whole-city/xx/modes/modes.json"):
+        assert c.get(bad).status_code == 404, bad
+
+
+def test_a_map_without_travel_modes_lists_none(make_client, settings, cleared):
+    c = _client(make_client, settings, *cleared)
+    assert "modes" not in c.get("/api/transit/status").json()["whole_city"]
+    resp = c.get(MODES)
+    assert resp.status_code == 404 and resp.json()["code"] == "whole_city_modes_unavailable"
+
+
+def test_the_travel_modes_go_with_the_tables_gate(make_client, settings, tmp_path):
+    build = make_build(tmp_path)                                  # licences not cleared
+    city = make_modes(make_city(tmp_path, build))
+    app = _client(make_client, settings, build, city, transit_allow_uncleared=True).app
+    assert TestClient(app).get(MODES).status_code == 404         # not this machine: the tables' gate
+    assert _local(app).get(MODES).status_code == 200
+
+
+@pytest.mark.parametrize("over", [{"build": "other"}, {"table_sha256": "0" * 64}, {"nodes": 5}, {"window": "wd08"},
+                                  {"timemap_sha256": "0" * 64}, {"land_sha256": "0" * 64}])
+def test_travel_modes_made_with_another_map_are_left_out(tmp_path, caplog, over):
+    build = make_build(tmp_path, cleared=True)
+    city = make_modes(make_city(tmp_path, build), **over)
+    cw = load_dir(city)["wd13"]
+    assert cw.modes == {} and "travel modes left out" in caplog.text
+    assert "timemap.json" in cw.files                          # the map itself still loads
+
+
+def test_a_missing_travel_mode_file_leaves_them_all_out(tmp_path):
+    build = make_build(tmp_path, cleared=True)
+    city = make_modes(make_city(tmp_path, build))
+    (city / "wd13" / "modes" / "roads.bin").unlink()
+    assert load_dir(city)["wd13"].modes == {}
+
+
+def test_travel_modes_made_with_an_earlier_map_are_left_out(tmp_path, caplog):
+    """A time map rebuilt beside an old modes/ folder: the car's blends and land checks were made for
+    the old timemap.json and land.bin, so the folder is not served with the new ones."""
+    build = make_build(tmp_path, cleared=True)
+    city = make_modes(make_city(tmp_path, build))
+    assert load_dir(city)["wd13"].modes
+    (city / "wd13" / "land.bin").write_bytes(LAND + b"x")
+    assert load_dir(city)["wd13"].modes == {} and "travel modes left out" in caplog.text

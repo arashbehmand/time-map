@@ -146,8 +146,11 @@ def load_build(build_dir: Path, window: str) -> BuildInput:
 
 
 def clean_name(name: str) -> str:
-    """A station's name for a label: 'WEMBLEY PARK UND' -> 'Wembley Park'."""
-    out = name.strip()
+    """A station's name for a label: 'WEMBLEY PARK UND' -> 'Wembley Park'; 'Nine Elms Underground
+    Station (N/A), London' -> 'Nine Elms'."""
+    out = name.replace(" (N/A)", "").strip()
+    if out.endswith(", London"):
+        out = out[: -len(", London")]
     for suffix in _NAME_SUFFIXES:
         if out.endswith(suffix):
             out = out[: -len(suffix)]

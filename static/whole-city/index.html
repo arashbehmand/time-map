@@ -50,6 +50,16 @@
       </div>
       <span>Time map</span>
     </div>
+    <fieldset id="modes" class="chips modes">
+      <legend class="label">Ways of travelling</legend>
+      <button class="btn" type="button" data-mode="walk" aria-pressed="false" disabled
+              title="Comes with the next table rebuild: it needs walking-only times between the map's points.">Walking</button>
+      <button class="btn" type="button" data-mode="bus" aria-pressed="false" disabled
+              title="Comes with the next table rebuild: it needs bus-only times between the map's points.">Bus</button>
+      <button class="btn" type="button" data-mode="train" aria-pressed="true">Train and tube</button>
+      <button class="btn" type="button" data-mode="car" aria-pressed="false" disabled>Car</button>
+    </fieldset>
+    <p id="modes-note" class="hint" hidden></p>
     <div class="when-field">
       <label class="label" for="window-select" id="when-label" hidden>When?</label>
       <select id="window-select" hidden></select>
@@ -58,7 +68,7 @@
     <p id="window-note" class="hint" hidden></p>
     <div id="readout" class="readout" aria-live="polite"></div>
     <div class="key">
-      <p class="label">Each station's colour: how well its distances on the map match its travel times</p>
+      <p class="label">Each station's colour: how well its distances on the map match its public transport times</p>
       <div class="colour-bar" aria-hidden="true"></div>
       <div class="key-ends"><span>Close</span><span>Far off</span></div>
     </div>
@@ -69,7 +79,6 @@
       <summary>Map options</summary>
       <div class="checks">
         <label><input id="labels" type="checkbox" checked /> Names</label>
-        <label><input id="line" type="checkbox" checked /> Metropolitan line</label>
         <label><input id="ghosts" type="checkbox" checked /> Where they really are</label>
         <label class="details-only" hidden><input id="smooth" type="checkbox" checked /> Smooth lines</label>
         <label class="details-only" hidden><input id="mesh" type="checkbox" /> Grid</label>
@@ -82,6 +91,8 @@
       <ul>
         <li><a id="report-link" href="#">The report</a>: how it was made and checked, in full.</li>
         <li><a id="shepard-link" href="#">The Shepard plot</a>: distances on the map against travel times.</li>
+        <li id="modes-report-item" hidden><a id="modes-report-link" href="#">The travel modes' report</a>: the car's
+          data, the combinations compared and every switch checked.</li>
       </ul>
     </details>
   </section>

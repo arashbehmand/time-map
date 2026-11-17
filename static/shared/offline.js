@@ -40,7 +40,9 @@ export async function keptCityWhy() {
   } catch { return none; }
 }
 
-const FILES = ["timemap.json", "land.bin", "report.md", "shepard.svg"];
+const FILES = ["timemap.json", "land.bin", "report.md", "shepard.svg",
+  // the travel modes (#23), fetched when first switched on
+  "modes/modes.json", "modes/combo-car.json", "modes/combo-car-train.json", "modes/roads.bin", "modes/report.md"];
 
 // Keep the status a window was shown with (`win`, its files just fetched through the service
 // worker). Windows viewed earlier under the same build stay offered; when the build has
@@ -61,6 +63,14 @@ export async function keepCity(c, win) {
     await cache.put(KEPT_STATUS, new Response(JSON.stringify({ ...c, viewed }),
                                               { headers: { "Content-Type": "application/json" } }));
   } catch { /* nothing kept: offline, the page says it can't be shown */ }
+}
+
+// Drop one window's kept travel-mode files (#23): made with another build of its map.
+export async function forgetModes(win) {
+  try {
+    const cache = await caches.open(CITY_CACHE);
+    for (const f of FILES) if (f.startsWith("modes/")) await cache.delete(`/api/whole-city/${win}/${f}`);
+  } catch { /* nothing kept */ }
 }
 
 export async function forgetCity() {

@@ -35,6 +35,19 @@ b = "gbt:910GLONDNBS"            # Baker Street
 a = "gbt:910GWEMBLSM"            # Wembley Stadium
 b = "gbt:910GMARYLBN"            # London Marylebone
 
+# Pairs of stations a car should bring closer (the travel modes' spot check, #23 L-03): the report
+# gives their map distance with train only and with car on. The job also picks the pair with the
+# biggest gain by car by itself.
+[[car_spot]]
+name = "Along the A40 (Western Avenue)"
+a = "gbt:910GSGFORD"               # South Greenford
+b = "gbt:940GZZLUPKR"              # Park Royal
+
+[[car_spot]]
+name = "Across Wandsworth Bridge"
+a = "gbt:940GZZLUFBY"              # Fulham Broadway
+b = "gbt:910GCLPHMJC"              # Clapham Junction
+
 # Each run is the line end to end, in order, through the bends at Baker Street and
 # Harrow-on-the-Hill (transit/layout/measures.py, line_order, says what is tested).
 [[metropolitan]]

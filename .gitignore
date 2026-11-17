@@ -21,6 +21,11 @@ transit/.venv/
 # not even a copy beside the page in static/whole-city/.
 timemap.json
 land.bin
+# ... and its travel modes (#23, L-03): the car is made from HERE's non-commercial speeds.
+combo-*.json
+roads.bin
+car_links.json
+london_wd13_speeds.*
 # Timetable feeds, map extracts and travel-time tables never go in git, wherever they sit
 # (tests/test_no_data_in_git.py checks it).
 *.zip

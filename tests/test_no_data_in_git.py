@@ -54,7 +54,15 @@ def test_no_data_or_large_file_is_tracked():
                                   "transit/out/timemap/2026-11-12/wd13/panels.svg",
                                   # and never a copy beside the app's Whole city page (#28)
                                   "static/whole-city/timemap.json", "static/whole-city/land.bin",
-                                  "server/timemap.json"])
+                                  "server/timemap.json",
+                                  # the travel modes (#23, L-03): HERE's non-commercial speeds and
+                                  # everything made from them, wherever they sit
+                                  "transit/out/timemap/2026-11-12/wd13/modes/combo-car.json",
+                                  "transit/out/timemap/2026-11-12/wd13/modes/modes.json",
+                                  "transit/out/car/2026-11-12/wd13/car_links.json",
+                                  "static/whole-city/combo-car-train.json", "static/whole-city/roads.bin",
+                                  "x/car_links.json", "x/LONDON_2022.zip", "x/london_wd13_speeds.parquet",
+                                  "x/london_wd13_speeds.json"])
 def test_data_files_are_ignored_anywhere(path):
     if _git("rev-parse", "--git-dir").returncode:
         pytest.skip("not a git checkout")

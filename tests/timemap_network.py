@@ -24,6 +24,7 @@ import zipfile
 from pathlib import Path
 
 from layout_network import BUILD, CHECKS_TOML, LAT0, LON0, M_PER_DEG, write_build
+from layout_network import WINDOW as WINDOW_ID
 
 FEED_ID = "syn"
 DAY = "20260107"                 # the synthetic build's weekday (manifest departure 2026-01-07T13:00)
@@ -174,3 +175,59 @@ def write_checks_l02(path: Path) -> Path:
 
 def manifest_of(build_dir: Path) -> dict:
     return json.loads((Path(build_dir) / "manifest.json").read_text())
+
+
+# ── car (#23, L-03) ─────────────────────────────────────────────────
+TRUNK_ID0, PRIMARY_ID0 = 10_000, 20_000
+CAR_KPH = {"trunk": 48.0, "primary": 30.0}
+
+
+def car_inputs():
+    """OpenStreetMap-like main roads over the synthetic stations, and Traffic4cast-like speeds on
+    them: (nodes {id: (lon, lat)}, ways [car.Way], speeds {u, v, median_kph}, t4c_xy).
+
+    - "A1" (trunk) along row 4, both ways, a node every 250 m; Traffic4cast's edges span two of our
+      edges each (simplified between junctions), so they land on our road by the node-id path rule;
+    - "A2" (primary) up column 3, crossing A1 at a shared node; its last 750 m have no speed (filled
+      from the class's median measured speed);
+    - an edge with a synthetic node id, and one whose node the clip no longer has: neither is used.
+    """
+    from transit.layout.car import Way
+
+    xs = list(range(-500, 8001, 250))
+    nodes, ways = {}, []
+    trunk = [TRUNK_ID0 + k for k in range(len(xs))]
+    for nid, x in zip(trunk, xs):
+        nodes[nid] = tuple(lonlat(x, 6000))
+    junction = trunk[xs.index(4500)]
+    primary = [junction if y == 6000 else PRIMARY_ID0 + k for k, y in enumerate(xs)]
+    for nid, y in zip(primary, xs):
+        nodes.setdefault(nid, tuple(lonlat(4500, y)))
+    ways.append(Way(1, trunk, {"highway": "trunk", "ref": "A1", "name": "Syn Way"}))
+    ways.append(Way(2, primary, {"highway": "primary", "ref": "A2", "name": "Syn Road"}))
+    u, v, kph = [], [], []
+    for a, b in zip(trunk[::2], trunk[2::2]):
+        u += [a, b]; v += [b, a]; kph += [CAR_KPH["trunk"]] * 2          # noqa: E702
+    for a, b in zip(primary[:-3], primary[1:-3]):
+        u += [a, b]; v += [b, a]; kph += [CAR_KPH["primary"]] * 2        # noqa: E702
+    u += [1 << 41, trunk[0]]; v += [trunk[1], 999_999]; kph += [50.0, 50.0]   # noqa: E702
+    import numpy as np
+    speeds = {"u": np.array(u, dtype=np.int64), "v": np.array(v, dtype=np.int64), "median_kph": np.array(kph)}
+    return nodes, ways, speeds, dict(nodes)
+
+
+def car_docs(build_dir, window=WINDOW_ID):
+    """car_links.json, roads.json and car_report.json for the synthetic build, from car_inputs()."""
+    from transit.layout import car as carmod
+    from transit.layout import timemap
+    from transit.layout.prep import load_build, station_pairs
+
+    b = load_build(build_dir, window)
+    pairs = station_pairs(b)
+    mesh, _, _ = timemap.mesh_of(b, pairs)
+    nodes, ways, speeds, t4c_xy = car_inputs()
+    doc = carmod.build(nodes, ways, t4c_xy, speeds, mesh, b.max_time, pairs.labels, None, log=lambda *a: None)
+    smeta = {"days_used": ["2019-07-02", "2019-07-03"], "days_skipped": {}, "bins": [52, 53, 54, 55],
+             "rules": {"min_kph": 1.0}, "rows_read": 10, "rows_in_window": 8, "rows_under_min_kph": 0,
+             "rows_kept": 8, "volume_class_rows": {"5": 8}, "zip_sha256": "0" * 64, "edges": len(speeds["u"])}
+    return carmod.documents(doc, b, pairs, mesh, smeta)

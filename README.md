@@ -141,6 +141,15 @@ TRANSIT_DIR=transit/out/2026-11-12 TIMEMAP_DIR=transit/out/timemap/2026-11-12 \
 then open <http://127.0.0.1:8000/whole-city/>. The override is refused on Railway and serves only
 requests from this machine through no proxy, as for the tables.
 
+**Travel modes (#23, L-03).** The page has a toggle for each way of travelling: Walking and Bus
+(off until the next table rebuild gives them their own times), Train and tube (the time map
+above) and Car. Car's typical speeds come from HERE's Traffic4cast data (used non-commercially,
+with the owner's permissions). A build made with `--modes car` (`transit/README.md`, "Travel
+modes") keeps the car in a `modes/` folder beside the window's files; the app serves it like the
+map, under the same gate (`/api/whole-city/<window>/modes/<file>`), and the page fetches a car
+combination the first time Car is switched on. A build without it shows Car switched off. Rail and
+tube lines follow the Train and tube toggle; the car's main roads appear with Car.
+
 ## Project Structure
 
 ```
@@ -518,6 +527,8 @@ off than they are.
 | `GET`  | `/glyphs/{fontstack}/{range}` | Mapbox font glyph proxy |
 | `POST` | `/api/meetup/solve` | Find optimal meeting point (via Mapbox Matrix API) |
 | `POST` | `/api/geocode` | Place search (via OpenStreetMap Nominatim, queued at 1 request/s, cached) |
+| `GET`  | `/api/whole-city/{window}/{file}` | Whole city's map, land, report and Shepard plot, under the tables' gate |
+| `GET`  | `/api/whole-city/{window}/modes/{file}` | Whole city's travel modes (car alone, car with train and tube), under the same gate |
 
 Errors are returned as `{"code": "<stable code>", "detail": "<fixed sentence>"}`. They never
 include upstream URLs, tokens or upstream response bodies. One error adds two fields:

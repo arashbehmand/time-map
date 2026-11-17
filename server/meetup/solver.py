@@ -491,7 +491,9 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
         idx = _named_near_best(kept, scores, ranked, unnamed_best + slack)
         if idx is not None:
             ranked = np.concatenate(([idx], ranked[ranked != idx]))
-            named_cost = float(scores[idx]) - unnamed_best
+            # Rounded once, as reported, so the note and the page's check always agree: a
+            # cost that rounds to 0 is no worse, and gets no note.
+            named_cost = round(float(scores[idx]) - unnamed_best, 2)
             if named_cost > 0:
                 notes.append(note_named(named_cost, req.objective))
     picks = _distinct(kept, ranked, req.search.top_k)
@@ -569,7 +571,7 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
         "matrix_elements": allowance.sent_elements if allowance is not None else 0,
         "quickest_stage": quickest_stage,
         # Minutes the shown place costs over an unnamed better one (0: none was passed over).
-        "named_over_best_min": round(named_cost, 2),
+        "named_over_best_min": named_cost,
         "elapsed_ms": round((time.perf_counter() - started) * 1000),
     }
     return SolveResponse(

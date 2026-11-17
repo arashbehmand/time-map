@@ -556,3 +556,46 @@ export function pullWords(mode, p, i, overheadMin = 0) {
   return `${name}: ${p.n} of ${p.of} ${springs} pulling (${pct}%)${top}.` +
     (mode === "car" && overheadMin ? ` Car times include ${overheadMin} minutes once a trip for parking and getting to the car.` : "");
 }
+
+// The steps a switch takes, from the plan (switchPlan): glide along the current combination to a
+// slider value, enter a combination at a value (where both draw the same layout: the real map, or
+// the end of a straight blend), or blend straight across at solved position i. `v` is where the
+// map is; `remembered` where the slider was when the last mode went off. Every blend these steps
+// draw is one the build checked: a combination's own keyframes, or a straight switch it flagged.
+export function switchSteps(plan, from, to, i, v, remembered = 0) {
+  if (plan === "same") return [];
+  if (plan === "down") return [{ glide: 0 }, { enter: "none", at: 0 }];
+  if (plan === "up") return [{ enter: to, at: 0 }, { glide: remembered }];
+  if (plan === "swap") return [{ glide: 0 }, { enter: to, at: 0 }];
+  if (plan === "straight") return [{ glide: i }, { cross: { from, to, at: i } }, { enter: to, at: i }];
+  return [{ glide: 0 }, { enter: to, at: 0 }, { glide: i }];
+}
+
+// Run steps one after another: ops.glide(x, done), ops.cross({from, to, at}, done) and
+// ops.enter(id, x) (at once); then ops.done(). A glide or blend that ends at once (already there,
+// reduced motion) calls done synchronously, which is fine.
+export function runSteps(steps, ops) {
+  let k = 0;
+  const next = () => {
+    while (k < steps.length) {
+      const s = steps[k++];
+      if ("enter" in s) { ops.enter(s.enter, s.at); continue; }
+      if ("glide" in s) { ops.glide(s.glide, next); return; }
+      if ("cross" in s) { ops.cross(s.cross, next); return; }
+    }
+    ops.done();
+  };
+  next();
+}
+
+// Which mode buttons can be pressed: Train and tube always; Car only where the build has the car
+// (modes.json says so); Walking and Bus never yet. `index` is modes.json or null.
+export function modeAvailability(index) {
+  const listed = Object.fromEntries(((index && index.modes) || []).map((m) => [m.id, m]));
+  return {
+    walk: { on: false, why: (listed.walk && listed.walk.why) || "Comes with the next table rebuild." },
+    bus: { on: false, why: (listed.bus && listed.bus.why) || "Comes with the next table rebuild." },
+    train: { on: true, why: "" },
+    car: { on: Boolean(listed.car && listed.car.available), why: listed.car ? "" : "This map has no car." },
+  };
+}

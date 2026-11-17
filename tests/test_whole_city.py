@@ -288,7 +288,10 @@ def make_modes(city: Path, win: str = "wd13", **over) -> Path:
     doc = json.loads((d / "timemap.json").read_text())
     doc.setdefault("nodes", {"kind": [0, 0, 1, 2]})
     (d / "timemap.json").write_text(json.dumps(doc))
-    common = {"build": doc["build"], "window": win, "table_sha256": doc["table_sha256"], "nodes": 4, **over}
+    import hashlib
+    bound = {"timemap_sha256": hashlib.sha256((d / "timemap.json").read_bytes()).hexdigest(),
+             "land_sha256": hashlib.sha256((d / "land.bin").read_bytes()).hexdigest()}
+    common = {"build": doc["build"], "window": win, "table_sha256": doc["table_sha256"], "nodes": 4, **bound, **over}
     md = d / "modes"
     md.mkdir(exist_ok=True)
     (md / "modes.json").write_text(json.dumps({"kind": "london-time-map-modes", **common}))
@@ -332,7 +335,8 @@ def test_the_travel_modes_go_with_the_tables_gate(make_client, settings, tmp_pat
     assert _local(app).get(MODES).status_code == 200
 
 
-@pytest.mark.parametrize("over", [{"build": "other"}, {"table_sha256": "0" * 64}, {"nodes": 5}, {"window": "wd08"}])
+@pytest.mark.parametrize("over", [{"build": "other"}, {"table_sha256": "0" * 64}, {"nodes": 5}, {"window": "wd08"},
+                                  {"timemap_sha256": "0" * 64}, {"land_sha256": "0" * 64}])
 def test_travel_modes_made_with_another_map_are_left_out(tmp_path, caplog, over):
     build = make_build(tmp_path, cleared=True)
     city = make_modes(make_city(tmp_path, build), **over)
@@ -346,3 +350,13 @@ def test_a_missing_travel_mode_file_leaves_them_all_out(tmp_path):
     city = make_modes(make_city(tmp_path, build))
     (city / "wd13" / "modes" / "roads.bin").unlink()
     assert load_dir(city)["wd13"].modes == {}
+
+
+def test_travel_modes_made_with_an_earlier_map_are_left_out(tmp_path, caplog):
+    """A time map rebuilt beside an old modes/ folder: the car's blends and land checks were made for
+    the old timemap.json and land.bin, so the folder is not served with the new ones."""
+    build = make_build(tmp_path, cleared=True)
+    city = make_modes(make_city(tmp_path, build))
+    assert load_dir(city)["wd13"].modes
+    (city / "wd13" / "land.bin").write_bytes(LAND + b"x")
+    assert load_dir(city)["wd13"].modes == {} and "travel modes left out" in caplog.text

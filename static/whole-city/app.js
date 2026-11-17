@@ -1,6 +1,6 @@
 // Whole city (#28): the full London time map of #6 (L-02), in the app. It draws the land with the
-// app's mesh renderer (/shared/mesh/, cpu back-end, a target per vertex) and the stations, names
-// and the Metropolitan line (carried through the mesh like the land) on a 2-D canvas above it.
+// app's mesh renderer (/shared/mesh/, cpu back-end, a target per vertex) and the stations and names
+// on a 2-D canvas above it.
 //
 // Its data is one build of `python -m transit.layout.timemap`, which the server serves only
 // under the transit tables' own gate (server/transit/whole_city.py): GET /api/transit/status says
@@ -30,7 +30,7 @@ import { forgetCity, keepCity, keptCityWhy } from "/shared/offline.js";
 import { defaultWindow, pollStatus, statusLoading, windowText } from "/shared/transit.js";
 import {
   blend, buildLand, comboOf, createMotion, createPlacer, decodeLand, ease, keyframes, loadSegment, pathLengths,
-  pullWords, segmentAt, switchPlan,
+  modeAvailability, pullWords, runSteps, segmentAt, switchPlan, switchSteps,
 } from "./carry.js";
 
 const $ = (id) => document.getElementById(id);
@@ -182,7 +182,12 @@ slider.max = String(last);
 const renderer = createMeshRenderer(glCanvas, {
   backend: "cpu",
   onLost: () => { status.textContent = "The land went missing for a moment. It comes back by itself."; draw(); },
-  onRestored: () => { status.textContent = ""; renderer.setWarp({ kind: "mesh", origin: frame.origin }); uploaded = -1; moveTo(motion.v); },
+  onRestored: () => {
+    status.textContent = "";
+    renderer.setWarp({ kind: "mesh", origin: frame.origin });
+    uploaded = "";
+    if (crossing) { uploadCross(); draw(); } else moveTo(motion.v);
+  },
 });
 let scene = null;
 if (!renderer.supported) {
@@ -239,6 +244,7 @@ let C = combos.train;        // the combination the map is drawn from (the last 
 let motion = motionOf(C);
 
 function bbox() {
+  if (index && index.view_box) return index.view_box;     // every combination's keyframes fit
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const k of combos.train.keys) for (const i of inner) {
     x0 = Math.min(x0, k.nodes[2 * i]); x1 = Math.max(x1, k.nodes[2 * i]);
@@ -294,6 +300,7 @@ function upload(key, placedA, placedB, modes) {
 }
 
 function moveTo(value) {
+  if (crossing) return;      // a straight switch owns the map until it ends
   const to = Math.max(0, Math.min(last, value));
   const dir = Math.sign(to - v);
   v = to;
@@ -369,6 +376,10 @@ function where() {
 // Each station's leftover stress where the map is: solved positions have their own; between two,
 // the colours blend from one to the other (an in-between layout has no stress of its own).
 function stressAt(i) {
+  if (crossing) {            // a straight switch: from one combination's colour to the other's
+    const a = crossing.a.frames[crossing.i].stress[i], b = crossing.b.frames[crossing.i].stress[i];
+    return a + (b - a) * morphS;
+  }
   const i0 = Math.floor(v + 1e-9), i1 = Math.min(last, i0 + 1), f = v - i0;
   const a = C.frames[i0].stress[i], b = C.frames[i1].stress[i];
   return f < 1e-9 ? a : a + (b - a) * f;
@@ -377,8 +388,9 @@ function stressAt(i) {
 // The same in words, for the tip: how well the station's distances match its travel times.
 function fitWords(x) {
   const t = x / doc.stress_scale[1];
-  return t < 1 / 3 ? "its distances match its travel times closely"
-    : t < 2 / 3 ? "its distances are somewhat off its travel times" : "its distances are far off its travel times";
+  return t < 1 / 3 ? "its distances match its public transport times closely"
+    : t < 2 / 3 ? "its distances are somewhat off its public transport times"
+      : "its distances are far off its public transport times";
 }
 
 // ── drawing ─────────────────────────────────────────────────────────
@@ -482,7 +494,12 @@ function modeLines() {
   if (!index || cur === "none") return [];
   const i = Math.round(v);
   const pulls = cur === "train" ? (index.train_pulls[i] || {}) : (C.frames[i].pulls || {});
-  return ["train", "car"].filter((m) => on.has(m)).map((m) => pullWords(m, pulls[m], i, index.overhead_min));
+  const lines = ["train", "car"].filter((m) => on.has(m)).map((m) => pullWords(m, pulls[m], i, index.overhead_min));
+  const acc = pulls.car_access;
+  if (DETAILS && acc && on.has("car")) {
+    lines.push(`Car access springs (the ${index.overhead_min}-minute overhead): ${acc.n} of ${acc.of} pulling.`);
+  }
+  return lines;
 }
 
 // The full readout, for a map at rest: where the map is, each mode's springs, and the distance
@@ -579,72 +596,85 @@ slider.addEventListener("keydown", (e) => {
 // ── switching travel modes ──────────────────────────────────────────
 // A mode switched on or off moves the map to the combination of the modes now on, at a solved
 // position: the map glides to the nearest one, then blends straight across where the build
-// checked that blend, or else goes down its own path to the real map and up the new one. Every
-// blend drawn is one the build checked. The controls wait while it moves.
+// checked that blend, or else goes down its own path to the real map and up the new one
+// (carry.js switchPlan and switchSteps). Every blend drawn is one the build checked. The controls
+// wait from the first click until the map is at rest again, files loading included.
 const modeButtons = [...document.querySelectorAll("#modes button[data-mode]")];
+const available = modeAvailability(index);
 let remembered = 0;          // where the slider was when the last mode went off
+let crossing = null;         // a straight blend under way: {a, b, i, A, B}
+const loading = {};          // each file fetched once, however often it is asked for
 
-async function loadCombo(id) {
-  if (combos[id]) return combos[id];
-  const entry = index.combos[id];
-  const cdoc = await load(`/api/whole-city/${win}/modes/${entry.file}`, "json");
-  if (cdoc.build !== doc.build || cdoc.table_sha256 !== doc.table_sha256) throw new Error("another build");
-  return addCombo(id, cdoc);
+function loadCombo(id) {
+  if (combos[id]) return Promise.resolve(combos[id]);
+  loading[id] ||= load(`/api/whole-city/${win}/modes/${index.combos[id].file}`, "json").then((cdoc) => {
+    if (cdoc.build !== doc.build || cdoc.table_sha256 !== doc.table_sha256) throw new Error("another build");
+    return addCombo(id, cdoc);
+  }).finally(() => { delete loading[id]; });
+  return loading[id];
 }
 
-async function loadRoads() {
-  if (roadsLoaded || !scene || !index.roads) return;
-  const buf = await load(`/api/whole-city/${win}/modes/roads.bin`, "bin");
-  const roads = buildLand(decodeLand(buf, index.roads), index.roads, real, STYLE_ID);
-  Object.assign(scene.passes, roads.passes);
-  Object.assign(scene.verts, roads.verts);
-  roadsLoaded = true;
-  for (const c of Object.values(combos)) c.placer = null;     // placed again with the roads
-  uploaded = "";
+function loadRoads() {
+  if (roadsLoaded || !scene || !index.roads) return Promise.resolve();
+  loading.roads ||= load(`/api/whole-city/${win}/modes/roads.bin`, "bin").then((buf) => {
+    const roads = buildLand(decodeLand(buf, index.roads), index.roads, real, STYLE_ID);
+    Object.assign(scene.passes, roads.passes);
+    Object.assign(scene.verts, roads.verts);
+    roadsLoaded = true;
+    for (const c of Object.values(combos)) c.placer = null;     // placed again with the roads
+    uploaded = "";
+  }).finally(() => { delete loading.roads; });
+  return loading.roads;
 }
 
 function setBusy(busy) {
   $("controls").setAttribute("aria-busy", String(busy));
-  for (const b of modeButtons) b.disabled = busy || b.dataset.off === "1";
+  for (const b of modeButtons) b.disabled = busy || !available[b.dataset.mode].on;
   slider.disabled = busy || cur === "none";
   toggle.disabled = busy || cur === "none";
+  smoothBox.disabled = busy;
 }
 
 function updateModeButtons() {
   for (const b of modeButtons) b.setAttribute("aria-pressed", String(on.has(b.dataset.mode)));
 }
 
-function glide(m, x, then) {
-  afterSettle = then;
-  m.playTo(x);
+// Upload the straight blend between combinations a and b at solved position i (again after a lost
+// context or a change of smoothing).
+function uploadCross() {
+  const { a, b, i } = crossing;
+  const both = new Set([...a.id.split("-"), ...b.id.split("-")]);
+  if (scene) upload(`${a.id}>${b.id}:${i}:${[...both].join()}`, placerOf(a).placed(a.mainKey[i]),
+    placerOf(b).placed(b.mainKey[i]), both);
 }
 
 // Blend straight from combination a to b at solved position i, in about SWITCH_MS (at once with
-// reduced motion), then call done.
+// reduced motion), then call done. Station colours blend with it.
 function crossBlend(a, b, i, done) {
-  const ka = a.mainKey[i], kb = b.mainKey[i];
-  const A = a.keys[ka].nodes, B = b.keys[kb].nodes;
-  const both = new Set([...a.id.split("-"), ...b.id.split("-")]);
-  if (scene) {
-    upload(`${a.id}>${b.id}:${i}:${[...both].join()}`, placerOf(a).placed(ka), placerOf(b).placed(kb), both);
-  }
+  crossing = { a, b, i, A: a.keys[a.mainKey[i]].nodes, B: b.keys[b.mainKey[i]].nodes };
+  uploadCross();
   const start = performance.now();
   const step = (t) => {
     const p = reduceMotion() ? 1 : Math.max(0, Math.min(1, (t - start) / SWITCH_MS));
     morphS = ease(p);
-    blend(A, B, morphS, nodes);
+    blend(crossing.A, crossing.B, morphS, nodes);
     showLive();
     draw();
-    if (p < 1) requestAnimationFrame(step); else done();
+    if (p < 1) { requestAnimationFrame(step); return; }
+    crossing = null;
+    done();
   };
   requestAnimationFrame(step);
 }
 
 async function switchModes(mode) {
-  if (switching) return;
+  if (switching || !available[mode] || !available[mode].on) return;
   const next = new Set(on);
   if (next.has(mode)) next.delete(mode); else next.add(mode);
   const to = comboOf(next);
+  const from = cur;
+  switching = { from, to };                   // the lock, taken before anything loads
+  setBusy(true);
   if (to !== "none") {
     try {
       status.textContent = combos[to] ? "" : "Getting the other map…";
@@ -654,66 +684,58 @@ async function switchModes(mode) {
       motionOf(c);
     } catch {
       status.textContent = "That map didn't load. Try again in a moment.";
+      switching = null;
+      setBusy(false);
       return;
     }
   }
-  const from = cur;
   motion.stop();
   const i = Math.round(motion.v);
   const plan = switchPlan(index && index.cross, from, to, i);
-  switching = { from, to };
-  setBusy(true);
-  const enter = (id, x) => {
-    cur = id;
-    for (const m of ["train", "car"]) { if (next.has(m)) on.add(m); else on.delete(m); }
-    updateModeButtons();
-    if (id !== "none") { C = combos[id]; motion = motionOf(C); }
-    uploaded = "";
-    motion.jump(x);
-  };
-  const finish = () => {
-    switching = null;
-    setBusy(false);
-    afterSettle = null;
-    uploaded = "";
-    moveTo(motion.v);
-    settled();
-  };
-  if (plan === "down") {
-    remembered = motion.v;
-    glide(motion, 0, () => { enter("none", 0); finish(); });
-  } else if (plan === "up") {
-    enter(to, 0);
-    glide(motion, remembered, finish);
-  } else if (plan === "swap") {
-    enter(to, 0);
-    finish();
-  } else if (plan === "straight") {
-    glide(motion, i, () => crossBlend(C, combos[to], i, () => { enter(to, i); finish(); }));
-  } else {
-    glide(motion, 0, () => { enter(to, 0); glide(motion, i, finish); });
-  }
+  if (plan === "down") remembered = motion.v;
+  runSteps(switchSteps(plan, from, to, i, motion.v, remembered), {
+    glide(x, done) { afterSettle = done; motion.playTo(x); },
+    cross({ at }, done) { crossBlend(C, combos[to], at, done); },
+    enter(id, x) {
+      cur = id;
+      for (const m of ["train", "car"]) { if (next.has(m)) on.add(m); else on.delete(m); }
+      updateModeButtons();
+      if (id !== "none") { C = combos[id]; motion = motionOf(C); if (DETAILS) markSlider(); }
+      uploaded = "";
+      motion.jump(x);
+    },
+    done() {
+      switching = null;
+      setBusy(false);
+      afterSettle = null;
+      uploaded = "";
+      moveTo(motion.v);
+      settled();
+    },
+  });
 }
 
+for (const b of modeButtons) {
+  const a = available[b.dataset.mode];
+  b.title = a.on ? "" : (b.dataset.mode === "car" && city.modes && city.modes[win]
+    ? "Car didn't load. Reload the page to try again." : a.why);
+}
 if (index) {
-  const byId = Object.fromEntries(index.modes.map((m) => [m.id, m]));
-  for (const b of modeButtons) {
-    const m = byId[b.dataset.mode];
-    if (m && m.available) b.dataset.off = "0";
-    else if (m) { b.dataset.off = "1"; b.title = m.why; }
-  }
+  const box = index.data_box_lonlat;
+  const cov = index.coverage || {};
   $("modes-note").textContent = "Car: typical weekday speeds from 13:00 to 14:00 (HERE Traffic4cast, 2019 to " +
-    `2020), with ${index.overhead_min} minutes once a trip for parking and getting to the car.`;
+    `2020), with ${index.overhead_min} minutes once a trip for parking and getting to the car.` +
+    (box ? " The speeds cover London from about Hounslow to Woolwich only, so Car reshapes that band" +
+      (cov.motorway != null && cov.motorway < 0.5 ? ", and few motorways have a speed." : ".") : "");
   $("modes-note").hidden = false;
   $("modes-report-link").href = `/api/whole-city/${win}/modes/report.md`;
   $("modes-report-item").hidden = false;
   $("checked").hidden = false;
-} else {
-  for (const b of modeButtons) {
-    if (b.dataset.mode === "car") { b.dataset.off = "1"; b.title = "This map was built without the car."; }
-  }
+  $("credits").textContent = [$("credits").textContent.replace(/\.$/, ""),
+    "Car speeds: HERE Traffic4cast (MeTS-10), academic and non-commercial use."].filter(Boolean).join("; ")
+    .replace(/^; /, "");
 }
-for (const b of modeButtons) b.disabled = b.dataset.off === "1";
+setBusy(false);
 updateModeButtons();
 for (const b of modeButtons) b.addEventListener("click", () => switchModes(b.dataset.mode));
 
@@ -728,7 +750,7 @@ for (const id of ["labels", "mesh", "ghosts"]) $(id).addEventListener("change", 
 smoothBox.addEventListener("change", () => {
   for (const c of Object.values(combos)) if (c.placer) c.placer.setSmooth(smoothBox.checked);
   uploaded = "";
-  moveTo(motion.v);
+  if (crossing) { uploadCross(); draw(); } else moveTo(motion.v);
 });
 
 // "Show a station": what a tap on a dot shows, for the keyboard too. It centres the station,
@@ -745,9 +767,11 @@ stationSel.addEventListener("change", () => {
   showTip(picked);
 });
 
-// Marks under the slider (?details=1): the first solved position where Wembley Park passes its
-// check against Baker Street, and any place where the layout jumps (train and tube alone).
+// Marks under the slider (?details=1), for the combination shown: the first solved position where
+// Wembley Park passes its check against Baker Street, and any place where the layout jumps.
 function markSlider() {
+  $("marks").replaceChildren();
+  const frames = C.frames, mo = C.doc.motion;
   const add = (at, text, title, cls) => {
     const m = document.createElement("span");
     m.className = cls;
@@ -757,14 +781,14 @@ function markSlider() {
     $("marks").append(m);
   };
   const passes = (f) => Boolean(f.metrics.ratios.wembley_park && f.metrics.ratios.wembley_park.status === "pass");
-  const first = doc.frames.findIndex(passes);
+  const first = frames.findIndex(passes);
   if (first > 0) {
-    const holds = doc.frames.slice(first).every(passes);
+    const holds = frames.slice(first).every(passes);
     add(first, "Wembley Park passes", "The first solved position where Wembley Park passes L-01's check against Baker " +
-      `Street (${fmt(doc.frames[first].rho)} times the grid's strength); ` +
+      `Street (${fmt(frames[first].rho)} times the grid's strength); ` +
       (holds ? "it passes at every solved position after it." : "it fails again at some later solved positions."), "mark");
   }
-  for (const j of (doc.motion && doc.motion.jumps) || []) {
+  for (const j of (mo && mo.jumps) || []) {
     add(j.at_from, "Jumps", `From ${fmt(j.from)} to ${fmt(j.rho)} times the grid's strength the layout jumps to another ` +
       `arrangement (${j.station} moves ${(j.move_m / 1000).toFixed(1)} km); the map follows the solver's own steps there.`,
       "mark jump");

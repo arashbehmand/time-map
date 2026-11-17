@@ -40,8 +40,8 @@ b = "gbt:910GMARYLBN"            # London Marylebone
 # biggest gain by car by itself.
 [[car_spot]]
 name = "Along the A40 (Western Avenue)"
-a = "gbt:940GZZLUWCY"              # White City
-b = "gbt:940GZZLUPVL"              # Perivale
+a = "gbt:910GSGFORD"               # South Greenford
+b = "gbt:940GZZLUPKR"              # Park Royal
 
 [[car_spot]]
 name = "Across Wandsworth Bridge"

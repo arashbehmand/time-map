@@ -45,3 +45,65 @@ test("the car's roads go to the renderer's road pass, in styles it has", () => {
   }
   assert.ok(PASSES.some((p) => p.name === "road") && PASSES.some((p) => p.buffer === "road" && p.casing));
 });
+
+import { modeAvailability, runSteps, switchSteps } from "../../static/whole-city/carry.js";
+
+// Run a switch's steps against a fake map: each glide moves along the current combination, each
+// cross blends between two combinations at a solved position. Returns every blend drawn.
+function drive(steps, start) {
+  let combo = start.combo, v = start.v;
+  const drawn = [];
+  let done = false;
+  runSteps(steps, {
+    glide(x, next) { if (x !== v) drawn.push(`${combo}: ${v} → ${x}`); v = x; next(); },
+    cross({ from, to, at }, next) { drawn.push(`${from} ⇄ ${to} at ${at}`); next(); },
+    enter(id, x) { combo = id; v = x; },
+    done() { done = true; },
+  });
+  return { combo, v, drawn, done };
+}
+
+test("each plan's steps draw only blends the build checked, and end where they should", () => {
+  const cross = { "train|car-train": [null, { ok: true }, { ok: true }, { ok: false }] };
+  const go = (from, to, v, remembered = 0) => {
+    const i = Math.round(v);
+    return drive(switchSteps(switchPlan(cross, from, to, i), from, to, i, v, remembered), { combo: from, v });
+  };
+  let r = go("train", "car-train", 2.4);                     // straight: glide to 2, blend across
+  assert.deepEqual(r.drawn, ["train: 2.4 → 2", "train ⇄ car-train at 2"]);
+  assert.equal(r.combo, "car-train"); assert.equal(r.v, 2); assert.ok(r.done);
+  r = go("car-train", "train", 3);                           // not checked at 3: down and up again
+  assert.deepEqual(r.drawn, ["car-train: 3 → 0", "train: 0 → 3"]);
+  assert.equal(r.combo, "train"); assert.equal(r.v, 3);
+  r = go("train", "none", 2.6);                              // the last mode off: down to the real map
+  assert.deepEqual(r.drawn, ["train: 2.6 → 0"]); assert.equal(r.combo, "none");
+  r = go("none", "car", 0, 2.6);                             // the first on again: up to where it was
+  assert.deepEqual(r.drawn, ["car: 0 → 2.6"]); assert.equal(r.combo, "car");
+  r = go("train", "car-train", 0.4);                         // near the real map: glide to it, then swap
+  assert.deepEqual(r.drawn, ["train: 0.4 → 0"]); assert.equal(r.combo, "car-train"); assert.equal(r.v, 0);
+  r = go("train", "train", 2);                               // nothing to do
+  assert.deepEqual(r.drawn, []); assert.equal(r.combo, "train"); assert.ok(r.done);
+});
+
+test("steps wait for each glide and blend to end before the next", () => {
+  const log = [];
+  let pending = null;
+  runSteps([{ glide: 1 }, { cross: { from: "a", to: "b", at: 1 } }, { enter: "b", at: 1 }], {
+    glide(x, next) { log.push("glide"); pending = next; },
+    cross(c, next) { log.push("cross"); pending = next; },
+    enter() { log.push("enter"); },
+    done() { log.push("done"); },
+  });
+  assert.deepEqual(log, ["glide"]);
+  pending(); assert.deepEqual(log, ["glide", "cross"]);
+  pending(); assert.deepEqual(log, ["glide", "cross", "enter", "done"]);
+});
+
+test("Walking and Bus are never live; Car only where the build has it", () => {
+  const none = modeAvailability(null);
+  assert.equal(none.walk.on, false); assert.equal(none.bus.on, false);
+  assert.equal(none.train.on, true); assert.equal(none.car.on, false);
+  const built = modeAvailability({ modes: [{ id: "walk", available: false, why: "Later." },
+    { id: "bus", available: false, why: "Later." }, { id: "train", available: true }, { id: "car", available: true }] });
+  assert.equal(built.walk.on, false); assert.equal(built.walk.why, "Later."); assert.equal(built.car.on, true);
+});

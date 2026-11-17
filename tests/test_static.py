@@ -571,7 +571,13 @@ def test_whole_city_has_a_toggle_per_way_of_travelling():
     assert 'id="line"' not in html and "Metropolitan line" not in html
     js = (ROOT / "whole-city/app.js").read_text()
     assert 'if (city.modes && city.modes[win])' in js
-    assert "load(`/api/whole-city/${win}/modes/modes.json`" in js and "load(`/api/whole-city/${win}/modes/${entry.file}`" in js
+    assert "load(`/api/whole-city/${win}/modes/modes.json`" in js
+    assert "load(`/api/whole-city/${win}/modes/${index.combos[id].file}`" in js
+    # Walking and Bus stay off whatever the script finds (carry.js modeAvailability), and a switch takes
+    # its lock before anything loads.
+    assert "b.disabled = busy || !available[b.dataset.mode].on;" in js
+    body = js.split("async function switchModes")[1].split("\n}\n")[0]
+    assert body.index("setBusy(true)") < body.index("await loadCombo")
     assert 'if (name === "rail" && !modes.has("train")) continue;' in js
     assert 'if (name === "road" && !modes.has("car")) continue;' in js
 

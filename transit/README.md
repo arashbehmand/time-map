@@ -526,9 +526,13 @@ times from R5, which come with the next table rebuild; their toggles say so.
 ```bash
 export TRANSIT_OUT=<builds> TRANSIT_DATA=<their data> T4C_ZIP=<path>/LONDON_2022.zip
 transit/.venv/bin/python -m transit.layout.carspeed                       # once per zip
-transit/.venv/bin/python -m transit.layout.car --build 2026-11-12         # once per build and window
+transit/.venv/bin/python -m transit.layout.car --build 2026-11-12         # once per build
 transit/.venv/bin/python -m transit.layout.timemap --build 2026-11-12 --modes car
 ```
+
+The speeds are weekday 13:00–14:00, so the car job and `--modes car` refuse any window but wd13
+(`CAR_WINDOW`). The car's files must name this build, window, table and mesh, or the job refuses
+them; the speed cache must name the zip's sha256 and the rules and bins in `transit/settings.py`.
 
 **The car's speeds** (`carspeed.py`). `LONDON_2022.zip` is HERE's Traffic4cast 2022 sample data
 (<https://developer.here.com/sample-data>, 2.8 GB; the owner downloads it). It holds, per day from
@@ -580,12 +584,14 @@ places are then held at most s·(5 + the drive along the roads) apart, however m
 passes. A road spring's weight is the train rule (the real distance between its nodes × the median
 mesh edge); an access spring's is the sum of its twin's road springs'. A weak tie, ρ·η·a·(d/r)²/2
 with η = 10⁻³, holds each twin by its node, so the Hessian stays positive definite where every car
-spring is slack; it is zero on the real map. Train and car springs between the same places sit in
-parallel and add: where a pair is stretched past both rest lengths the slower one pulls too. Train
-hops come from the tables and include a wait at each; a car trip pays its overhead once.
+spring is slack; it is zero on the real map. This replaces the issue's model of two modes'
+springs in parallel on the same pair of places: car springs join twins, never two places, and
+reach a place only through its access spring and the tie. So train and car never share a pair;
+both can pull in the same area at once, the car holding a pair at most s·(5 min + drive) apart.
+Train hops come from the tables and include a wait at each; a car trip pays its overhead once.
 
 **What it writes** (into `modes/` of the time map's folder, only with `--modes car`; without it
-the job's output is exactly what it was, byte for byte):
+the time map is what it was, except two station names that lose a stray "(N/A), London"):
 
 | File | What it is |
 |---|---|
@@ -595,7 +601,9 @@ the job's output is exactly what it was, byte for byte):
 | `report.md`, `report.json` | The car data (licence, days, window, coverage before and after), the Thames crossings, the combinations compared at train alone's Wembley pick and at the end (node shift from the real map and from train alone, each mode's pulling share, Wembley Park, σ₁ against the all-mode tables, the thinnest triangle), every switch, the restart check per car combination, the spot check, every position |
 
 `timemap.json` and `land.bin` stay train and tube alone, so the page's first load is unchanged;
-the land's Float32 sliver check covers every blend any combination draws, switches included. Each
+the land's Float32 sliver check covers every blend any combination draws, switches included. The
+`modes/` files name the sha256 of the `timemap.json` and `land.bin` they were made with, and the
+app serves them with no other; a run without `--modes` removes an old `modes/` folder. Each
 car file must be under 2 MB gzipped; the page fetches a combination the first time it is switched
 on.
 
@@ -611,7 +619,11 @@ are checked at every position; train ↔ car always passes through one of them (
 **Spot check.** The station pair at least 3 km apart with the biggest gain by car (its table time
 minus the car's door-to-door time along the links, overhead included), and any `[[car_spot]]` row
 in `checks.toml`, with their map distance at train alone's Wembley pick and at the end, for each
-combination: it passes when car with train ends closer than train alone.
+combination. A pair faster by car passes when car with train ends closer than train alone and
+fails otherwise; a pair not faster by car makes no claim ("not faster by car"), nor one with no
+table time or no road between them ("no time"). Each row also gives the car bound (s × the car's
+minutes) and a control: how much car with train shrinks the median station pair 3 km or more apart,
+so a pair that shrinks only as much as its surroundings reads as such.
 
 **Serving.** The app serves `modes/` like the map itself, under the same gate (main README,
 "Whole city"). The car's speeds are used non-commercially, with the owner's permissions.

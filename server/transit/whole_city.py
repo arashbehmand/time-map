@@ -139,12 +139,15 @@ def load_window(d: Path) -> CityWindow:
             files[name] = _blob((d / name).read_bytes(), name)
         except OSError:
             pass
-    return CityWindow(d.name, doc["build"], valid_until, doc["table_sha256"], files, _load_modes(d, doc))
+    made_with = {"timemap_sha256": hashlib.sha256(raw).hexdigest(),
+                 "land_sha256": hashlib.sha256(body).hexdigest() if body is not None else None}
+    return CityWindow(d.name, doc["build"], valid_until, doc["table_sha256"], files, _load_modes(d, doc, made_with))
 
 
-def _load_modes(d: Path, doc: dict) -> dict[str, Blob]:
-    """The window's travel modes, every file present and made with this map (the same build, window,
-    table and node count), or none."""
+def _load_modes(d: Path, doc: dict, made_with: dict | None = None) -> dict[str, Blob]:
+    """The window's travel modes, every file present and made with this very map: the same build,
+    window, table and node count, and the timemap.json and land.bin they name (their blends and the
+    land's sliver check were made for exactly those). Otherwise none."""
     md = d / MODES_DIR
     if not (md / "modes.json").is_file():
         return {}
@@ -156,7 +159,8 @@ def _load_modes(d: Path, doc: dict) -> dict[str, Blob]:
             if name.endswith(".json"):
                 m = json.loads(body)
                 same = (isinstance(m, dict) and m.get("build") == doc["build"] and m.get("window") == d.name
-                        and m.get("table_sha256") == doc["table_sha256"] and m.get("nodes") == nodes)
+                        and m.get("table_sha256") == doc["table_sha256"] and m.get("nodes") == nodes
+                        and all(m.get(k) == v for k, v in (made_with or {}).items()))
                 if not same:
                     log.warning("whole city: window %s's travel modes left out (%s was made with another map)",
                                 d.name, name)

@@ -476,7 +476,7 @@ def car_links(g: Graph, sp: dict, mesh: Mesh, max_time: float, labels: list[str]
     links, dropped = [], []
     for A, B in cand:
         allowed = by_owner[A] | by_owner[B]
-        seen, best = set(), None
+        seen, stretches = set(), []
         for start in sorted(allowed):
             if start in seen:
                 continue
@@ -499,16 +499,19 @@ def car_links(g: Graph, sp: dict, mesh: Mesh, max_time: float, labels: list[str]
             ways = [t for t in (ab, ba) if math.isfinite(t)]
             if not ways:
                 continue
-            t = sum(ways) / len(ways)
-            if best is None or t < best["t"]:
-                best = {"t": t, "ab": ab, "ba": ba, "paths": path_ab + path_ba}
+            P = np.array(path_ab + path_ba, dtype=np.int64)
+            L = float(pc.length[P].sum())
+            share = float(pc.length[P][measured[P]].sum() / L) if L else 0.0
+            stretches.append({"t": sum(ways) / len(ways), "ab": ab, "ba": ba, "P": P, "L": L, "share": share})
         rec = {"a": A, "b": B, "a_name": name(A), "b_name": name(B)}
-        if best is None:
+        if not stretches:
             dropped.append({**rec, "why": "no way to drive between them along these roads"})
             continue
-        P = np.array(best["paths"], dtype=np.int64)
-        L = float(pc.length[P].sum())
-        share = float(pc.length[P][measured[P]].sum() / L) if L else 0.0
+        # The fastest stretch with enough of its road measured; when none has, the best measured one,
+        # which is then dropped (a filled, faster stretch never hides a measured one).
+        ok = [x for x in stretches if x["share"] >= settings.CAR_FILL_MIN_SHARE]
+        best = min(ok, key=lambda x: x["t"]) if ok else max(stretches, key=lambda x: (x["share"], -x["t"]))
+        P, L, share = best["P"], best["L"], best["share"]
         minutes = max(best["t"], FLOOR_MIN)
         wcount = Counter()
         for p in P.tolist():
@@ -698,6 +701,7 @@ def run(b, clip: Path, out: Path, zip_path: Path, *, log=print, work: Path | Non
     from transit.layout.prep import station_pairs
 
     out = Path(out)
+    check_window(b.window)
     check_out_dir(out, OUT_FILES)
     speeds, smeta = carspeed.load(zip_path)
     pairs = station_pairs(b)
@@ -718,8 +722,17 @@ def run(b, clip: Path, out: Path, zip_path: Path, *, log=print, work: Path | Non
     return {"links": links_doc, "report": report}
 
 
-def load(build: str, window: str, mesh: Mesh, d: Path | None = None) -> tuple[dict, dict, dict]:
-    """car_links.json, roads.json and car_report.json of a build, refused unless made on this mesh."""
+def check_window(window: str) -> None:
+    """The car's speeds are weekday 13:00-14:00 (T4C_BINS): refuse any other transit window."""
+    if window != settings.CAR_WINDOW:
+        raise RefusedInput(f"the car's speeds are weekday 13:00-14:00 only: build it for --window "
+                           f"{settings.CAR_WINDOW}, not {window}")
+
+
+def load(build: str, window: str, mesh: Mesh, d: Path | None = None,
+         table_sha256: str | None = None) -> tuple[dict, dict, dict]:
+    """car_links.json, roads.json and car_report.json of a build, refused unless all three were made
+    for this build, window and table (when given) and on this mesh."""
     d = Path(d or default_out(build, window))
     try:
         docs = [json.loads((d / n).read_text(encoding="utf-8")) for n in OUT_FILES]
@@ -729,6 +742,12 @@ def load(build: str, window: str, mesh: Mesh, d: Path | None = None) -> tuple[di
     if any(x.get("mesh_sha256") != mesh_sha256(mesh) for x in docs):
         raise RefusedInput(f"the car links in {d} were built on another mesh: run python -m transit.layout.car "
                            f"--build {build} --window {window} again")
+    for x in docs:
+        other = [k for k, want in (("build", build), ("window", window), ("table_sha256", table_sha256))
+                 if want is not None and x.get(k) != want]
+        if other:
+            raise RefusedInput(f"the car links in {d} were made for another {', '.join(other)}: run "
+                               f"python -m transit.layout.car --build {build} --window {window} again")
     return tuple(docs)
 
 
@@ -750,6 +769,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError:
         ap.error(f"--build must be a date (YYYY-MM-DD), not {args.build!r}")
     try:
+        check_window(args.window)
         b = load_build(settings.OUT / args.build, args.window)
         _, clip, _ = tm.find_inputs(b, settings.DATA, land=True)
         run(b, clip, args.out_dir or default_out(args.build, args.window), args.t4c_zip)

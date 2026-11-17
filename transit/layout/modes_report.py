@@ -30,6 +30,17 @@ from transit.layout import mesh as meshmod
 from transit.layout.prep import RefusedOutput
 from transit.layout.report import _r
 
+
+def _readable_until(frames, share: float = 0.1) -> float:
+    """The last ρ at which at most `share` of the drawn area is stretched past 4:1 (as the time map's
+    own report says it)."""
+    last = 0.0
+    for f in frames:
+        if f["metrics"]["stretched_4_share"] > share:
+            break
+        last = f["rho"]
+    return last
+
 MAX_GZIP_BYTES = 2_000_000          # each file a car combination loads, as the page's first load
 ROAD_TOL_M = 20.0                   # the drawn roads are simplified this much
 MODE_LIST = (
@@ -97,14 +108,23 @@ def _frames_doc(frames) -> list[dict]:
     return [{**frame_doc(f), "pulls": _r(f["pulls"])} for f in frames]
 
 
-def build(*, b, pairs, mesh, links, frames, modes, stress_scale, code, page_gzip, land_dropped) -> tuple[dict, list]:
+def view_box(modes: dict, mesh) -> list[float]:
+    """The box (x0, y0, x1, y1, metres) every keyframe of every combination's stations and cells fits
+    in: the page frames the map once, for all of them."""
+    inner = mesh.kinds != meshmod.RING
+    X = np.concatenate([k["dm"][inner] / 10.0 for mo in modes["motions"].values() for k in mo["keys"]])
+    return [round(float(v), 1) for v in (*X.min(axis=0), *X.max(axis=0))]
+
+
+def build(*, b, pairs, mesh, links, frames, modes, stress_scale, code, page_gzip, land_dropped,
+          bound: dict | None = None) -> tuple[dict, list]:
     """Every modes/ file as bytes ({path: bytes}) and the log's summary lines; refused when a file
     a car combination loads is over MAX_GZIP_BYTES gzipped."""
     from transit.layout.timemap import MODES_DIR
     from transit.layout.timemap_report import motion_doc
 
     common = {"build": b.manifest.get("build"), "window": b.window, "table_sha256": b.table_sha256, "nodes": int(mesh.n),
-              "notice": NOTICE, "code": code}
+              **(bound or {}), "notice": NOTICE, "code": code}
     files, sizes = {}, {}
     for cid, name in COMBO_FILES.items():
         doc = {"schema": 1, "kind": "london-time-map-combo", "id": cid, "modes": cid.split("-"), **common,
@@ -126,7 +146,10 @@ def build(*, b, pairs, mesh, links, frames, modes, stress_scale, code, page_gzip
              "rhos": [_r(f["rho"]) for f in frames],
              "train_pulls": [_r(f["pulls"]) for f in frames],
              "cross": {k: [_r(x) for x in v] for k, v in modes["cross"].items()},
-             "roads": roads_header, "sizes": sizes, "report": True}
+             "roads": roads_header, "sizes": sizes, "report": True, "view_box": view_box(modes, mesh),
+             "data_box_lonlat": modes["car_report"].get("data_box_lonlat"),
+             "coverage": {k: modes["car_report"]["coverage"][k]["after"]
+                          for k in ("all", "motorway", "inside_the_data_box") if k in modes["car_report"]["coverage"]}}
     rep = report_json(b, pairs, mesh, links, modes, sizes, page_gzip, land_dropped, code)
     files["modes.json"] = json.dumps(index, separators=(",", ":"), ensure_ascii=False).encode()
     files["report.json"] = (json.dumps(rep, indent=1, ensure_ascii=False) + "\n").encode()
@@ -148,10 +171,13 @@ def report_json(b, pairs, mesh, links, modes, sizes, page_gzip, land_dropped, co
             "motion": {"blends": mo["blends"], "inserted": mo["inserted"], "settling": mo["settling"],
                        "min_area_ratio_along_blends": mo["min_area_ratio_along_blends"]},
             "pick": modes["picks"][cid],
+            "stretched_4_end": fr[-1]["metrics"]["stretched_4_share"],
+            "readable_until": _readable_until(fr),
             "frames": [{"rho": f["rho"], "sigma1": f["metrics"]["sigma1"],
                         "wembley": f["metrics"]["ratios"].get("wembley_park", {}),
                         "area_ratio_min": f["metrics"]["area_ratio_min"], "stretch_max": f["metrics"]["stretch_max"],
                         "shift_median_m": f["metrics"]["shift_median_m"], "flipped": f["metrics"]["folds"]["flipped"],
+                        "stretched_4_share": f["metrics"]["stretched_4_share"],
                         "iterations": f["iterations"], "pd": bool(f["pd"]),
                         "pulls": {k: {kk: vv for kk, vv in v.items() if kk != "top_links"} for k, v in f["pulls"].items()}}
                        for f in fr]}
@@ -176,6 +202,19 @@ def report_json(b, pairs, mesh, links, modes, sizes, page_gzip, land_dropped, co
            "sizes": sizes, "page_gzip_bytes": page_gzip, "land_slivers_dropped": land_dropped,
            "train_links": len(links.pairs)}
     return _r(out)
+
+
+def _at(d: dict, k):
+    """d[k] for a position k whether the keys are numbers (in memory) or strings (from JSON)."""
+    return d[k] if k in d else d[str(k)]
+
+
+def _min(x) -> str:
+    return "—" if x is None else f"{x:.0f} min"
+
+
+def _km(x) -> str:
+    return "—" if x is None else f"{x:.2f} km"
 
 
 def _pct(x) -> str:
@@ -206,6 +245,11 @@ def report_md(rep: dict) -> str:
     L.append(f"- **Car times include {rep['overhead_min']:g} minutes once a trip** for parking and getting to and from "
              "the car. The road springs sit on a road layer of twins, so a trip along a road pays it once, however many "
              "nodes the road passes; train times come from the tables and include the walk to the platform and the wait.")
+    L.append("- **How this differs from the issue's model:** the issue puts two modes' springs in parallel on the same "
+             "pair of places, the faster one setting the distance and the slower going slack. Paying the overhead once a "
+             "trip needs the road layer instead: car springs join twins, not places, and reach a place only through its "
+             "access spring (slack within s·2.5 min of its twin) and a weak tie. Train and car springs therefore never "
+             "share a pair; both can pull in the same area at once, and the car bounds a pair at s·(5 min + drive).")
     flips = max(c["flipped_max"] for c in combos.values())
     L.append(f"- **Flipped triangles: {flips} at every position of every combination**, on what ships (whole "
              "decimetres) and its Float32 image, and every blend the page draws between neighbouring keyframes of a "
@@ -243,18 +287,31 @@ def report_md(rep: dict) -> str:
         if s.get("status") == "absent":
             L.append(f"- **Spot check, {s['name']}:** absent from this build ({', '.join(s['absent'])}).")
             continue
-        end = max(int(k) for k in s["at"])
-        at = s["at"][str(end)] if str(end) in s["at"] else s["at"][end]
+        at = _at(s["at"], max(int(k) for k in s["at"]))
+        ctl = _at(s.get("control") or {}, max(int(k) for k in s["at"])) if s.get("control") else None
+        what = {"pass": "pass: faster by car, and closer with car on",
+                "fail": "fail: faster by car, but not closer with car on",
+                "not faster by car": "no claim: not faster by car",
+                "no time": "no claim: no time by public transport or no road between them"}.get(s["status"], s["status"])
         L.append(f"- **Spot check, {s['name']}: {s['a_name']} – {s['b_name']}** ({s['real_km']:.1f} km apart): "
-                 f"{s['train_table_min']:.0f} min by public transport, {s['car_min']:.0f} min by car door to door. At "
-                 f"the end of the slider {at['train']:.2f} km apart with train only, {at['car-train']:.2f} km with car "
-                 f"and train, {at['car']:.2f} km with car only: **{s['status']}** (closer with car on).")
+                 f"{_min(s['train_table_min'])} by public transport, {_min(s['car_min'])} by car door to door "
+                 f"(the car holds them at most {_km(s.get('car_bound_km'))} apart). At the end of the slider "
+                 f"{at['train']:.2f} km apart with train only, {at['car-train']:.2f} km with car and train, "
+                 f"{at['car']:.2f} km with car only"
+                 + (f" (car and train makes it {s['ratio_end']:.2f}× its train-only distance; the median pair 3 km or "
+                    f"more apart: {ctl:.2f}×)" if s.get("ratio_end") and ctl else "")
+                 + f": **{what}**.")
     for cid, r in rep["restart"].items():
         worst = max(r["at"].values(), key=lambda v: v["shift_max_m"]) if r["at"] else None
         L.append(f"- **Restart check, {LABEL[cid]}:** " + ("complete" if r["complete"] else "INCOMPLETE")
                  + f" ({', '.join(r['ladders'])}; nudged starts)"
                  + (f"; no node more than {worst['shift_max_m']:.1f} m from the shipped layout"
                     f" ({worst['shift_at'] or '—'}, {worst['shift_run']})" if worst else "") + ".")
+    for cid, c in combos.items():
+        L.append(f"- **How thin triangles get, {LABEL[cid]}:** at the end of the slider "
+                 f"{100 * c['stretched_4_end']:.1f}% of the drawn area is stretched past 4:1"
+                 + ("; at no position is more than a tenth of it." if c["readable_until"] == c["frames"][-1]["rho"]
+                    else f"; past {_rho(c['readable_until'])} more than a tenth of it is.") )
     sizes = rep["sizes"]
     L.append(f"- **Size:** the page's first load is {rep['page_gzip_bytes'] / 1e6:.2f} MB gzipped (train alone, as "
              "without the modes); switching Car on loads " + ", ".join(f"{n} {v / 1e3:.0f} kB" for n, v in sizes.items())
@@ -344,19 +401,26 @@ def report_md(rep: dict) -> str:
                  + (", ".join(x["links"]) if x["links"] else f"none: {x['why']}") + " |")
     L += ["", "## Spot check", "",
           "A pair of stations faster by car (door to door, the overhead included) than by public transport should "
-          "end closer with car on. The biggest gain is picked automatically among pairs at least 3 km apart; "
-          "`[[car_spot]]` rows in checks.toml add more.", "",
-          "| Pair | Real | Public transport | Car | " + " | ".join(f"{LABEL[c]}, {_rho(rep['compare'][str(k)]['train']['rho'] if str(k) in rep['compare'] else rep['compare'][k]['train']['rho'])}"
+          "end closer with car on: that is a pass. A pair not faster by car makes no claim either way. The biggest "
+          "gain is picked automatically among pairs at least 3 km apart; `[[car_spot]]` rows in checks.toml add more. "
+          "The car bound is s × the car's minutes, the farthest apart the car springs hold the pair. The control is "
+          "how much car and train shrinks the median station pair 3 km or more apart against train only, so a pair "
+          "that shrinks only as much as everything around it reads as such.", "",
+          "| Pair | Real | Public transport | Car | Car bound | " + " | ".join(f"{LABEL[c]}, {_rho(rep['compare'][str(k)]['train']['rho'] if str(k) in rep['compare'] else rep['compare'][k]['train']['rho'])}"
                                                            for k in rep["compare_at"] for c in ("train", "car-train", "car"))
-          + " | Result |", "|---|---:|---:|---:|" + "---:|" * (3 * len(rep["compare_at"])) + "---|"]
+          + " | Car + train ÷ train at the end (median pair) | Result |",
+          "|---|---:|---:|---:|---:|" + "---:|" * (3 * len(rep["compare_at"])) + "---:|---|"]
     for s in rep["spots"]:
         if s.get("status") == "absent":
             L.append(f"| {s['name']} | absent ({', '.join(s['absent'])}) |")
             continue
-        cells = [f"{(s['at'][str(k)] if str(k) in s['at'] else s['at'][k])[c]:.2f} km" for k in rep["compare_at"]
-                 for c in ("train", "car-train", "car")]
+        cells = [f"{_at(s['at'], k)[c]:.2f} km" for k in rep["compare_at"] for c in ("train", "car-train", "car")]
+        end = max(rep["compare_at"])
+        ctl = _at(s["control"], end) if s.get("control") else None
+        ratio = (f"{s['ratio_end']:.2f}" + (f" ({ctl:.2f})" if ctl else "")) if s.get("ratio_end") else "—"
         L.append(f"| {s['name']}: {s['a_name']} – {s['b_name']} | {s['real_km']:.1f} km | "
-                 f"{s['train_table_min']:.0f} min | {s['car_min']:.0f} min | " + " | ".join(cells) + f" | {s['status']} |")
+                 f"{_min(s['train_table_min'])} | {_min(s['car_min'])} | {_km(s.get('car_bound_km'))} | "
+                 + " | ".join(cells) + f" | {ratio} | {s['status']} |")
     L += ["", "## Restart check", "",
           "Each car combination solved again from the real map nudged on every free node (the same steps) and "
           "through other ladders of ρ (every other step, and each checked position in one step), compared with "
@@ -368,12 +432,13 @@ def report_md(rep: dict) -> str:
                      f"{v['shift_run'] or '—'} | {', '.join(v['statuses'])} |")
     for cid, c in combos.items():
         L += ["", f"## Every position: {LABEL[cid]}", "",
-              "| Position | σ₁ | Wembley Park | Smallest area | Thinnest | Median shift | Pulling | Iterations | "
-              "Positive definite |", "|---|---:|---|---:|---:|---:|---|---:|---|"]
+              "| Position | σ₁ | Wembley Park | Smallest area | Thinnest | Area past 4:1 | Median shift | Pulling | "
+              "Iterations | Positive definite |", "|---|---:|---|---:|---:|---:|---:|---|---:|---|"]
         for f in c["frames"]:
             pull = "; ".join(f"{k} {p['n']}/{p['of']}" for k, p in f["pulls"].items())
             L.append(f"| {_rho(f['rho'])} | {f['sigma1']:.4f} | {_wem(f['wembley'])} | {100 * f['area_ratio_min']:.1f}% "
-                     f"| {f['stretch_max']:.1f}:1 | {f['shift_median_m']:.0f} m | {pull or '—'} | {f['iterations']} | "
+                     f"| {f['stretch_max']:.1f}:1 | {100 * f['stretched_4_share']:.1f}% | {f['shift_median_m']:.0f} m | "
+                     f"{pull or '—'} | {f['iterations']} | "
                      f"{'yes' if f['pd'] else 'no'} |")
         mo = c["motion"]
         L += ["", f"Motion: {mo['blends']} blends, {mo['inserted']} in-between positions, {mo['settling']} settling "

@@ -1135,3 +1135,61 @@ def test_a_travel_mode_file_over_two_megabytes_is_refused(job_env, monkeypatch, 
     car = _car_dir(tmp_path, build_dir)
     code, out = _main(tmp_path, "big", "--modes", "car", "--car-dir", str(car))
     assert code == 2 and "travel modes' files would be over" in capsys.readouterr().err and not out.exists()
+
+
+def test_a_run_without_the_modes_removes_an_old_modes_folder(job_env):
+    tmp_path, build_dir, _ = job_env
+    car = _car_dir(tmp_path, build_dir)
+    code, out = _main(tmp_path, "again", "--modes", "car", "--car-dir", str(car))
+    assert code == 0 and (out / "modes/modes.json").is_file()
+    idx = json.loads((out / "modes/modes.json").read_text())
+    import hashlib
+    assert idx["timemap_sha256"] == hashlib.sha256((out / "timemap.json").read_bytes()).hexdigest()
+    assert idx["land_sha256"] == hashlib.sha256((out / "land.bin").read_bytes()).hexdigest()
+    assert len(idx["view_box"]) == 4 and idx["view_box"][0] < idx["view_box"][2]
+    code, out2 = _main(tmp_path, "again")
+    assert code == 0 and out2 == out
+    assert not any((out / n).exists() for n in timemap.MODES_FILES)
+
+
+def test_the_car_is_built_for_its_own_window_only(job_env, capsys):
+    tmp_path, build_dir, _ = job_env
+    from transit.layout import car as carmod
+    with pytest.raises(RefusedInput, match="weekday 13:00-14:00"):
+        carmod.check_window("sa13")
+    carmod.check_window(settings.CAR_WINDOW)
+
+
+def test_car_files_for_another_table_are_refused(job_env, capsys):
+    tmp_path, build_dir, _ = job_env
+
+    def other(docs):
+        for d in docs:
+            d["table_sha256"] = "1" * 64
+    car = _car_dir(tmp_path, build_dir, other)
+    code, out = _main(tmp_path, "othertable", "--modes", "car", "--car-dir", str(car))
+    assert code == 2 and "another table_sha256" in capsys.readouterr().err and not out.exists()
+
+
+def test_the_spot_check_claims_nothing_for_a_pair_not_faster_by_car():
+    from types import SimpleNamespace
+    n = 3
+    xy = np.array([[0.0, 0.0], [4000.0, 0.0], [0.0, 5000.0]])
+    t = np.array([[0, 10.0, 40.0], [10.0, 0, 30.0], [40.0, 30.0, 0]])
+    pairs = SimpleNamespace(n=n, xy=xy, t=t, used=~np.eye(n, dtype=bool), s=100.0, labels=["A", "B", "C"],
+                            index_of=lambda sid: {"x:A": 0, "x:B": 1, "x:C": 2, "x:none": None}.get(sid))
+    mesh = SimpleNamespace(n=n)
+
+    def frames(scale):
+        X = xy * scale
+        return [{"Xs": xy}, {"Xs": X}]
+    combos = {"train": frames(1.0), "car": frames(0.9), "car-train": frames(0.8)}
+    links = [{"a": 0, "b": 1, "minutes": 20.0}, {"a": 0, "b": 2, "minutes": 5.0}]
+    checks = {"car_spot": [{"name": "slower", "a": "x:A", "b": "x:B"}, {"name": "gone", "a": "x:A", "b": "x:none"}]}
+    rows = timemap.spot_check(pairs, mesh, links, 5.0, combos, [1], checks)
+    by = {r["name"]: r for r in rows}
+    assert by["Biggest gain by car"]["status"] == "pass" and {by["Biggest gain by car"]["a"],
+                                                               by["Biggest gain by car"]["b"]} == {0, 2}
+    assert by["Biggest gain by car"]["car_bound_km"] == pytest.approx(100.0 * 10.0 / 1000)
+    assert by["slower"]["status"] == "not faster by car" and by["gone"]["status"] == "absent"
+    assert by["slower"]["control"][1] == pytest.approx(0.8)

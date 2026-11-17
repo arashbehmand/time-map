@@ -352,7 +352,8 @@ def run(b: BuildInput, feed: Path, clip: Path | None, checks: dict, out: Path, *
     mesh, cells, pick = mesh_of(b, pairs)
     if isinstance(car, (str, Path)):             # the car job's folder: refused unless made on this mesh
         from transit.layout import car as carmod
-        car = carmod.load(b.manifest.get("build"), b.window, mesh, Path(car))
+        carmod.check_window(b.window)
+        car = carmod.load(b.manifest.get("build"), b.window, mesh, Path(car), table_sha256=b.table_sha256)
     log(f"{pairs.n} station nodes, {mesh.n_cell} cells, {mesh.n_ring} guard nodes: {len(mesh.tri)} triangles, "
         f"{len(mesh.edges)} grid springs")
 
@@ -521,14 +522,13 @@ def pulls(m, X: np.ndarray, labels: list[str], car_links: list[dict] | None) -> 
         if f.name == "train":
             rec["top"] = [f"{labels[int(f.links[i, 0])]} – {labels[int(f.links[i, 1])]}" for i in order[:3]]
         elif f.name == "car" and car_links is not None:
-            seen = []
+            # Where the car pulls: the roads with the most length of pulling links, not the few
+            # most-stretched hops (often short minor roads).
+            by_road: dict[str, float] = {}
             for i in order:
                 for road in car_links[i]["roads"][:1]:
-                    if road not in seen:
-                        seen.append(road)
-                if len(seen) >= 3:
-                    break
-            rec["top"] = seen
+                    by_road[road] = by_road.get(road, 0.0) + float(car_links[i]["road_m"])
+            rec["top"] = [r for r, _ in sorted(by_road.items(), key=lambda kv: (-kv[1], kv[0]))[:3]]
             rec["top_links"] = [f"{car_links[i]['a_name']} – {car_links[i]['b_name']}" for i in order[:3]]
         out[f.name] = rec
     return out
@@ -576,8 +576,13 @@ def spot_check(pairs, mesh, car_links: list[dict], overhead: float, combos: dict
                checks: dict) -> list[dict]:
     """Pairs faster by car than by train (the issue's spot check): the station pair at least
     SPOT_MIN_M apart with the largest table time minus car time, and every [[car_spot]] row of the
-    checks file. Each with its real distance and its map distance with train only, car only and
-    car + train at `picks` (positions); it passes when car + train ends closer than train only."""
+    checks file. Each with its real distance, its car bound (s × car minutes) and its map distance
+    with train only, car only and car + train at `picks` (positions). Status: "pass" when the pair is
+    faster by car and car + train ends closer than train only at the end, "fail" when faster by car
+    and not closer, "not faster by car" (no claim either way), "no time" when the table or the roads
+    give none, "absent". The control: how much car + train shrinks every station pair at least
+    SPOT_MIN_M apart (the median ratio to train only), so a pair that only shrinks as much as the area
+    around it reads as such."""
     n = pairs.n
     D = _car_minutes(mesh.n, car_links, overhead)[:n, :n]
     real = np.hypot(*(pairs.xy[:, None, :] - pairs.xy[None, :, :]).transpose(2, 0, 1))
@@ -593,21 +598,37 @@ def spot_check(pairs, mesh, car_links: list[dict], overhead: float, combos: dict
                          "kind": "checks"})
             continue
         rows.append({"name": r["name"], "a": i, "b": j, "kind": "checks"})
+    end = max(picks)
+    iu = np.triu_indices(n, 1)
+    far = (real[iu] >= SPOT_MIN_M) & pairs.used[iu]
+
+    def dist(cid, k):
+        X = combos[cid][k]["Xs"][:n]
+        return np.hypot(*(X[iu[0]] - X[iu[1]]).T)
+    control = {k: float(np.median(dist("car-train", k)[far] / dist("train", k)[far])) if far.any() else None
+               for k in picks}
     out = []
     for r in rows:
         if "absent" in r:
             out.append({**r, "status": "absent"})
             continue
         a, b = r["a"], r["b"]
+        tt = float(pairs.t[a, b]) if pairs.used[a, b] else None
+        cm = float(D[a, b]) if math.isfinite(D[a, b]) else None
         rec = {**r, "a_name": pairs.labels[a], "b_name": pairs.labels[b], "real_km": float(real[a, b]) / 1000,
-               "train_table_min": float(pairs.t[a, b]) if pairs.used[a, b] else None,
-               "car_min": float(D[a, b]) if math.isfinite(D[a, b]) else None, "at": {}}
+               "train_table_min": tt, "car_min": cm, "car_bound_km": pairs.s * cm / 1000 if cm is not None else None,
+               "train_bound_km": pairs.s * tt / 1000 if tt is not None else None, "at": {}, "control": control}
         for k in picks:
             rec["at"][k] = {cid: float(np.hypot(*(fr[k]["Xs"][a] - fr[k]["Xs"][b]))) / 1000
                             for cid, fr in combos.items()}
-        end = max(picks)
         closer = rec["at"][end]["car-train"] < rec["at"][end]["train"]
-        rec["status"] = "pass" if closer else "fail"
+        rec["ratio_end"] = rec["at"][end]["car-train"] / rec["at"][end]["train"] if rec["at"][end]["train"] else None
+        if tt is None or cm is None:
+            rec["status"] = "no time"
+        elif cm >= tt:
+            rec["status"] = "not faster by car"
+        else:
+            rec["status"] = "pass" if closer else "fail"
         rec["closer_at"] = [k for k in picks if rec["at"][k]["car-train"] < rec["at"][k]["train"]]
         out.append(rec)
     return out
@@ -906,7 +927,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--checks", type=Path, default=l01_job.CHECKS, help="hand-typed station ids (checks.toml)")
     ap.add_argument("--no-land", action="store_true", help="skip the OSM land (no osmium needed)")
     ap.add_argument("--modes", choices=["car"], help="the travel modes too (#23, L-03): car alone and car with "
-                    "train and tube, from python -m transit.layout.car; written to modes/, local use only")
+                    "train and tube, from python -m transit.layout.car; written to modes/ (weekday 13:00 only, "
+                    f"--window {settings.CAR_WINDOW})")
     ap.add_argument("--car-dir", type=Path, help="the car job's output (default: transit/out/car/<build>/<window>/)")
     args = ap.parse_args(argv)
     try:
@@ -923,6 +945,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.modes:
             from transit.layout import car as carmod
             car = args.car_dir or carmod.default_out(args.build, args.window)
+            carmod.check_window(args.window)
         run(b, feed, clip, checks, out, checks_sha256=checks_sha, input_sha=shas, car=car)
     except Refused as e:
         print(f"refused: {e}", file=sys.stderr)

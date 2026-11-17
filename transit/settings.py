@@ -209,8 +209,8 @@ def jvm_home() -> str | None:
 
 # ── Car (#23, L-03): typical weekday speeds on the main roads ───────
 # Traffic4cast 2022's London speeds (HERE probe data turned into speeds on OpenStreetMap edges by
-# the MeTS-10 pipeline): academic and non-commercial use only, so everything made from them stays
-# on this machine. The zip is its own setting: it need not sit beside the build's other inputs.
+# the MeTS-10 pipeline), used non-commercially. The zip is its own setting: it need not sit beside the
+# build's other inputs. Its speeds are weekday 13:00-14:00 only, so the car is built for CAR_WINDOW only.
 T4C_ZIP = Path(os.environ.get("T4C_ZIP", RAW / "t4c22" / "LONDON_2022.zip"))
 T4C_MEMBER_DIR = "speed_classes/london/"
 T4C_COLUMNS = ("u", "v", "day", "t", "volume_class", "median_speed_kph", "free_flow_kph")
@@ -220,6 +220,7 @@ T4C_LAST_DAY = date(2020, 2, 29)         # nothing from the covid period
 T4C_HOLIDAYS = (date(2019, 8, 26), date(2019, 12, 25), date(2019, 12, 26), date(2020, 1, 1))
 T4C_CHRISTMAS = ((12, 23), (1, 3))       # 23 December to 3 January, left out every year
 T4C_SYNTHETIC_ID = 1 << 40               # node ids at or above this are not OpenStreetMap's
+CAR_WINDOW = "wd13"                      # the transit window the bins match
 CAR_HIGHWAYS = ("motorway", "trunk", "primary")   # mainline only: no *_link
 CAR_MIN_KPH = 1.0                        # a bin's median under this is noise, not traffic
 CAR_OVERHEAD_MIN = 5.0                   # parking and getting to the car, once a trip (half each end)

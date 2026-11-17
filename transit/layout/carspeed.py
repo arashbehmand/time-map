@@ -165,9 +165,7 @@ def aggregate(zip_path: Path, log=print) -> tuple[dict, dict]:
         "zip_sha256": sha256(zip_path), "licence": LICENCE, "clock": CLOCK,
         "bins": list(settings.T4C_BINS), "window": "13:00-14:00",
         "days_in_zip": len(members), "days_used": used, "days_skipped": skipped,
-        "rules": {"weekdays": True, "holidays": [h.isoformat() for h in settings.T4C_HOLIDAYS],
-                  "christmas": [list(x) for x in settings.T4C_CHRISTMAS],
-                  "last_day": settings.T4C_LAST_DAY.isoformat(), "min_kph": settings.CAR_MIN_KPH},
+        "rules": rules(),
         "rows_read": rows_read, "rows_in_window": rows_window, "rows_under_min_kph": rows_slow, "rows_kept": kept,
         "volume_class_rows": dict(sorted(vol.items())), "edges": int(len(u)), "edges_with_synthetic_id": synthetic,
         "median_kph_quartiles": [float(x) for x in np.percentile(med, [25, 50, 75])] if len(med) else [],
@@ -184,9 +182,16 @@ def write(cols: dict, meta: dict, out: Path) -> None:
     (out / META).write_text(json.dumps(meta, indent=1) + "\n", encoding="utf-8")
 
 
+def rules() -> dict:
+    """The rules the speeds were made by: a cache made by others is refused."""
+    return {"weekdays": True, "holidays": [h.isoformat() for h in settings.T4C_HOLIDAYS],
+            "christmas": [list(x) for x in settings.T4C_CHRISTMAS],
+            "last_day": settings.T4C_LAST_DAY.isoformat(), "min_kph": settings.CAR_MIN_KPH}
+
+
 def load(zip_path: Path | None = None, out: Path | None = None) -> tuple[dict, dict]:
-    """The cached speeds and their meta, refused when missing or made from another zip (its size
-    and modification time differ from the meta's)."""
+    """The cached speeds and their meta, refused when missing, made from another zip (its sha256
+    differs from the meta's) or by other rules or bins."""
     import pyarrow.parquet as pq
 
     zip_path = Path(zip_path or settings.T4C_ZIP)
@@ -195,9 +200,12 @@ def load(zip_path: Path | None = None, out: Path | None = None) -> tuple[dict, d
         raise RefusedInput(f"no car speeds in {out}: run python -m transit.layout.carspeed --t4c-zip {zip_path}")
     meta = json.loads((out / META).read_text(encoding="utf-8"))
     if zip_path.is_file() and (meta.get("zip_bytes") != zip_path.stat().st_size
-                               or meta.get("zip_mtime") != zip_path.stat().st_mtime):
+                               or meta.get("zip_sha256") != sha256(zip_path)):
         raise RefusedInput(f"the car speeds in {out} were made from another {zip_path.name}: run "
                            "python -m transit.layout.carspeed --force")
+    if meta.get("rules") != rules() or meta.get("bins") != list(settings.T4C_BINS):
+        raise RefusedInput(f"the car speeds in {out} were made by other rules or bins than transit/settings.py's: "
+                           "run python -m transit.layout.carspeed --force")
     t = pq.read_table(out / SPEEDS)
     cols = {k: t.column(k).to_numpy() for k in ("u", "v", "median_kph", "rows")}
     return cols, meta

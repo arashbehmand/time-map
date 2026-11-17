@@ -708,11 +708,20 @@ def write(out: Path, *, b, pairs, mesh, links, model, frames, cells, pick, check
     panels = panels_svg(pairs, mesh, frames, panel_picks(frames, wembley), land["coarse"] if land else None, routes,
                         checks, f"London by travel time on a spring grid that can't fold, build {doc['build']} {b.window}")
 
-    # The travel modes' files, built and size-checked before anything is written.
+    # The travel modes' files, built and size-checked before anything is written. They name the exact
+    # timemap.json and land.bin they were made with: the server serves them with no other.
+    import hashlib
+    bound = {"timemap_sha256": hashlib.sha256((text + "\n").encode()).hexdigest(),
+             "land_sha256": hashlib.sha256(blob).hexdigest()}
     mfiles, msummary = modes_report.build(b=b, pairs=pairs, mesh=mesh, links=links, frames=frames, modes=modes,
                                           stress_scale=doc["stress_scale"], code=code, page_gzip=gz,
-                                          land_dropped=dropped) if modes else ({}, [])
+                                          land_dropped=dropped, bound=bound) if modes else ({}, [])
     out.mkdir(parents=True, exist_ok=True)
+    if not modes:
+        # A run without the modes leaves no car behind: old modes/ files were made with another land.bin.
+        for name in tm.MODES_FILES:
+            if (out / name).is_file():
+                (out / name).unlink()
     (out / "timemap.json").write_text(text + "\n", encoding="utf-8")
     (out / "land.bin").write_bytes(blob)
     (out / "report.json").write_text(json.dumps(rep, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

@@ -23,7 +23,7 @@
 //                        reached (the true minutes, as the colour bar counts them), at the
 //                        middle's own places per area; inside, radius = minutes.
 //   squashReach          how far out squash draws the places within the chosen time (99th
-//                        percentile, capped at 3 × the time): the view reaches that far.
+//                        percentile, capped at REACH_CAP × the time): the view reaches that far.
 //   bentRings(field, warp, levels)   the rings: along each of `bearings` directions, the first
 //                        place that many minutes away on the true minutes, drawn where the warp
 //                        puts it. Every vertex is a place exactly that many minutes away (no
@@ -176,7 +176,7 @@ export function cutPeaks(f, { minDrop = CUT_MIN_DROP } = {}) {
 }
 
 // How far squash draws, at most, as a multiple of the chosen time (squashReach's cap).
-export const REACH_CAP = 3;
+export const REACH_CAP = 6;
 
 export function squashReach(f, R, maxMinutes, { share = 0.99, cap = REACH_CAP } = {}) {
   const r = [];

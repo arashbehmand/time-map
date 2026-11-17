@@ -5,9 +5,10 @@
 //   ordinary  the normal map (MapLibre) with travel-time bands, islands and holes included.
 //             The baseline: it always works, even without WebGL2.
 //   bent      the mesh renderer (static/shared/mesh/): each place keeps its direction from
-//             the pin (by reach or true compass) and sits at a distance proportional to its
-//             minutes, so the rings are exact circles. Experimental; for public transport
-//             it stays hidden until Direction 4's checks pass (views.js).
+//             the pin (by reach or true compass). Walking, cycling and driving use the fold:
+//             distance proportional to minutes, so the rings are exact circles. Public
+//             transport uses squash (layouts.js), whose rings bend; it is offered only at the
+//             outer rings that passed W-03's checks (views.js BEND_OUTERS). Experimental.
 // "Time map" dissolves the real map into the unbent mesh, then morphs it. Pan, zoom
 // and resize never fetch; a new pin, mode or window fetches one field, and the old picture
 // stays up until the new one is ready.
@@ -282,10 +283,13 @@ const squashOpts = () => ({ minSlope: Number(Q.get("squashslope")) > 0 ? Number(
                              spread: V.DIRECTIONS[S.directions] });
 
 // The layout wanted now (views.js layoutFor): a chip picked in this mode, else ?layout=, else
-// the mode's own (squash for public transport, the fold otherwise).
+// the mode's own (squash for public transport, the fold otherwise). The mode is the active
+// field's, the one the mesh is built from: while a new mode's field loads, the old field keeps
+// its own layout.
 function layoutNow() {
-  const chip = S.layoutPick && S.layoutPick.mode === S.mode ? S.layoutPick.layout : null;
-  return V.layoutFor(S.mode, chip || Q.get("layout"));
+  const mode = S.active ? S.active.json.mode : S.mode;
+  const chip = S.layoutPick && S.layoutPick.mode === mode ? S.layoutPick.layout : null;
+  return V.layoutFor(mode, chip || Q.get("layout"));
 }
 
 // What the workers need (plain arrays; they rebuild the field, its geometry field and the
@@ -446,7 +450,7 @@ function labelsFor(m) {
 
 // ── Bending ──────────────────────────────────────────────────────────
 // The bent map needs both workers: the scene, and the band layer with its tap index.
-function bendOffered() { return S.renderer && S.renderer.supported && S.fieldWorker && V.bendOffered(S.mode, location.search); }
+function bendOffered() { return S.renderer && S.renderer.supported && S.fieldWorker && V.bendOffered(S.mode, location.search, S.outer); }
 
 function setBent(on) {
   S.bent = !!(on && bendOffered());
@@ -714,6 +718,9 @@ function updateLegend() {
   // One label, "Time map"; the state is aria-pressed alone, so a screen reader says it once.
   if (toggleBtn.getAttribute("aria-pressed") !== String(S.bent)) toggleBtn.setAttribute("aria-pressed", String(S.bent));
   show($("time-map-note"), offered && S.bent);
+  const limited = !offered && S.renderer && S.renderer.supported && S.fieldWorker && V.bendOffered(S.mode, location.search);
+  show($("bend-limit"), !!limited);
+  if (limited) setText($("bend-limit"), T.bendLimit(S.mode, V.BEND_OUTERS[S.mode]));
   show($("direction-chips"), offered && S.bent);
   const layouts = Q.get("layouts") === "1" || V.LAYOUTS.includes(Q.get("layout"));
   show($("layout-chips"), offered && S.bent && layouts);
@@ -722,11 +729,16 @@ function updateLegend() {
   if (layouts) checkRadio("layout", layoutNow());
   show($("direction-note"), offered && S.bent);
   setText($("direction-note"), T.directionNote(S.directions, layout));
-  show($("overlap-note"), S.bent && S.mode === "transit" && layoutNow() !== "squash");
+  // The overlap note is for the transit fold drawn (or about to be), never for squash.
+  const drawnMode = bentNow && S.mesh ? S.mesh.entry.json.mode : (S.active ? S.active.json.mode : S.mode);
+  show($("overlap-note"), S.bent && drawnMode === "transit" && layout !== "squash");
   // What squash gives up, for the view drawn (its own counts: a pending pin never relabels it).
   const givesUp = bentNow && S.mesh && S.mesh.layout === "squash" && S.mesh.entry.json.mode === "transit";
   show($("gives-up"), !!givesUp);
-  if (givesUp) setText($("gives-up"), T.givesUp(S.mesh.outer, S.mesh.layers && S.mesh.layers.ringCounts ? S.mesh.layers.ringCounts.pastRing : null));
+  if (givesUp) {
+    const rc = S.mesh.layers && S.mesh.layers.ringCounts;
+    setText($("gives-up"), T.givesUp(S.mesh.outer, rc ? rc.pastRing : null, rc ? rc.slowInside : null));
+  }
   setText($("overlap-note"), T.OVERLAP_NOTE);
   show($("when-field"), S.mode === "transit" && S.transit.available);
 }
@@ -999,7 +1011,10 @@ function setOuter(m) {
   S.outer = m;
   updateBands();
   frameView();
-  if (S.bent) prepareMesh();
+  // Public transport bends only at the rings that passed W-03's checks (views.js BEND_OUTERS):
+  // another ring goes back to the real map, and the page says why.
+  if (S.bent && !bendOffered()) { S.bent = false; S.pendingMesh = null; flatNow(); }
+  else if (S.bent) prepareMesh();
   dirty = true;
 }
 
@@ -1020,7 +1035,7 @@ function initControls() {
   for (const radio of document.querySelectorAll('input[name="layout"]')) {
     radio.addEventListener("change", () => {
       if (!radio.checked) return;
-      S.layoutPick = { mode: S.mode, layout: radio.value };
+      S.layoutPick = { mode: S.active ? S.active.json.mode : S.mode, layout: radio.value };
       hideTapList();
       updateLegend();
       prepareMesh();

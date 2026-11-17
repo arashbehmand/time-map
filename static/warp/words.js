@@ -66,14 +66,24 @@ export function directionNote(directions, layout = "fold") {
   return (layout === "squash" ? SQUASH_DIRECTION_NOTES : DIRECTION_NOTES)[directions];
 }
 
-// What squash gives up, in one line (W-03, #27): its rings follow the main reach, so places
-// quicker than a ring can be drawn past it. `share` is the share of the places within `outer`
-// minutes drawn past the outer ring (diagnostics.js ringShares, from the field worker), or null
-// while it is being counted.
-export function givesUp(outer, share) {
-  const n = share === null || share === undefined || !(share >= 0) ? "Some"
-    : share < 0.05 ? "A few" : `${Math.round(share * 100)}%`;
-  return `Rings follow the main reach, not every place: ${n} of the places within ${outer} minutes are drawn past the ${outer} min ring, mostly near stations. Colours and taps give each place's own time.`;
+// What squash gives up (W-03, #27): its rings follow the main reach, so places quicker than a
+// ring can lie past it, and a few slower ones inside it. `past` is the share of the places
+// within `outer` minutes drawn past the outer ring or not drawn (diagnostics.js ringShares
+// pastOrOff), `slow` the share of the places drawn inside it that are slower (slowInside, cut
+// patches included: they are drawn too); either is null while it is being counted. The outer
+// ring sits past the first view (it is framed on the places two thirds of the way out).
+const pct = (x) => (x < 0.01 ? "under 1%" : `${Math.round(x * 100)}%`);
+const known = (x) => x !== null && x !== undefined && x >= 0;
+export function givesUp(outer, past, slow = null) {
+  const a = known(past) ? `${pct(past)} of the places` : "Some places";
+  const b = known(slow) ? `${pct(slow)} of the places inside it are slower` : "a few places inside it can be slower";
+  return `Rings follow the main reach, not every place: ${a} within ${outer} minutes lie past the ${outer} min ring, and ${b}. Zoom out to see the whole ring. Colours and taps give each place's own time.`;
+}
+
+// Why there is no Time map button at this outer ring (views.js BEND_OUTERS).
+export function bendLimit(mode, outers) {
+  const list = outers.length > 1 ? `${outers.slice(0, -1).join(", ")} and ${outers[outers.length - 1]}` : `${outers[0]}`;
+  return `The time map for ${mode === "transit" ? "public transport" : "this mode"} is shown for ${list} minutes only: further out it bends too much to read.`;
 }
 
 export const LAYOUT_NOTES = {

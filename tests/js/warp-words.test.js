@@ -78,16 +78,28 @@ test("public transport bends with squash, every other mode with the fold; a pick
   assert.equal(V.layoutFor("transit", "nonsense"), "squash");
 });
 
-test("the time map says what squash gives up, with the share counted for the view drawn", () => {
-  assert.equal(T.givesUp(45, 0.364),
-    "Rings follow the main reach, not every place: 36% of the places within 45 minutes are drawn past the 45 min ring, mostly near stations. Colours and taps give each place's own time.");
-  assert.match(T.givesUp(45, 0.02), /^Rings follow the main reach, not every place: A few of the places/);
-  assert.match(T.givesUp(60, null), /: Some of the places within 60 minutes are drawn past the 60 min ring/);
-  assert.ok(!/0%/.test(T.givesUp(45, null)), "no number before it is counted");
+test("the time map says what squash gives up, with the shares counted for the view drawn", () => {
+  assert.equal(T.givesUp(45, 0.374, 0.008),
+    "Rings follow the main reach, not every place: 37% of the places within 45 minutes lie past the 45 min ring, and under 1% of the places inside it are slower. Zoom out to see the whole ring. Colours and taps give each place's own time.");
+  assert.match(T.givesUp(45, 0.03, 0.021), /: 3% of the places within 45 minutes .* and 2% of the places inside it are slower/);
+  assert.match(T.givesUp(60, null, null), /: Some places within 60 minutes lie past the 60 min ring, and a few places inside it can be slower/);
+  assert.ok(!/0%/.test(T.givesUp(45, null, null)), "no number before it is counted");
   // Squash doesn't keep distance as minutes, so its direction note doesn't promise it.
   assert.match(T.directionNote("reach", "fold"), /Minutes stay exact/);
   assert.ok(!/exact/i.test(T.directionNote("reach", "squash")));
   assert.ok(!/wedges/.test(T.directionNote("compass", "squash")));
+});
+
+test("public transport bends only at the rings that passed W-03's checks", () => {
+  assert.deepEqual(V.BEND_OUTERS.transit, [30, 45]);
+  for (const m of [30, 45]) assert.equal(V.bendOffered("transit", "", m), true);
+  for (const m of [60, 90, 120]) {
+    assert.equal(V.bendOffered("transit", "", m), false);
+    assert.equal(V.bendOffered("transit", "?polar=1", m), true);     // for testing
+  }
+  for (const m of [15, 30, 45, 60]) assert.equal(V.bendOffered("walking", "", m), true);
+  assert.equal(T.bendLimit("transit", V.BEND_OUTERS.transit),
+    "The time map for public transport is shown for 30 and 45 minutes only: further out it bends too much to read.");
 });
 
 test("tables expire the day after valid_until, in London", () => {

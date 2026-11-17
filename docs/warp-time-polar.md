@@ -318,8 +318,8 @@ adds across the 18 fields, against Mapbox Streets tiles (z14) at each node:
 | Baker Street | Walk | Fold, by reach | 30 | No wedge; Regent's Park keeps its own times (the allowance) |
 | Canary Wharf | Walk | Fold, by reach | 30 | No wedge |
 
-Not looked at: a transit origin with `?polar=1`. The transit fields at the five origins carry no
-patches, so their bent view is unchanged.
+Not looked at then (2026-11-15): a transit origin with `?polar=1`. The transit fields at the
+five origins carry no patches, so their bent view is unchanged. (W-03 looked at them, below.)
 
 **Direction 4, rerun 2026-11-15.** The weekday 08–09 smoothed rows at all five origins and both
 direction settings are unchanged to the third decimal place, because the transit fields carry no
@@ -332,7 +332,7 @@ Around each station the minutes drop, then rise again as you walk away, so along
 from the pin the time doesn't only grow. The fold (the issue's time-polar view) draws every
 place at its own minutes, so each pocket folds over its station. Squash gives up "distance =
 minutes" to stop that. It is on the bent map behind `?layouts=1` (`static/shared/mesh/layouts.js`);
-the default is still the fold, and transit's bend stays hidden. It is not the issue's view: if
+the default was still the fold, and transit's bend stayed hidden. It is not the issue's view: if
 it is to ship for transit, #5 needs the owner to accept it in place of "distance = minutes".
 (The owner did, in W-03 below, and the climb in a pocket's shadow is now 5 minutes per km.)
 
@@ -348,7 +348,7 @@ it is to ship for transit, #5 needs the owner to accept it in place of "distance
   labels and taps keep each place's own minutes.
 - **The bend.** Along each line out from the pin, a place sits at its own (cut) minutes while
   they keep rising; where they drop below the slowest place met so far (a pocket's shadow), the
-  distance keeps climbing at 3 minutes per km until the minutes catch up. Unknown ground is
+  distance keeps climbing at 3 minutes per km (5 since W-03) until the minutes catch up. Unknown ground is
   stepped over, not restarted from. A field without pockets is drawn exactly as the fold.
 - **Rings spaced by places reached.** Inside 15 minutes the radius is the minutes. Beyond, it
   grows with the number of places within each time (the true minutes, as the colour bar counts
@@ -423,8 +423,11 @@ by places reached):
   read on 720 bearings and has a quarter-minute allowance.
 - **C3's 1%** was how "every place inside a ring is quicker than that ring" was measured: a 100 m
   grid and 720 bearings can't give exactly zero. **The owner relaxed it to 2.5% on 2026-11-17,
-  after measuring,** when no setting got Heathrow under 1% (see the results below). Cut patches (ground walled off from the streets
-  around it, lowered by squash's cut) are counted separately and reported.
+  after measuring,** when no setting got Heathrow under 1% (see the results below). Cut patches
+  (ground walled off from the streets around it, lowered by squash's cut) are counted separately
+  and reported.
+- **The climb applies to every squash,** including the trial for walking, cycling and driving
+  behind `?layouts=1` (`MIN_SLOPE`), which wasn't re-checked; those fields have few pockets.
 - **The grid:** Baker Street, Wembley Park, Canary Wharf, Heathrow and Croydon
   (`static/warp/lab/stations.json`), the four windows (wd08, wd13, wd19, sa13), and both
   direction settings (by reach 0.5, true compass): 40 rows. Every row must pass on its own;
@@ -465,13 +468,16 @@ scoring is fixed now):
   reach. Five people who haven't seen it, five seconds each.
 - **Ask:**
   1. "What do the rings mean?"
-  2. "Is everything inside the 30 ring within 30 minutes?"
+  2. "Is everywhere you can get to in 30 minutes inside the 30 ring?"
   3. "Show me every place under this spot." (a tap on a crowded spot)
 - **Pass:** at least 4 of 5 say a ring is how far you get in that many minutes in each
-  direction, with quicker places possibly further out (on question 2, "yes, everything inside"
-  is not a pass), and the tap lists every place under the finger with its minutes.
+  direction, and answer question 2 "no: quicker places can be further out" (squash's main
+  give-up; a "yes" is not a pass), and the tap lists every place under the finger with its
+  minutes. Question 2 was "Is everything inside the 30 ring within 30 minutes?" until the review
+  round, before any run: at most 1.3% of the places inside are slower, so "yes" was nearly right
+  and tested the wrong give-up.
 
-| Person | Rings | Inside the 30 ring | Tap |
+| Person | Rings | Everywhere in 30 minutes inside? | Tap |
 |---|---|---|---|
 | 1 | | | |
 | 2 | | | |
@@ -507,8 +513,9 @@ airport, the rest east of it (Hatton Cross) where the ring jumps outward between
 directions. No setting that applies everywhere moved them under 1%, so the table went to the
 owner, who relaxed C3 to 2.5% and kept the 5 min/km climb (`MIN_SLOPE` in `layouts.js`).
 
-**Shipped (climb 5 min/km, rings spaced by places reached): 40 of 40 rows pass.** Ranges over
-the four windows and both directions settings:
+**First round (climb 5 min/km, reach cap 3): 40 of 40 rows passed** under the first reading of
+the ring, which the review round corrected (below). Ranges over the four windows and both
+directions settings:
 
 | Origin | C1 overlap | C2 stretch | C3 slower inside | Past the 45 ring (stated) | Not drawn | Fold: overlap, stretch |
 |---|---|---|---|---|---|---|
@@ -518,20 +525,17 @@ the four windows and both directions settings:
 | Heathrow | 0.2–0.6% | 1.89–2.01:1 | 0.4–2.3% | 51–71% | 9–12% | 50–63%, 5.2–7.3:1 |
 | Croydon | 0.7–0.9% | 1.98–2.31:1 | 0.1–0.7% | 51–58% | 0.9–1.1% | 44–51%, 6.3–6.6:1 |
 
-- **Not drawn at Heathrow rose from 1% to 9–12%.** A steeper climb pushes its far places past
-  squash's reach (at most three times the outer ring), so they fade onto the view's edge. It is
-  reported, not a check.
-- **The other rings** (weekday 08–09, by reach, not checked): 30 and 60 minutes stay within the
-  limits everywhere except Heathrow's 60 (stretch 4.07:1). At 90 and 120 minutes the stretch is
-  4.2–55:1 and up to 19% of the places inside a ring are slower: the long rings are not readable
-  at every origin.
+- **Not drawn at Heathrow rose from 1% to 9–12%.** A steeper climb pushed its far places past
+  squash's reach (then at most three times the outer ring). Fixed in the review round.
+- **The other rings** were reported only, at weekday 08–09: the review round checks them all.
 - **The renderer on the shipped squash** (lab, real tiles, weekday 08–09): G1 ≤ 0.002 px, G2
   pass, G3 ≤ 0.062 px, G4 99.97–100% within 1 px, G5 pass, at all five origins on back-end B, and
   at Baker Street on back-end C.
 - **First scene, Baker Street** (desktop, weekday 08–09, 45 minutes, by reach, tiles in the
   browser's cache, a new page each time, request to the whole scene installed): 10 runs,
   median 1,415 ms, range 1,373–2,758 ms (three of the ten took 2.5–2.8 s). The fold, run the
-  same way: 1,048–1,091 ms. W-02's 2.06 s was the fold before the second worker.
+  same way: 1,048–1,091 ms. W-02's 2.06 s did not reproduce on this setup (the fold now takes
+  1.05 s); its cause wasn't traced.
 - **Taps:** five taps near Baker Street listed 2, 5, 5, 5 and 3 places, each with its minutes.
   Two places said the same way (within 50 m, same direction) now keep a line each.
 - **Looked at** (screenshots, not stored):
@@ -543,9 +547,88 @@ the four windows and both directions settings:
 | After the switch | King's Cross and Baker Street, public transport, Time map, no flags | Squash, the one-line note, no trial chips. The colour bar had shrunk to nothing in the long transit panel (it did on the fold too); it no longer shrinks |
 | After the bar fix | Opening example, normal and Time map | Unchanged |
 
+### W-03 review round (2026-11-17)
+
+Five reviews. The checks added before re-measuring are listed above, in the W-03 section. Raw
+numbers in `docs/warp-time-polar-results.json`, `w03.review_round`.
+
+**The reading of the ring was wrong.** It took each ring vertex's bearing bin and the largest
+radius in it. With directions by reach the vertices spread apart, so 8–23% of bearings had no
+vertex and their places weren't judged (`bearings` 0.77–0.92 on every by-reach row), and where
+the ring jumps outward one vertex's radius stood for the whole bin. Read as drawn (odd crossings
+along the place's bearing), every bearing is judged at every row, and Heathrow's slower-inside
+share by reach falls from 1.9–2.3% to 0.4–1.3%.
+
+**Squash's reach cap goes from 3 to 6 times the outer ring** (`REACH_CAP`, `layouts.js`). With
+the 5 min/km climb, Heathrow's far places were past the cap: 9–12% within 45 minutes drawn
+nowhere. At caps 4, 6 and none the 45-minute rows are the same (the reach is then the 99th
+percentile, as designed); at 30 minutes cap 4 still left 1.7–2.4% at Heathrow, cap 6 passes.
+Tile cover is set by the places within the outer ring (`fit.js reachBox`), so the cap doesn't
+fetch more tiles.
+
+**Shipped (climb 5 min/km, reach cap 6), 45 minutes: 40 of 40 rows pass C1–C3 and C5.**
+
+| Origin | C1 overlap | C2 stretch | C3 slower inside (with cut patches) | Past the ring or not drawn (stated) | C5 not drawn | Fold: overlap, stretch |
+|---|---|---|---|---|---|---|
+| Baker Street | 0.2–0.4% | 1.75–1.83:1 | 0.1–0.4% (0.6–0.8%) | 35–37% | 0.9–1.0% | 54–56%, 5.5–5.8:1 |
+| Wembley Park | 0.3–0.5% | 1.76–1.90:1 | 0.1–0.4% (0.4–0.7%) | 20–23% | 1.0–1.1% | 40–52%, 4.6–6.2:1 |
+| Canary Wharf | 0.2–0.3% | 1.71–1.77:1 | 0.2–0.3% (0.4–0.6%) | 28–31% | 0.9–1.0% | 58–64%, 5.5–6.1:1 |
+| Heathrow | 0.2–0.6% | 2.01–2.23:1 | 0.4–1.3% (1.9–2.5%) | 66–74% | 1.0–1.1% | 50–63%, 5.2–7.3:1 |
+| Croydon | 0.7–0.9% | 1.98–2.31:1 | 0.1–0.5% (0.4–0.9%) | 52–58% | 0.9–1.1% | 44–51%, 6.3–6.6:1 |
+
+- **C3 stays at 2.5%.** Three Heathrow rows are over 1% (weekday 08–09 true compass 1.3%,
+  weekday 13–14 by reach 1.0%, Saturday by reach 1.2%), so under the rule fixed before this run
+  the owner's 2.5% stands. Counting the cut patches readers also see, Heathrow is 1.9–2.5%; the
+  page states that figure, cut patches included.
+- **Every offered ring, 40 rows each:**
+
+| Outer ring | Rows passing | What fails | Public transport's time map |
+|---|---|---|---|
+| 30 min | 40 | none (stretch 1.63–2.51:1, slower inside ≤ 0.4%, not drawn ≤ 1.7%) | offered |
+| 45 min | 40 | none | offered |
+| 60 min | 38 | Heathrow C2 by reach, weekday 08–09 and 13–14 (4.18:1) | normal map only |
+| 90 min | 4 | C2 and C3 at most origins (stretch up to 19.7:1, slower inside up to 21%) | normal map only |
+| 120 min | 0 | C2 and C3 everywhere (stretch up to 54.5:1) | normal map only |
+
+  90 and 120 were measured at reach cap 4; the cap changes only the places not drawn, not
+  their C2 or C3. At 60, 90 and 120 minutes the page has no Time map button and says "The time
+  map for public transport is shown for 30 and 45 minutes only: further out it bends too much
+  to read." (`views.js BEND_OUTERS`). `?polar=1` bends at any ring, for testing.
+- **Why the 5 min/km climb halved the stretch.** In a station's shadow squash's radius grows
+  exactly at the climb rate, while the scale across the ray doesn't change, so a shadow cell's
+  stretch is about 11 ÷ the climb (min/km) at Baker Street: 3.7:1 at 3, 2.2:1 at 5. The median
+  then levels off at about 1.7:1, set by the ground outside the shadows (Baker Street 3.66,
+  1.78, 1.70, 1.77:1 at 3, 5, 8, 12 min/km). It is not an artefact of the measure. A second
+  measure (`foldDiagnostics` on the same layout) counts everything squash draws out to its
+  reach, the places slower than the ring included: there Baker Street goes 3.62 → 2.50:1 but
+  Heathrow 5.22 → 5.97:1. C2 holds for the places within the ring's minutes; past the ring, the
+  uncoloured map at Heathrow is more stretched, which is where the smeared streaks are.
+- **The page's line** now states both give-ups, for the view drawn, and where the ring is:
+  "Rings follow the main reach, not every place: 37% of the places within 45 minutes lie past
+  the 45 min ring, and under 1% of the places inside it are slower. Zoom out to see the whole
+  ring. Colours and taps give each place's own time." (Baker Street). On the page: Baker Street
+  37%, Heathrow 74%, King's Cross 27%; the lab's shares for Baker Street and Heathrow match (0.374,
+  0.742). Below 1% it says "under 1%"; before the count arrives, "Some places" and "a few places
+  inside it can be slower". "Mostly near stations" is gone: it wasn't measured.
+- **First scene, Baker Street, 21 runs** (same setup as above): median 1,480 ms, 90th percentile
+  3,454 ms, maximum 3,834 ms; 7 of 21 over 2 s. Every slow run is waiting for tiles: the last
+  tile is in at 0.63–0.74 s in the 14 fast runs and 1.53–2.96 s in the 7 slow ones, while the
+  squash build (0.17–0.20 s), packing (0.67–0.92 s) and tessellation (0.45–0.67 s) barely move.
+  The tile proxy keeps no copy of its own (`server/app.py`, `max-age=3600` to the browser), so a
+  browser-cache miss is a round trip to Mapbox; whether the slow runs missed the cache wasn't
+  checked. The median passes the gate as written; the issue's plain "under 2 s" does not hold
+  for every first bend. The earlier "one run of eleven returned no data" was not reproduced in
+  these 21 runs and was not explained.
+- **Looked at, after these changes:** the opening example normal and Time map (unchanged);
+  King's Cross, Baker Street and Heathrow by public transport, Time map, no flags (squash, the new
+  line; Heathrow's first view as before, the smeared streaks east of the airport still there);
+  Baker Street with 60 minutes picked while bent (back to the real map, no Time map button, the
+  note shown).
+
 ## Done when
 
-Every row is about the shipped path: the normal map, and the fold where the map bends.
+Every row is about W-02's shipped path: the normal map, and the fold where the map bends.
+Public transport's squash (W-03) is measured in its own section above.
 
 | Done when | Result |
 |---|---|
@@ -555,7 +638,7 @@ Every row is about the shipped path: the normal map, and the fold where the map 
 | No Matrix calls; at most two isochrone requests per new origin | **Met, live and in the tests.** Live usage counter: a new transit pin +2 isochrone, 0 Matrix; walking and another window at that pin +0. Concurrent walk and transit requests share the calls in flight (`tests/test_field_api.py`) |
 | After a pan, an update within 500 ms p95, no blocking overlay | **Met on desktop with real tiles.** 50 pans: next drawn frame p95 21 ms (normal map) and 22 ms (bent), 0 API requests. A new walking pin draws its bands in p50 583 ms (max 658), with nothing covering the map; while bent, the new pin's bent view arrives in p50 838 ms (max 911) |
 | Smooth on a mid-range phone, iOS Safari included | **Not measured** (owner) |
-| Direction 4 reported for all five origins, with a decision | **Met, for the fold** (the issue's time-polar view): it fails everywhere, so transit's bent view stays hidden. Squash is measured separately above, not against Direction 4 |
+| Direction 4 reported for all five origins, with a decision | **Met, for the fold** (the issue's time-polar view): it fails everywhere, so transit's fold stayed hidden. Since W-03 transit bends with squash, measured above, not against Direction 4 |
 
 ### TfL journeys
 
@@ -607,8 +690,8 @@ Back-end B, real Streets tiles (`?geom=tiles`), live transit fields with the nea
 **The bent transit view's first scene is slow:** 2.06 s for Baker Street on desktop, with 30
 tiles (3.7 MB), 4.77M shaded vertices, 664 ms packing and 451 ms tessellation. Its band layer
 (224k refined vertices) takes 903 ms in the same worker. With tiles cold at the server too, the
-whole bend took 6.7 s, the morph included. Walking's first bend is 0.44 s plus the morph. The
-transit bent view is hidden, so this is for #6 to weigh.
+whole bend took 6.7 s, the morph included. Walking's first bend is 0.44 s plus the morph. (W-03
+measures squash's first scene: see its section.)
 
 ## Comprehension test for the fold (owner, before W-03)
 

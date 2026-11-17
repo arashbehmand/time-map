@@ -112,6 +112,18 @@ def test_warp_hidden_controls_stay_hidden():
     assert re.search(r"(^|\n)\[hidden\]\s*{\s*display:\s*none\s*!important;?\s*}", css)
 
 
+def test_warp_page_has_every_element_the_legend_writes_to():
+    # updateLegend runs on every drawn frame; an element it writes to that is missing from the
+    # page throws there. W-03 (#27) added the squash note and the outer-ring limit note.
+    html = (ROOT / "warp/index.html").read_text()
+    js = (ROOT / "warp/app.js").read_text()
+    body = js[js.index("function updateLegend()"):js.index("function updateCredits()")]
+    ids = set(re.findall(r'\$\("([a-z-]+)"\)', body))
+    assert {"gives-up", "bend-limit"} <= ids
+    for el in sorted(ids):
+        assert f'id="{el}"' in html, el
+
+
 def test_logo_is_plain_svg():
     svg = (ROOT / "icons/mapbox-logo.svg").read_text()
     assert svg.lstrip().startswith("<?xml") and "<svg" in svg

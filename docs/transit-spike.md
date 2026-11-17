@@ -467,7 +467,7 @@ rules). **Quick-look result: FAIL on the accepted lines; FAIL on the issue's lin
   says Morden Road tram stop (wd08), and New Addington where TfL says Addington Village (sa13).
   Both are Croydon tram stops; the trams in this build run as in build 2026-11-12 (706 weekday
   trips). The first quick look's worst was 10. The owner kept the build live (2026-11-17); the
-  tram groups have their own issue.
+  tram groups are followed up in #36.
 
 ## UK2GTFS on TfL's Underground files
 

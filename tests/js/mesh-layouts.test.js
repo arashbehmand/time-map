@@ -224,5 +224,35 @@ test("W-03: nothing to count is no share, never a pass at 0%", () => {
   assert.equal(rs.outside, null);
   assert.equal(rs.slowInside, null);
   assert.equal(rs.bearings, 0);
-  assert.deepEqual(LAYOUT_LIMITS, { overlap: 0.05, stretch: 4, slowInside: 0.025 });
+  assert.deepEqual(LAYOUT_LIMITS, { overlap: 0.05, stretch: 4, slowInside: 0.025, omitted: 0.02 });
+});
+
+test("W-03: the ring is read as drawn: segments cover the gaps by reach opens, a spike is thin", () => {
+  // Directions by reach move the ring's vertices apart in drawn bearing; the segments between
+  // them still cover every bearing, so no place goes unjudged.
+  const sq = squashLayout(field, 30, { spread: 0.5 });
+  const warp = createWarp(sq.spec);
+  const [ring] = bentRings(sq.ringSource, warp, [30]);
+  const rs = ringShares(warp, field, 30, ring);
+  assert.ok(rs.bearings > 0.99, `bearings ${rs.bearings}`);
+  assert.equal(rs.counts.unjudged, 0);
+
+  // A circle of radius 10 with one spike out to 20 at bearing 0. A place beside the spike's base
+  // at radius 15 is outside the ring; one in the spike is inside. (A largest-radius-per-bearing
+  // reading put both inside.) The mock warp draws every place where it is.
+  const n = 720, xy = [];
+  for (let b = 0; b <= n; b++) {
+    const a = (2 * Math.PI * b) / n, r = b % n === 0 ? 20 : 10;
+    xy.push(r * Math.cos(a), r * Math.sin(a));
+  }
+  const at = (deg, r) => [r * Math.cos((deg * Math.PI) / 180), r * Math.sin((deg * Math.PI) / 180)];
+  const places = [at(0, 15), at(0.5, 15), at(90, 5), at(90, 12)];
+  // Two rows, the second no data, since a field needs at least 2 × 2 nodes.
+  const f = createField({ origin, cell: 1, nx: places.length, ny: 2, x0: 0, y0: 0,
+                          minutes: new Float32Array([20, 20, 40, 20, NO_DATA, NO_DATA, NO_DATA, NO_DATA]) });
+  const mock = { target: (x) => places[Math.round(x)] };
+  const s = ringShares(mock, f, 30, { xy: Float32Array.from(xy) }, { step: 1 });
+  // Within 30: places 0, 1 and 3; 0 is in the spike (inside), 1 beside it and 3 past the circle
+  // (outside). Place 2 (40 minutes) is inside and slower.
+  assert.deepEqual([s.counts.judged, s.counts.outside, s.counts.inside, s.counts.slowInside], [3, 2, 2, 1]);
 });

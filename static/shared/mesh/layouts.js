@@ -175,7 +175,10 @@ export function cutPeaks(f, { minDrop = CUT_MIN_DROP } = {}) {
   return out;
 }
 
-export function squashReach(f, R, maxMinutes, { share = 0.99, cap = 3 } = {}) {
+// How far squash draws, at most, as a multiple of the chosen time (squashReach's cap).
+export const REACH_CAP = 3;
+
+export function squashReach(f, R, maxMinutes, { share = 0.99, cap = REACH_CAP } = {}) {
   const r = [];
   for (let k = 0; k < f.minutes.length; k++) {
     const t = f.minutes[k];
@@ -243,12 +246,12 @@ export function groundScale(f, inner = 15) {
 // `frame`: the radius the view is framed on: the reach for `scale: "minutes"`; with the ground
 // scale, the median radius at which places two thirds of maxMinutes away are drawn (the outer
 // rings sit far out: zoom out for them). `spread`: directions by reach (warp.js angularSpread).
-// `inner`: the ground scale's middle, drawn at its own minutes (15 by default).
-export function squashLayout(f, maxMinutes, { minSlope, spread = 0, scale = "minutes", inner = 15 } = {}) {
+// `inner`: the ground scale's middle, drawn at its own minutes (15 by default). `reachCap`: squashReach's cap.
+export function squashLayout(f, maxMinutes, { minSlope, spread = 0, scale = "minutes", inner = 15, reachCap = REACH_CAP } = {}) {
   const unsure = f.uncertain || null;
   const cut = cutPeaks(geometryField(f));
   let R = squashField(cut, minSlope > 0 ? { minSlope } : {});
-  let reach = squashReach(f, R, maxMinutes), frame = reach;
+  let reach = squashReach(f, R, maxMinutes, { cap: reachCap }), frame = reach;
   if (scale === "ground") {
     const g = groundScale(f, inner);
     const m = new Float32Array(R.minutes.length);

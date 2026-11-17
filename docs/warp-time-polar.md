@@ -439,6 +439,25 @@ by places reached):
   minutes, by reach, warm tiles, desktop), from the request to the whole scene installed, the
   fade and the morph left out. The maximum is reported too.
 
+**Added in the review round (2026-11-17), before re-measuring.** Reviewers found that the ring
+was read from its vertices only (directions by reach open gaps between them, and a ring that
+jumps outward made its largest radius count for the whole bearing), that places squash doesn't
+draw at all were in no check, and that the 60, 90 and 120 minute rings were offered unchecked.
+Fixed here before any new number:
+
+- **The ring is read as drawn** (`ringShares`): along a place's drawn bearing, it is inside if
+  the ring's segments cross that bearing an odd number of times beyond it. Every bearing a
+  segment sweeps is judged.
+- **C5 not drawn ≤ 2%:** the share of the places within the ring's minutes that squash draws
+  nowhere (past its reach). A layout can't pass by dropping places.
+- **Every offered ring is checked.** Public transport's time map is offered at an outer ring
+  (30, 45, 60, 90, 120 minutes) only if all 40 rows at that ring pass C1–C3 and C5. The others
+  keep the normal map, and the page says so.
+- **C3 goes back to 1%** if every row passes it there under the corrected reading; otherwise it
+  stays at the owner's 2.5%, and the rows over 1% are listed.
+- **C4 states** the share of the places within the ring's minutes drawn past it or not drawn,
+  and the share of the places drawn inside it that are slower.
+
 **Comprehension test for squash** (replaces the fold's protocol below once squash ships; the
 scoring is fixed now):
 

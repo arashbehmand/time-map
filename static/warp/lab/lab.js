@@ -662,7 +662,8 @@ async function directionChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spr
 
 // W-03's checks (#27) on squash, as public transport's time map draws it (rings spaced by places
 // reached), for every test origin, window and directions setting: C1 overlap, C2 median stretch,
-// C3 slower inside the ring (cut patches left out), against LAYOUT_LIMITS; plus what C4 states
+// C3 slower inside the ring (cut patches left out), C5 places not drawn, against LAYOUT_LIMITS;
+// `ring` is the outer ring checked (45 by default; each offered ring is checked); plus what C4 states
 // (the share drawn past the ring) and what is reported only. `settings` is a list of squash
 // options to try (minSlope in minutes per metre, inner); each field is fetched once for all of
 // them. The fold's figures come with the first setting, for reference. A row with nothing to
@@ -707,14 +708,16 @@ async function squashChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spread
             overlap: counted && c.overlap <= LAYOUT_LIMITS.overlap,
             stretch: counted && c.stretch !== null && c.stretch <= LAYOUT_LIMITS.stretch,
             slowInside: counted && c.slowInsideExCut !== null && c.slowInsideExCut <= LAYOUT_LIMITS.slowInside,
+            omitted: counted && c.omitted !== null && c.omitted <= LAYOUT_LIMITS.omitted,
           };
           results.push({
             setting: si, origin: o.id, window: w, spread: sp, sources: json.sources, notes: json.notes,
             overlap: r3(c.overlap), stretch: r3(c.stretch), slowInside: r3(c.slowInsideExCut),
-            slowInsideWithCut: r3(c.slowInside), outside: r3(c.outside), omitted: r3(c.omitted),
+            slowInsideWithCut: r3(c.slowInside), slowInsideAt1pc: c.slowInsideExCut !== null && c.slowInsideExCut <= 0.01,
+            outside: r3(c.outside), pastOrOff: r3(c.pastOrOff), unjudged: r3(c.unjudged), omitted: r3(c.omitted),
             bearings: r3(c.bearings), offFirstView: r3(n ? past / n : null), cells: c.cells, counts: c.counts,
             reach: r3(sq.reach), frame: r3(sq.frame), buildMs, fold: foldRef,
-            pass, passAll: pass.overlap && pass.stretch && pass.slowInside,
+            pass, passAll: pass.overlap && pass.stretch && pass.slowInside && pass.omitted,
           });
           if (si === 0 && sp === spreads[0] && w === windows[0]) {
             for (const T of rings) {
@@ -734,6 +737,7 @@ async function squashChecks({ windows = ["wd08", "wd13", "wd19", "sa13"], spread
     return { setting: si, options: set, rows: rs.length, passAll: rs.length > 0 && rs.every((r) => r.passAll),
              byReachPasses: rs.filter((r) => r.spread > 0).every((r) => r.passAll),
              compassPasses: rs.filter((r) => r.spread === 0).every((r) => r.passAll),
+             slowInsideAt1pcEverywhere: rs.length > 0 && rs.every((r) => r.slowInsideAt1pc),
              failing: rs.filter((r) => !r.passAll).map((r) => `${r.origin} ${r.window} ${r.spread}: ${Object.keys(r.pass).filter((k) => !r.pass[k]).join(",")}`) };
   });
   const out = { kind: "squash-checks", at: new Date().toISOString(), ring, limits: LAYOUT_LIMITS,

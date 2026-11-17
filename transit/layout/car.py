@@ -12,10 +12,12 @@ implied one way) says. Every stretch between two OSM nodes is a directed edge.
 **Speeds.** Traffic4cast's edges (u, v: OSM node ids) have no geometry, so they land on our roads by
 node id first: where both u and v are on our main roads, the edge's speed goes to every edge of the
 shortest path from u to v along them, if that path is at most CAR_PATH_RATIO times the straight
-distance (the "before" share). Then, for our edges still without one: the straight chord of a
+distance (the "before" share). Traffic4cast's synthetic node ids (≥ 2⁴⁰, on no map) sit inside roads,
+motorways most of all: each chain real → synthetic → … → real counts as one edge between its real
+ends first (contract_chains). Then, for our edges still without one: the straight chord of a
 Traffic4cast edge whose ends the clip still has, within CAR_MATCH_M of the edge's middle and within
 CAR_MATCH_DEG of its direction, nearest first (the "after" share). An edge claimed by several gets
-their median. Edges with a node id the clip no longer has, or a synthetic one (≥ 2⁴⁰), are counted
+their median. Edges with a node id the clip no longer has, or a synthetic one on its own, are counted
 and not used. The rest of our edges take their class's median measured speed, and are marked
 filled.
 
@@ -25,7 +27,9 @@ makes A–B a candidate. Within the road stretches owned by A or B, joined up, t
 drive from A's anchor (its own road point nearest it) to B's, at the edges' speeds, each way that
 exists; the mean of the two (or the one), floored at 0.5 min; the fastest stretch when there are
 several. A link with under CAR_FILL_MIN_SHARE of its road length measured is dropped and listed,
-as is one over the build's time limit. One link per pair of nodes. Cutting the roads finer changes
+as is one over the build's time limit, and one whose two ends are both outside Greater London (the
+M25 and its spurs at the mesh's edge, where its fast springs crush cells far apart into slivers). One
+link per pair of nodes. Cutting the roads finer changes
 which piece ends a boundary falls between, not which nodes are joined.
 
 **Thames crossings.** Every bridge or tunnel of a motor road (any class) that crosses the River
@@ -274,6 +278,40 @@ def _dijkstra(adj, src: int, dst: int, limit: float, allowed=None):
 
 
 # ── speeds on our roads ─────────────────────────────────────────────
+def contract_chains(u: np.ndarray, v: np.ndarray, kph: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Traffic4cast's synthetic node ids (≥ 2⁴⁰), which no map has, are the nodes it added where a loop
+    counter had to be attached to its road graph (its README; the other node ids are OSM's). A counter
+    node splits one edge in two, so most have one edge in and one out between two real OSM nodes, and
+    the roads with counters (motorways most of all, Highways England's) are largely under them. Each directed chain real → synthetic → … → real becomes one edge between its
+    two real ends, at the harmonic mean of its edges' speeds (each edge's length is unknown, so they
+    count alike). A chain that branches, loops or ends inside the synthetic nodes is left out.
+    Returns (u, v, kph) of the chains."""
+    S = settings.T4C_SYNTHETIC_ID
+    out = defaultdict(list)
+    for a, b, k in zip(u.tolist(), v.tolist(), kph.tolist()):
+        out[a].append((b, k))
+    cu, cv, ck = [], [], []
+    for a in sorted(out):
+        if a >= S:
+            continue
+        for b, k in out[a]:
+            if b < S:
+                continue
+            speeds, cur, seen = [k], b, {b}
+            while cur >= S:
+                nxt = [(x, sk) for x, sk in out.get(cur, []) if x not in seen and x != a]
+                if len(nxt) != 1:
+                    break
+                cur, sk = nxt[0]
+                speeds.append(sk)
+                seen.add(cur)
+            if cur < S and cur != a and all(x > 0 for x in speeds):
+                cu.append(a)
+                cv.append(cur)
+                ck.append(len(speeds) / sum(1.0 / x for x in speeds))
+    return np.array(cu, dtype=np.int64), np.array(cv, dtype=np.int64), np.array(ck, dtype=np.float64)
+
+
 def place_speeds(g: Graph, speeds: dict, t4c_xy: dict[int, tuple[float, float]]) -> dict:
     """Each of our directed edges' 13:00 speed (km/h) and where it came from (see the module
     docstring). `speeds` = {"u", "v", "median_kph"} arrays; t4c_xy = lon/lat of Traffic4cast node ids
@@ -286,10 +324,19 @@ def place_speeds(g: Graph, speeds: dict, t4c_xy: dict[int, tuple[float, float]])
     for e, (a, b, ln) in enumerate(zip(g.ea.tolist(), g.eb.tolist(), g.length.tolist())):
         adj[a].append((b, ln, e))
     u, v, kph = (np.asarray(speeds[k]) for k in ("u", "v", "median_kph"))
+    u, v = u.astype(np.int64), v.astype(np.int64)
     synthetic = (u >= settings.T4C_SYNTHETIC_ID) | (v >= settings.T4C_SYNTHETIC_ID)
     known = np.array([(int(a) in t4c_xy) and (int(b) in t4c_xy) for a, b in zip(u.tolist(), v.tolist())], dtype=bool)
     counts = {"t4c_edges": int(len(u)), "t4c_synthetic": int(synthetic.sum()),
               "t4c_vanished": int((~synthetic & ~known).sum()), "t4c_on_our_roads": 0, "t4c_path_too_long": 0}
+    # Synthetic chains contracted to edges between real nodes, matched like any other edge.
+    cu, cv, ck = contract_chains(u, v, kph)
+    counts["t4c_chains"] = int(len(cu))
+    n0 = len(u)
+    u, v, kph = np.concatenate([u, cu]), np.concatenate([v, cv]), np.concatenate([np.asarray(kph, float), ck])
+    synthetic = np.concatenate([synthetic, np.zeros(len(cu), dtype=bool)])
+    known = np.concatenate([known, np.array([(int(a) in t4c_xy) and (int(b) in t4c_xy) for a, b in zip(cu, cv)],
+                                            dtype=bool)])
     on_ids = {}
     for k, (a, b) in enumerate(zip(u.tolist(), v.tolist())):
         if synthetic[k]:
@@ -303,6 +350,8 @@ def place_speeds(g: Graph, speeds: dict, t4c_xy: dict[int, tuple[float, float]])
             counts["t4c_path_too_long"] += 1
             continue
         counts["t4c_on_our_roads"] += 1
+        if k >= n0:
+            counts["t4c_chains_on_our_roads"] = counts.get("t4c_chains_on_our_roads", 0) + 1
         on_ids[k] = path
         for e in path:
             claims[e].append(float(kph[k]))
@@ -443,8 +492,11 @@ def _minutes(length_m, kph):
     return length_m / 1000.0 / kph * 60.0
 
 
-def car_links(g: Graph, sp: dict, mesh: Mesh, max_time: float, labels: list[str] | None = None) -> dict:
-    """The links (see the module docstring)."""
+def car_links(g: Graph, sp: dict, mesh: Mesh, max_time: float, labels: list[str] | None = None,
+              inside: np.ndarray | None = None) -> dict:
+    """The links (see the module docstring). With `inside` (per mesh node: in Greater London), a link
+    whose two ends are both outside is dropped: there, at the mesh's edge where cells are far apart,
+    the M25's fast springs crush a triangle to a sliver (590:1 on build 2026-11-12)."""
     pc = cut(g)
     pc.owner = owners(pc.xy, mesh)
     speed = sp["speed"][pc.edge]
@@ -529,6 +581,9 @@ def car_links(g: Graph, sp: dict, mesh: Mesh, max_time: float, labels: list[str]
             continue
         if minutes > max_time:
             dropped.append({**rec, "why": f"{minutes:.0f} min, over the build's {max_time}-minute limit"})
+            continue
+        if inside is not None and not (inside[A] or inside[B]):
+            dropped.append({**rec, "why": "both ends outside Greater London"})
             continue
         links.append(rec)
     twins = sorted({x for lk in links for x in (lk["a"], lk["b"])})
@@ -653,7 +708,11 @@ def build(nodes, ways, t4c_xy, speeds, mesh: Mesh, max_time: float, labels: list
     log(f"car: measured speed on {cov['all']['before']:.0%} of main-road length by node id, "
         f"{cov['all']['after']:.0%} with the geometric match"
         + (f" ({cov['inside_the_data_box']['after']:.0%} inside the data's box)" if box_xy else ""))
-    res = car_links(g, sp, mesh, max_time, labels)
+    inside = None
+    if region is not None:
+        import shapely
+        inside = shapely.contains(region, shapely.points(mesh.P))
+    res = car_links(g, sp, mesh, max_time, labels, inside)
     log(f"car: {len(res['links'])} links on {len(res['twins'])} nodes, {len(res['dropped'])} dropped")
     bridges = thames_crossings(nodes, ways, region, g, res) if region is not None else []
     roads = [{"id": w.id, "class": w.tags.get("highway"), "label": label_of(w.tags),

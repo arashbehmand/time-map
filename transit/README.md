@@ -557,20 +557,25 @@ non-commercially, with the permissions collected.
 - **Speeds on them, by node id first:** a Traffic4cast edge is simplified between junctions, so
   where both its ends are on our main roads its speed goes to every edge of the shortest path
   between them along those roads, if that is at most 1.5× the straight distance ("before"
-  matching). Then, for edges still without one, the straight chord of a Traffic4cast edge whose ends
-  the clip still has (`osmium getid`), within 20 m and 30° ("after"). Edges with a synthetic id or a
-  node OpenStreetMap no longer has are counted and not used. The rest take their class's median
-  measured speed.
+  matching). Traffic4cast's synthetic node ids (≥ 2⁴⁰, on no map) are the nodes it added where a
+  loop counter is attached, splitting one road edge in two; the roads with counters, motorways most
+  of all, are largely under them. Each chain real → synthetic → … → real counts as one edge between
+  its real ends, at the harmonic mean of its speeds, and lands like any other. Then, for edges still
+  without a speed, the straight chord of a Traffic4cast edge whose ends the clip still has
+  (`osmium getid`), within 20 m and 30° ("after"). Edges with a node OpenStreetMap no longer has are
+  counted and not used. The rest take their class's median measured speed.
 - **Coverage on build 2026-11-12:** Traffic4cast's London is a fixed box, longitude −0.378 to
-  0.075 (about Hounslow to Woolwich): roads east and west of it have no speed. Inside it 85% of
-  the main roads' length has a measured speed; motorways are mostly unmatched (few of their 2019
-  node ids are still in OpenStreetMap).
+  0.075 (about Hounslow to Woolwich): roads east and west of it have no speed. Inside it 93% of
+  the main roads' length has a measured speed, motorways 88% (7% before the synthetic chains were
+  used).
 - **Links:** roads are cut into pieces of at most 20 m; each piece end belongs to its nearest
   station or cell (never a guard node). A piece whose ends belong to different nodes A and B makes
   A–B a candidate; within the road stretches owned by A or B the link's time is the drive from A's
   anchor (its own road point nearest it) to B's, each way that exists, averaged, the fastest stretch
-  when there are several, floored at 0.5 min. A link with under half its road measured is dropped
-  and listed. Cutting finer changes nothing.
+  with at least half its road measured when there are several, floored at 0.5 min. A link with
+  under half its road measured is dropped and listed, and so is one whose two ends are both outside
+  Greater London: there, at the mesh's edge where cells are far apart, the M25's fast springs crushed
+  a triangle to 590:1. Cutting finer changes nothing.
 - **Thames crossings:** every bridge or tunnel of a motor road that crosses the River Thames inside
   Greater London (`london_region.geojson`, with the tidal river the ONS boundary leaves out filled
   back in), with the link that crosses it, or why there is none (not a main road, closed to cars,
@@ -619,9 +624,10 @@ are checked at every position; train ↔ car always passes through one of them (
 **Very thin triangles.** The page marks, under the slider and in the readout, every solved position
 of the combination shown where some triangle is stretched past 50:1 (`THIN_MARK` in
 `static/whole-city/carry.js`, from each position's `stretch_max`). The slider keeps every position.
-On build 2026-11-12 that is car with train and tube at ρ = 67 (73:1) and ρ = 100 (140:1): three
-cells at the mesh's south edge, outside Greater London. Train alone stays under 16:1 and car alone
-under 21:1, and at most 4.3% of any combination's drawn area is past 4:1.
+On build 2026-11-12 no position qualifies: the thinnest triangle is 15:1 with train alone, 40:1 with
+car and 34:1 with car and train, and at most 6.3% of any combination's drawn area is past 4:1.
+(Before car links with both ends outside Greater London were left out, the M25's springs crushed
+three cells at the mesh's south edge to 590:1.)
 
 **Spot check.** The station pair at least 3 km apart with the biggest gain by car (its table time
 minus the car's door-to-door time along the links, overhead included), and any `[[car_spot]]` row

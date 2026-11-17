@@ -728,7 +728,8 @@ if (index) {
   $("modes-note").textContent = "Car: typical weekday speeds from 13:00 to 14:00 (HERE Traffic4cast, 2019 to " +
     `2020), with ${index.overhead_min} minutes once a trip for parking and getting to the car.` +
     (box ? " The speeds cover London from about Hounslow to Woolwich only, so Car reshapes that band" +
-      (cov.motorway != null && cov.motorway < 0.5 ? ", and few motorways have a speed." : ".") : "");
+      (cov.motorway_inside_the_data_box != null && cov.motorway_inside_the_data_box < 0.5
+        ? ", and few motorways have a speed." : ".") : "");
   $("modes-note").hidden = false;
   $("modes-report-link").href = `/api/whole-city/${win}/modes/report.md`;
   $("modes-report-item").hidden = false;

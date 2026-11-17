@@ -149,7 +149,8 @@ def build(*, b, pairs, mesh, links, frames, modes, stress_scale, code, page_gzip
              "roads": roads_header, "sizes": sizes, "report": True, "view_box": view_box(modes, mesh),
              "data_box_lonlat": modes["car_report"].get("data_box_lonlat"),
              "coverage": {k: modes["car_report"]["coverage"][k]["after"]
-                          for k in ("all", "motorway", "inside_the_data_box") if k in modes["car_report"]["coverage"]}}
+                          for k in ("all", "motorway", "inside_the_data_box", "motorway_inside_the_data_box")
+                          if k in modes["car_report"]["coverage"]}}
     rep = report_json(b, pairs, mesh, links, modes, sizes, page_gzip, land_dropped, code)
     files["modes.json"] = json.dumps(index, separators=(",", ":"), ensure_ascii=False).encode()
     files["report.json"] = (json.dumps(rep, indent=1, ensure_ascii=False) + "\n").encode()
@@ -277,7 +278,8 @@ def report_md(rep: dict) -> str:
              + f". A link needs at least {_pct(cr['links']['fill_min_share'])} of its road measured; the rest of its road "
              "takes its class's median measured speed."
              + (" Motorways are mostly unmatched: few of their 2019 node ids are still in OpenStreetMap."
-                if cov.get("motorway", {}).get("km") and cov["motorway"]["after"] < 0.5 else ""))
+                if cov.get("motorway_inside_the_data_box", {}).get("km")
+                and cov["motorway_inside_the_data_box"]["after"] < 0.5 else ""))
     br = cr["bridges"]
     linked = [x for x in br if x["status"] == "linked"]
     L.append(f"- **Thames crossings in Greater London:** {len(linked)} of {len(br)} bridges and tunnels of motor "
@@ -379,7 +381,10 @@ def report_md(rep: dict) -> str:
     m = cr["matching"]
     L += ["", f"Traffic4cast edges with a 13:00–14:00 speed: {m['t4c_edges']:,}; {m['t4c_synthetic']:,} with a synthetic "
           f"node id and {m['t4c_vanished']:,} with a node OpenStreetMap no longer has were not used. "
-          f"{m['t4c_on_our_roads']:,} landed on our main roads by node id (the shortest path between their ends along "
+          f"Traffic4cast's synthetic node ids sit inside roads, motorways most of all: {m.get('t4c_chains', 0):,} "
+          f"chains real → synthetic → … → real were contracted to one edge each, at the harmonic mean of their "
+          f"speeds, and {m.get('t4c_chains_on_our_roads', 0):,} of them landed on our roads. "
+          f"{m['t4c_on_our_roads']:,} edges in all landed on our main roads by node id (the shortest path between their ends along "
           f"them at most {m['path_ratio']}× the straight distance; {m['t4c_path_too_long']:,} did not); the rest lent "
           f"their straight chord to pieces within {m['match_m']:g} m and {m['match_deg']:g}°. Filled speeds (each "
           "class's median measured speed): " + ", ".join(f"{k} {v} km/h" for k, v in m["fill_kph"].items() if v)

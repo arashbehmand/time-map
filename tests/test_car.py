@@ -251,3 +251,44 @@ def test_the_closed_tidal_thames_is_inside_greater_london():
     assert region.contains(westminster_bridge)
     assert math.isfinite(region.area) and region.area > 1.5e9                    # about 1,570 km²
     assert TRUNK_ID0 != PRIMARY_ID0
+
+
+def test_synthetic_chains_become_edges_between_their_real_ends():
+    S = settings.T4C_SYNTHETIC_ID
+    u = np.array([1, S + 1, S + 1, 2, S + 2, 3, S + 3, 4], dtype=np.int64)
+    v = np.array([S + 1, 2, 5, S + 2, 3, S + 3, S + 4, S + 3], dtype=np.int64)
+    kph = np.array([60.0, 30.0, 10.0, 40.0, 40.0, 20.0, 20.0, 20.0])
+    cu, cv, ck = carmod.contract_chains(u, v, kph)
+    got = {(int(a), int(b)): round(float(k), 6) for a, b, k in zip(cu, cv, ck)}
+    # 1 → S+1 branches (to 2 and to 5): left out. 2 → S+2 → 3 is one edge at the harmonic mean.
+    # 3 → S+3 → S+4 ends inside the synthetic ids: left out.
+    assert got == {(2, 3): 40.0}
+
+
+def test_motorways_under_synthetic_ids_get_their_speed():
+    """A motorway whose middle nodes Traffic4cast knows only by synthetic ids: the chain between its
+    two real ends lends its speed to the whole stretch of our road between them."""
+    nodes, ways, speeds, t4c_xy = car_inputs()
+    trunk = ways[0].nodes
+    S = settings.T4C_SYNTHETIC_ID
+    a, b = trunk[0], trunk[4]
+    one = {"u": np.array([a, S + 7]), "v": np.array([S + 7, b]), "median_kph": np.array([90.0, 90.0])}
+    g = carmod.road_graph(nodes, ways)
+    sp = carmod.place_speeds(g, one, t4c_xy)
+    assert sp["counts"]["t4c_chains"] == 1 and sp["counts"]["t4c_chains_on_our_roads"] == 1
+    on = [e for e in range(len(g.ea)) if sp["source"][e] == "id"]
+    assert len(on) == 4 and np.allclose(sp["speed"][on], 90.0)
+
+
+def test_links_with_both_ends_outside_greater_london_are_dropped():
+    nodes, ways, speeds, t4c_xy = car_inputs()
+    mesh = _grid_mesh()
+    g = carmod.road_graph(nodes, ways)
+    sp = carmod.place_speeds(g, speeds, t4c_xy)
+    everything = carmod.car_links(g, sp, mesh, 180)
+    inside = np.ones(mesh.n, dtype=bool)
+    inside[[24, 25, 26]] = False                       # three trunk nodes on row 4 "outside"
+    res = carmod.car_links(g, sp, mesh, 180, None, inside)
+    gone = {(lk["a"], lk["b"]) for lk in everything["links"]} - {(lk["a"], lk["b"]) for lk in res["links"]}
+    assert gone == {(24, 25), (25, 26)}                # (26, 27) keeps one end inside
+    assert sum(d["why"] == "both ends outside Greater London" for d in res["dropped"]) == 2

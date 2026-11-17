@@ -619,6 +619,8 @@ fetch more tiles.
   checked. The median passes the gate as written; the issue's plain "under 2 s" does not hold
   for every first bend. The earlier "one run of eleven returned no data" was not reproduced in
   these 21 runs and was not explained.
+- **The renderer after the cap change**, Heathrow (the only origin whose reach moved), back-end
+  B, real tiles: G1 0.0012 px, G2 pass, G3 0.06 px, G4 99.94–100% within 1 px, G5 pass.
 - **Looked at, after these changes:** the opening example normal and Time map (unchanged);
   King's Cross, Baker Street and Heathrow by public transport, Time map, no flags (squash, the new
   line; Heathrow's first view as before, the smeared streaks east of the airport still there);

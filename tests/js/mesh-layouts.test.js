@@ -224,6 +224,8 @@ test("W-03: nothing to count is no share, never a pass at 0%", () => {
   assert.equal(rs.outside, null);
   assert.equal(rs.slowInside, null);
   assert.equal(rs.bearings, 0);
+  // The shipped limits. slowInside was fixed at 0.01 before measuring and relaxed to 0.025 by
+  // the owner after it (diagnostics.js says so); omitted was added before the review re-run.
   assert.deepEqual(LAYOUT_LIMITS, { overlap: 0.05, stretch: 4, slowInside: 0.025, omitted: 0.02 });
 });
 

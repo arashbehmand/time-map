@@ -130,7 +130,7 @@ input[type="text"], input[type="search"], select {
 
 /* Minutes as a colour bar, the same in every tool: one segment per band, a label under its
    right end. */
-.minute-bar { display: flex; height: 10px; border-radius: 3px; overflow: visible; margin: 2px 0 14px; }
+.minute-bar { display: flex; height: 10px; flex-shrink: 0; border-radius: 3px; overflow: visible; margin: 2px 0 14px; }  /* a full panel scrolls; the bar never shrinks to nothing */
 .minute-bar span { flex: 1; position: relative; }
 .minute-bar span[data-label]::after {
   content: attr(data-label); position: absolute; right: 0; top: 11px; font-size: 11px;

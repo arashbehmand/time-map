@@ -3177,5 +3177,2645 @@
     "pass": true
    }
   }
+ },
+ "w03": {
+  "note": "W-03 (#27), measured 2026-11-17: squash for public transport. Checks fixed 2026-11-16 before measuring (commit 05dd990); C3 relaxed from 1% to 2.5% by the owner on 2026-11-17 after measuring. layoutChecks/ringShares at T = 45, smoothed fields, build 2026-11-12, ground ring spacing. Shares of sampled places (every second node).",
+  "limits": {
+   "overlap": 0.05,
+   "stretch": 4,
+   "slowInside_fixed": 0.01,
+   "slowInside_relaxed": 0.025
+  },
+  "baseline_3_min_per_km": {
+   "summary": [
+    {
+     "setting": 0,
+     "options": {},
+     "rows": 40,
+     "passAll": false,
+     "byReachPasses": false,
+     "compassPasses": false,
+     "failing": [
+      "heathrow wd08 0.5: stretch,slowInside",
+      "heathrow wd08 0: slowInside",
+      "heathrow wd13 0.5: stretch,slowInside",
+      "heathrow wd19 0.5: stretch,slowInside",
+      "heathrow sa13 0.5: stretch,slowInside",
+      "heathrow sa13 0: slowInside",
+      "croydon wd08 0: stretch",
+      "croydon wd19 0: stretch"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd08",
+     "spread": 0.5,
+     "overlap": 0.014,
+     "stretch": 3.657,
+     "slowInside": 0.005,
+     "slowInsideWithCut": 0.01,
+     "outside": 0.364,
+     "omitted": 0.01,
+     "bearings": 0.89,
+     "offFirstView": 0.67,
+     "reach": 252.526,
+     "frame": 74.582,
+     "buildMs": 164,
+     "fold": {
+      "overlap": 0.564,
+      "stretch": 5.504
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd08",
+     "spread": 0,
+     "overlap": 0.016,
+     "stretch": 3.554,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.008,
+     "outside": 0.361,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.67,
+     "reach": 252.526,
+     "frame": 74.582,
+     "buildMs": 126,
+     "fold": {
+      "overlap": 0.546,
+      "stretch": 5.726
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd13",
+     "spread": 0.5,
+     "overlap": 0.014,
+     "stretch": 3.648,
+     "slowInside": 0.005,
+     "slowInsideWithCut": 0.011,
+     "outside": 0.348,
+     "omitted": 0.009,
+     "bearings": 0.868,
+     "offFirstView": 0.664,
+     "reach": 250.276,
+     "frame": 75.108,
+     "buildMs": 123,
+     "fold": {
+      "overlap": 0.558,
+      "stretch": 5.58
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd13",
+     "spread": 0,
+     "overlap": 0.017,
+     "stretch": 3.518,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.008,
+     "outside": 0.353,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.664,
+     "reach": 250.276,
+     "frame": 75.108,
+     "buildMs": 121,
+     "fold": {
+      "overlap": 0.539,
+      "stretch": 5.785
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd19",
+     "spread": 0.5,
+     "overlap": 0.014,
+     "stretch": 3.663,
+     "slowInside": 0.005,
+     "slowInsideWithCut": 0.009,
+     "outside": 0.349,
+     "omitted": 0.009,
+     "bearings": 0.893,
+     "offFirstView": 0.663,
+     "reach": 251.251,
+     "frame": 74.551,
+     "buildMs": 119,
+     "fold": {
+      "overlap": 0.556,
+      "stretch": 5.616
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd19",
+     "spread": 0,
+     "overlap": 0.017,
+     "stretch": 3.606,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.007,
+     "outside": 0.349,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.663,
+     "reach": 251.251,
+     "frame": 74.551,
+     "buildMs": 116,
+     "fold": {
+      "overlap": 0.536,
+      "stretch": 5.808
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "sa13",
+     "spread": 0.5,
+     "overlap": 0.015,
+     "stretch": 3.635,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.009,
+     "outside": 0.34,
+     "omitted": 0.009,
+     "bearings": 0.872,
+     "offFirstView": 0.655,
+     "reach": 248.006,
+     "frame": 74.697,
+     "buildMs": 133,
+     "fold": {
+      "overlap": 0.557,
+      "stretch": 5.62
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "sa13",
+     "spread": 0,
+     "overlap": 0.018,
+     "stretch": 3.521,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.008,
+     "outside": 0.344,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.655,
+     "reach": 248.006,
+     "frame": 74.697,
+     "buildMs": 119,
+     "fold": {
+      "overlap": 0.539,
+      "stretch": 5.785
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd08",
+     "spread": 0.5,
+     "overlap": 0.013,
+     "stretch": 3.821,
+     "slowInside": 0.007,
+     "slowInsideWithCut": 0.01,
+     "outside": 0.201,
+     "omitted": 0.01,
+     "bearings": 0.806,
+     "offFirstView": 0.572,
+     "reach": 208.839,
+     "frame": 73.378,
+     "buildMs": 128,
+     "fold": {
+      "overlap": 0.485,
+      "stretch": 4.579
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd08",
+     "spread": 0,
+     "overlap": 0.015,
+     "stretch": 3.595,
+     "slowInside": 0.002,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.206,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.572,
+     "reach": 208.839,
+     "frame": 73.378,
+     "buildMs": 117,
+     "fold": {
+      "overlap": 0.406,
+      "stretch": 5.93
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd13",
+     "spread": 0.5,
+     "overlap": 0.012,
+     "stretch": 3.748,
+     "slowInside": 0.007,
+     "slowInsideWithCut": 0.009,
+     "outside": 0.182,
+     "omitted": 0.011,
+     "bearings": 0.797,
+     "offFirstView": 0.52,
+     "reach": 207.6,
+     "frame": 81.338,
+     "buildMs": 129,
+     "fold": {
+      "overlap": 0.495,
+      "stretch": 4.728
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd13",
+     "spread": 0,
+     "overlap": 0.015,
+     "stretch": 3.449,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.191,
+     "omitted": 0.011,
+     "bearings": 1,
+     "offFirstView": 0.52,
+     "reach": 207.6,
+     "frame": 81.338,
+     "buildMs": 134,
+     "fold": {
+      "overlap": 0.416,
+      "stretch": 6.12
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd19",
+     "spread": 0.5,
+     "overlap": 0.015,
+     "stretch": 3.761,
+     "slowInside": 0.009,
+     "slowInsideWithCut": 0.013,
+     "outside": 0.188,
+     "omitted": 0.01,
+     "bearings": 0.81,
+     "offFirstView": 0.568,
+     "reach": 210.82,
+     "frame": 82.58,
+     "buildMs": 120,
+     "fold": {
+      "overlap": 0.515,
+      "stretch": 4.748
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd19",
+     "spread": 0,
+     "overlap": 0.017,
+     "stretch": 3.449,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.008,
+     "outside": 0.192,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.568,
+     "reach": 210.82,
+     "frame": 82.58,
+     "buildMs": 117,
+     "fold": {
+      "overlap": 0.442,
+      "stretch": 5.97
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "sa13",
+     "spread": 0.5,
+     "overlap": 0.012,
+     "stretch": 3.825,
+     "slowInside": 0.007,
+     "slowInsideWithCut": 0.009,
+     "outside": 0.198,
+     "omitted": 0.01,
+     "bearings": 0.794,
+     "offFirstView": 0.507,
+     "reach": 204.261,
+     "frame": 79.774,
+     "buildMs": 128,
+     "fold": {
+      "overlap": 0.491,
+      "stretch": 4.636
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "sa13",
+     "spread": 0,
+     "overlap": 0.014,
+     "stretch": 3.491,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.007,
+     "outside": 0.208,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.507,
+     "reach": 204.261,
+     "frame": 79.774,
+     "buildMs": 130,
+     "fold": {
+      "overlap": 0.404,
+      "stretch": 6.189
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd08",
+     "spread": 0.5,
+     "overlap": 0.014,
+     "stretch": 3.532,
+     "slowInside": 0.006,
+     "slowInsideWithCut": 0.009,
+     "outside": 0.293,
+     "omitted": 0.009,
+     "bearings": 0.858,
+     "offFirstView": 0.548,
+     "reach": 278.614,
+     "frame": 103.259,
+     "buildMs": 126,
+     "fold": {
+      "overlap": 0.642,
+      "stretch": 5.678
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd08",
+     "spread": 0,
+     "overlap": 0.015,
+     "stretch": 3.329,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.006,
+     "outside": 0.297,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.548,
+     "reach": 278.614,
+     "frame": 103.259,
+     "buildMs": 120,
+     "fold": {
+      "overlap": 0.599,
+      "stretch": 6.103
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd13",
+     "spread": 0.5,
+     "overlap": 0.013,
+     "stretch": 3.556,
+     "slowInside": 0.006,
+     "slowInsideWithCut": 0.009,
+     "outside": 0.291,
+     "omitted": 0.01,
+     "bearings": 0.858,
+     "offFirstView": 0.541,
+     "reach": 275.286,
+     "frame": 104.118,
+     "buildMs": 126,
+     "fold": {
+      "overlap": 0.63,
+      "stretch": 5.581
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd13",
+     "spread": 0,
+     "overlap": 0.014,
+     "stretch": 3.333,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.297,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.541,
+     "reach": 275.286,
+     "frame": 104.118,
+     "buildMs": 129,
+     "fold": {
+      "overlap": 0.587,
+      "stretch": 6.059
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd19",
+     "spread": 0.5,
+     "overlap": 0.015,
+     "stretch": 3.579,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.266,
+     "omitted": 0.009,
+     "bearings": 0.853,
+     "offFirstView": 0.538,
+     "reach": 270.916,
+     "frame": 102.379,
+     "buildMs": 127,
+     "fold": {
+      "overlap": 0.625,
+      "stretch": 5.492
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd19",
+     "spread": 0,
+     "overlap": 0.015,
+     "stretch": 3.35,
+     "slowInside": 0.002,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.275,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.538,
+     "reach": 270.916,
+     "frame": 102.379,
+     "buildMs": 118,
+     "fold": {
+      "overlap": 0.584,
+      "stretch": 6.016
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "sa13",
+     "spread": 0.5,
+     "overlap": 0.013,
+     "stretch": 3.626,
+     "slowInside": 0.005,
+     "slowInsideWithCut": 0.007,
+     "outside": 0.281,
+     "omitted": 0.009,
+     "bearings": 0.851,
+     "offFirstView": 0.524,
+     "reach": 270.168,
+     "frame": 106.012,
+     "buildMs": 134,
+     "fold": {
+      "overlap": 0.624,
+      "stretch": 5.477
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "sa13",
+     "spread": 0,
+     "overlap": 0.013,
+     "stretch": 3.34,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.004,
+     "outside": 0.292,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.524,
+     "reach": 270.168,
+     "frame": 106.012,
+     "buildMs": 118,
+     "fold": {
+      "overlap": 0.582,
+      "stretch": 5.995
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd08",
+     "spread": 0.5,
+     "overlap": 0.007,
+     "stretch": 4.69,
+     "slowInside": 0.041,
+     "slowInsideWithCut": 0.06,
+     "outside": 0.733,
+     "omitted": 0.009,
+     "bearings": 0.776,
+     "offFirstView": 0.497,
+     "reach": 697.617,
+     "frame": 240.462,
+     "buildMs": 122,
+     "fold": {
+      "overlap": 0.606,
+      "stretch": 5.316
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": false,
+      "slowInside": false
+     },
+     "passAll": false
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd08",
+     "spread": 0,
+     "overlap": 0.012,
+     "stretch": 3.88,
+     "slowInside": 0.014,
+     "slowInsideWithCut": 0.026,
+     "outside": 0.741,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.497,
+     "reach": 697.617,
+     "frame": 240.462,
+     "buildMs": 130,
+     "fold": {
+      "overlap": 0.507,
+      "stretch": 7.33
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": false
+     },
+     "passAll": false
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd13",
+     "spread": 0.5,
+     "overlap": 0.01,
+     "stretch": 4.391,
+     "slowInside": 0.047,
+     "slowInsideWithCut": 0.066,
+     "outside": 0.702,
+     "omitted": 0.011,
+     "bearings": 0.788,
+     "offFirstView": 0.513,
+     "reach": 678.508,
+     "frame": 226.47,
+     "buildMs": 129,
+     "fold": {
+      "overlap": 0.598,
+      "stretch": 5.405
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": false,
+      "slowInside": false
+     },
+     "passAll": false
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd13",
+     "spread": 0,
+     "overlap": 0.016,
+     "stretch": 3.852,
+     "slowInside": 0.009,
+     "slowInsideWithCut": 0.021,
+     "outside": 0.718,
+     "omitted": 0.011,
+     "bearings": 1,
+     "offFirstView": 0.513,
+     "reach": 678.508,
+     "frame": 226.47,
+     "buildMs": 121,
+     "fold": {
+      "overlap": 0.495,
+      "stretch": 7.33
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd19",
+     "spread": 0.5,
+     "overlap": 0.01,
+     "stretch": 4.389,
+     "slowInside": 0.026,
+     "slowInsideWithCut": 0.041,
+     "outside": 0.584,
+     "omitted": 0.011,
+     "bearings": 0.753,
+     "offFirstView": 0.504,
+     "reach": 677.893,
+     "frame": 224.462,
+     "buildMs": 123,
+     "fold": {
+      "overlap": 0.625,
+      "stretch": 5.341
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": false,
+      "slowInside": false
+     },
+     "passAll": false
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd19",
+     "spread": 0,
+     "overlap": 0.013,
+     "stretch": 3.787,
+     "slowInside": 0.007,
+     "slowInsideWithCut": 0.02,
+     "outside": 0.651,
+     "omitted": 0.011,
+     "bearings": 1,
+     "offFirstView": 0.504,
+     "reach": 677.893,
+     "frame": 224.462,
+     "buildMs": 115,
+     "fold": {
+      "overlap": 0.533,
+      "stretch": 6.877
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "sa13",
+     "spread": 0.5,
+     "overlap": 0.007,
+     "stretch": 4.676,
+     "slowInside": 0.04,
+     "slowInsideWithCut": 0.057,
+     "outside": 0.724,
+     "omitted": 0.01,
+     "bearings": 0.79,
+     "offFirstView": 0.48,
+     "reach": 662.256,
+     "frame": 230.856,
+     "buildMs": 212,
+     "fold": {
+      "overlap": 0.603,
+      "stretch": 5.218
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": false,
+      "slowInside": false
+     },
+     "passAll": false
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "sa13",
+     "spread": 0,
+     "overlap": 0.012,
+     "stretch": 3.83,
+     "slowInside": 0.012,
+     "slowInsideWithCut": 0.024,
+     "outside": 0.735,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.48,
+     "reach": 662.256,
+     "frame": 230.856,
+     "buildMs": 133,
+     "fold": {
+      "overlap": 0.506,
+      "stretch": 7.087
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": false
+     },
+     "passAll": false
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd08",
+     "spread": 0.5,
+     "overlap": 0.022,
+     "stretch": 3.996,
+     "slowInside": 0.005,
+     "slowInsideWithCut": 0.007,
+     "outside": 0.572,
+     "omitted": 0.011,
+     "bearings": 0.856,
+     "offFirstView": 0.739,
+     "reach": 333.829,
+     "frame": 95.198,
+     "buildMs": 144,
+     "fold": {
+      "overlap": 0.495,
+      "stretch": 6.32
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd08",
+     "spread": 0,
+     "overlap": 0.021,
+     "stretch": 4.027,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.004,
+     "outside": 0.573,
+     "omitted": 0.011,
+     "bearings": 1,
+     "offFirstView": 0.739,
+     "reach": 333.829,
+     "frame": 95.198,
+     "buildMs": 135,
+     "fold": {
+      "overlap": 0.453,
+      "stretch": 6.633
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": false,
+      "slowInside": true
+     },
+     "passAll": false
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd13",
+     "spread": 0.5,
+     "overlap": 0.023,
+     "stretch": 3.889,
+     "slowInside": 0.008,
+     "slowInsideWithCut": 0.015,
+     "outside": 0.508,
+     "omitted": 0.01,
+     "bearings": 0.831,
+     "offFirstView": 0.743,
+     "reach": 325.703,
+     "frame": 90.816,
+     "buildMs": 134,
+     "fold": {
+      "overlap": 0.505,
+      "stretch": 6.251
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd13",
+     "spread": 0,
+     "overlap": 0.022,
+     "stretch": 3.881,
+     "slowInside": 0.001,
+     "slowInsideWithCut": 0.006,
+     "outside": 0.52,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.743,
+     "reach": 325.703,
+     "frame": 90.816,
+     "buildMs": 124,
+     "fold": {
+      "overlap": 0.466,
+      "stretch": 6.367
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd19",
+     "spread": 0.5,
+     "overlap": 0.025,
+     "stretch": 3.956,
+     "slowInside": 0.008,
+     "slowInsideWithCut": 0.01,
+     "outside": 0.539,
+     "omitted": 0.01,
+     "bearings": 0.851,
+     "offFirstView": 0.752,
+     "reach": 338.024,
+     "frame": 93.216,
+     "buildMs": 144,
+     "fold": {
+      "overlap": 0.506,
+      "stretch": 6.328
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd19",
+     "spread": 0,
+     "overlap": 0.023,
+     "stretch": 4.007,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.542,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.752,
+     "reach": 338.024,
+     "frame": 93.216,
+     "buildMs": 132,
+     "fold": {
+      "overlap": 0.469,
+      "stretch": 6.34
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": false,
+      "slowInside": true
+     },
+     "passAll": false
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "sa13",
+     "spread": 0.5,
+     "overlap": 0.021,
+     "stretch": 3.781,
+     "slowInside": 0.005,
+     "slowInsideWithCut": 0.007,
+     "outside": 0.511,
+     "omitted": 0.009,
+     "bearings": 0.847,
+     "offFirstView": 0.753,
+     "reach": 328.486,
+     "frame": 86.85,
+     "buildMs": 175,
+     "fold": {
+      "overlap": 0.484,
+      "stretch": 6.465
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "sa13",
+     "spread": 0,
+     "overlap": 0.02,
+     "stretch": 3.761,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.512,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.753,
+     "reach": 328.486,
+     "frame": 86.85,
+     "buildMs": 123,
+     "fold": {
+      "overlap": 0.44,
+      "stretch": 6.301
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    }
+   ]
+  },
+  "sweep": [
+   {
+    "setting": 0,
+    "options": {
+     "minSlope": 0.005
+    },
+    "rows": 40,
+    "passAll": false,
+    "byReachPasses": false,
+    "compassPasses": false,
+    "failing": [
+     "heathrow wd08 0.5: slowInside",
+     "heathrow wd08 0: slowInside",
+     "heathrow wd13 0.5: slowInside",
+     "heathrow wd19 0.5: slowInside",
+     "heathrow sa13 0.5: slowInside"
+    ]
+   },
+   {
+    "setting": 1,
+    "options": {
+     "minSlope": 0.008
+    },
+    "rows": 40,
+    "passAll": false,
+    "byReachPasses": false,
+    "compassPasses": false,
+    "failing": [
+     "heathrow wd08 0.5: slowInside",
+     "heathrow wd08 0: slowInside",
+     "heathrow wd13 0.5: slowInside",
+     "heathrow wd19 0.5: slowInside",
+     "heathrow sa13 0.5: slowInside"
+    ]
+   },
+   {
+    "setting": 2,
+    "options": {
+     "minSlope": 0.012
+    },
+    "rows": 40,
+    "passAll": false,
+    "byReachPasses": false,
+    "compassPasses": false,
+    "failing": [
+     "heathrow wd08 0.5: slowInside",
+     "heathrow wd08 0: slowInside",
+     "heathrow wd13 0.5: slowInside",
+     "heathrow wd13 0: slowInside",
+     "heathrow wd19 0.5: slowInside",
+     "heathrow sa13 0.5: slowInside"
+    ]
+   },
+   {
+    "setting": 3,
+    "options": {
+     "inner": 20
+    },
+    "rows": 40,
+    "passAll": false,
+    "byReachPasses": false,
+    "compassPasses": false,
+    "failing": [
+     "heathrow wd08 0.5: stretch,slowInside",
+     "heathrow wd08 0: slowInside",
+     "heathrow wd13 0.5: stretch,slowInside",
+     "heathrow wd19 0.5: stretch,slowInside",
+     "heathrow sa13 0.5: stretch,slowInside",
+     "heathrow sa13 0: slowInside",
+     "croydon wd08 0.5: stretch",
+     "croydon wd08 0: stretch",
+     "croydon wd19 0: stretch"
+    ]
+   },
+   {
+    "setting": 4,
+    "options": {
+     "inner": 25
+    },
+    "rows": 40,
+    "passAll": false,
+    "byReachPasses": false,
+    "compassPasses": false,
+    "failing": [
+     "wembley-park wd19 0.5: slowInside",
+     "heathrow wd08 0.5: stretch,slowInside",
+     "heathrow wd08 0: slowInside",
+     "heathrow wd13 0.5: stretch,slowInside",
+     "heathrow wd19 0.5: stretch,slowInside",
+     "heathrow sa13 0.5: stretch,slowInside",
+     "heathrow sa13 0: slowInside",
+     "croydon wd08 0: stretch",
+     "croydon wd19 0.5: slowInside",
+     "croydon wd19 0: stretch"
+    ]
+   },
+   {
+    "setting": 5,
+    "options": {
+     "scale": "minutes"
+    },
+    "rows": 40,
+    "passAll": false,
+    "byReachPasses": false,
+    "compassPasses": false,
+    "failing": [
+     "baker-street wd13 0.5: slowInside",
+     "wembley-park wd13 0.5: slowInside",
+     "canary-wharf wd13 0.5: slowInside",
+     "heathrow wd08 0.5: slowInside",
+     "heathrow wd08 0: slowInside",
+     "heathrow wd13 0.5: slowInside",
+     "heathrow wd13 0: slowInside",
+     "heathrow wd19 0.5: slowInside",
+     "heathrow wd19 0: slowInside",
+     "heathrow sa13 0.5: slowInside",
+     "heathrow sa13 0: slowInside",
+     "croydon wd19 0.5: slowInside",
+     "croydon sa13 0.5: slowInside"
+    ]
+   }
+  ],
+  "shipped_5_min_per_km": {
+   "summary": [
+    {
+     "setting": 0,
+     "options": {},
+     "rows": 40,
+     "passAll": true,
+     "byReachPasses": true,
+     "compassPasses": true,
+     "failing": []
+    }
+   ],
+   "rows": [
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd08",
+     "spread": 0.5,
+     "overlap": 0.002,
+     "stretch": 1.781,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.009,
+     "outside": 0.355,
+     "omitted": 0.01,
+     "bearings": 0.911,
+     "offFirstView": 0.661,
+     "reach": 281.917,
+     "frame": 89.904,
+     "buildMs": 153,
+     "fold": {
+      "overlap": 0.564,
+      "stretch": 5.504
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd08",
+     "spread": 0,
+     "overlap": 0.004,
+     "stretch": 1.827,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.008,
+     "outside": 0.362,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.661,
+     "reach": 281.917,
+     "frame": 89.904,
+     "buildMs": 127,
+     "fold": {
+      "overlap": 0.546,
+      "stretch": 5.726
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd13",
+     "spread": 0.5,
+     "overlap": 0.003,
+     "stretch": 1.787,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.009,
+     "outside": 0.35,
+     "omitted": 0.009,
+     "bearings": 0.906,
+     "offFirstView": 0.651,
+     "reach": 281.888,
+     "frame": 90.851,
+     "buildMs": 130,
+     "fold": {
+      "overlap": 0.558,
+      "stretch": 5.58
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd13",
+     "spread": 0,
+     "overlap": 0.004,
+     "stretch": 1.819,
+     "slowInside": 0.002,
+     "slowInsideWithCut": 0.007,
+     "outside": 0.354,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.651,
+     "reach": 281.888,
+     "frame": 90.851,
+     "buildMs": 130,
+     "fold": {
+      "overlap": 0.539,
+      "stretch": 5.785
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd19",
+     "spread": 0.5,
+     "overlap": 0.002,
+     "stretch": 1.753,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.008,
+     "outside": 0.337,
+     "omitted": 0.01,
+     "bearings": 0.906,
+     "offFirstView": 0.656,
+     "reach": 281.379,
+     "frame": 90.325,
+     "buildMs": 132,
+     "fold": {
+      "overlap": 0.556,
+      "stretch": 5.616
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "wd19",
+     "spread": 0,
+     "overlap": 0.003,
+     "stretch": 1.795,
+     "slowInside": 0.001,
+     "slowInsideWithCut": 0.006,
+     "outside": 0.35,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.656,
+     "reach": 281.379,
+     "frame": 90.325,
+     "buildMs": 128,
+     "fold": {
+      "overlap": 0.536,
+      "stretch": 5.808
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "sa13",
+     "spread": 0.5,
+     "overlap": 0.002,
+     "stretch": 1.77,
+     "slowInside": 0.005,
+     "slowInsideWithCut": 0.01,
+     "outside": 0.34,
+     "omitted": 0.009,
+     "bearings": 0.892,
+     "offFirstView": 0.645,
+     "reach": 280.275,
+     "frame": 89.894,
+     "buildMs": 141,
+     "fold": {
+      "overlap": 0.557,
+      "stretch": 5.62
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "baker-street",
+     "window": "sa13",
+     "spread": 0,
+     "overlap": 0.004,
+     "stretch": 1.801,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.008,
+     "outside": 0.345,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.645,
+     "reach": 280.275,
+     "frame": 89.894,
+     "buildMs": 118,
+     "fold": {
+      "overlap": 0.539,
+      "stretch": 5.785
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd08",
+     "spread": 0.5,
+     "overlap": 0.004,
+     "stretch": 1.833,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.008,
+     "outside": 0.195,
+     "omitted": 0.011,
+     "bearings": 0.857,
+     "offFirstView": 0.544,
+     "reach": 267.81,
+     "frame": 89.591,
+     "buildMs": 120,
+     "fold": {
+      "overlap": 0.485,
+      "stretch": 4.579
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd08",
+     "spread": 0,
+     "overlap": 0.004,
+     "stretch": 1.895,
+     "slowInside": 0.001,
+     "slowInsideWithCut": 0.004,
+     "outside": 0.206,
+     "omitted": 0.011,
+     "bearings": 1,
+     "offFirstView": 0.544,
+     "reach": 267.81,
+     "frame": 89.591,
+     "buildMs": 119,
+     "fold": {
+      "overlap": 0.406,
+      "stretch": 5.93
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd13",
+     "spread": 0.5,
+     "overlap": 0.003,
+     "stretch": 1.782,
+     "slowInside": 0.007,
+     "slowInsideWithCut": 0.009,
+     "outside": 0.169,
+     "omitted": 0.011,
+     "bearings": 0.856,
+     "offFirstView": 0.459,
+     "reach": 272.4,
+     "frame": 102.946,
+     "buildMs": 126,
+     "fold": {
+      "overlap": 0.495,
+      "stretch": 4.728
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd13",
+     "spread": 0,
+     "overlap": 0.003,
+     "stretch": 1.826,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.007,
+     "outside": 0.191,
+     "omitted": 0.011,
+     "bearings": 1,
+     "offFirstView": 0.459,
+     "reach": 272.4,
+     "frame": 102.946,
+     "buildMs": 122,
+     "fold": {
+      "overlap": 0.416,
+      "stretch": 6.12
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd19",
+     "spread": 0.5,
+     "overlap": 0.004,
+     "stretch": 1.759,
+     "slowInside": 0.007,
+     "slowInsideWithCut": 0.011,
+     "outside": 0.175,
+     "omitted": 0.01,
+     "bearings": 0.876,
+     "offFirstView": 0.506,
+     "reach": 278.734,
+     "frame": 102.538,
+     "buildMs": 124,
+     "fold": {
+      "overlap": 0.515,
+      "stretch": 4.748
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "wd19",
+     "spread": 0,
+     "overlap": 0.005,
+     "stretch": 1.765,
+     "slowInside": 0.002,
+     "slowInsideWithCut": 0.006,
+     "outside": 0.193,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.506,
+     "reach": 278.734,
+     "frame": 102.538,
+     "buildMs": 118,
+     "fold": {
+      "overlap": 0.442,
+      "stretch": 5.97
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "sa13",
+     "spread": 0.5,
+     "overlap": 0.003,
+     "stretch": 1.817,
+     "slowInside": 0.007,
+     "slowInsideWithCut": 0.01,
+     "outside": 0.184,
+     "omitted": 0.01,
+     "bearings": 0.839,
+     "offFirstView": 0.486,
+     "reach": 268.624,
+     "frame": 97.999,
+     "buildMs": 116,
+     "fold": {
+      "overlap": 0.491,
+      "stretch": 4.636
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "wembley-park",
+     "window": "sa13",
+     "spread": 0,
+     "overlap": 0.003,
+     "stretch": 1.873,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.209,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.486,
+     "reach": 268.624,
+     "frame": 97.999,
+     "buildMs": 129,
+     "fold": {
+      "overlap": 0.404,
+      "stretch": 6.189
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd08",
+     "spread": 0.5,
+     "overlap": 0.003,
+     "stretch": 1.731,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.006,
+     "outside": 0.289,
+     "omitted": 0.01,
+     "bearings": 0.91,
+     "offFirstView": 0.552,
+     "reach": 300.325,
+     "frame": 128.402,
+     "buildMs": 128,
+     "fold": {
+      "overlap": 0.642,
+      "stretch": 5.678
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd08",
+     "spread": 0,
+     "overlap": 0.003,
+     "stretch": 1.766,
+     "slowInside": 0.002,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.297,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.552,
+     "reach": 300.325,
+     "frame": 128.402,
+     "buildMs": 133,
+     "fold": {
+      "overlap": 0.599,
+      "stretch": 6.103
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd13",
+     "spread": 0.5,
+     "overlap": 0.003,
+     "stretch": 1.72,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.006,
+     "outside": 0.295,
+     "omitted": 0.01,
+     "bearings": 0.922,
+     "offFirstView": 0.525,
+     "reach": 306.687,
+     "frame": 132.829,
+     "buildMs": 124,
+     "fold": {
+      "overlap": 0.63,
+      "stretch": 5.581
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd13",
+     "spread": 0,
+     "overlap": 0.003,
+     "stretch": 1.758,
+     "slowInside": 0.002,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.298,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.525,
+     "reach": 306.687,
+     "frame": 132.829,
+     "buildMs": 126,
+     "fold": {
+      "overlap": 0.587,
+      "stretch": 6.059
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd19",
+     "spread": 0.5,
+     "overlap": 0.003,
+     "stretch": 1.732,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.271,
+     "omitted": 0.009,
+     "bearings": 0.91,
+     "offFirstView": 0.534,
+     "reach": 303.16,
+     "frame": 127.76,
+     "buildMs": 125,
+     "fold": {
+      "overlap": 0.625,
+      "stretch": 5.492
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "wd19",
+     "spread": 0,
+     "overlap": 0.003,
+     "stretch": 1.772,
+     "slowInside": 0.002,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.276,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.534,
+     "reach": 303.16,
+     "frame": 127.76,
+     "buildMs": 118,
+     "fold": {
+      "overlap": 0.584,
+      "stretch": 6.016
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "sa13",
+     "spread": 0.5,
+     "overlap": 0.002,
+     "stretch": 1.709,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.004,
+     "outside": 0.277,
+     "omitted": 0.01,
+     "bearings": 0.917,
+     "offFirstView": 0.528,
+     "reach": 305.636,
+     "frame": 132.23,
+     "buildMs": 130,
+     "fold": {
+      "overlap": 0.624,
+      "stretch": 5.477
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "canary-wharf",
+     "window": "sa13",
+     "spread": 0,
+     "overlap": 0.002,
+     "stretch": 1.737,
+     "slowInside": 0.003,
+     "slowInsideWithCut": 0.004,
+     "outside": 0.293,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.528,
+     "reach": 305.636,
+     "frame": 132.23,
+     "buildMs": 119,
+     "fold": {
+      "overlap": 0.582,
+      "stretch": 5.995
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd08",
+     "spread": 0.5,
+     "overlap": 0.002,
+     "stretch": 1.975,
+     "slowInside": 0.023,
+     "slowInsideWithCut": 0.037,
+     "outside": 0.668,
+     "omitted": 0.103,
+     "bearings": 0.813,
+     "offFirstView": 0.457,
+     "reach": 749.651,
+     "frame": 289.509,
+     "buildMs": 121,
+     "fold": {
+      "overlap": 0.606,
+      "stretch": 5.316
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd08",
+     "spread": 0,
+     "overlap": 0.005,
+     "stretch": 1.96,
+     "slowInside": 0.013,
+     "slowInsideWithCut": 0.025,
+     "outside": 0.713,
+     "omitted": 0.103,
+     "bearings": 1,
+     "offFirstView": 0.457,
+     "reach": 749.651,
+     "frame": 289.509,
+     "buildMs": 120,
+     "fold": {
+      "overlap": 0.507,
+      "stretch": 7.33
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd13",
+     "spread": 0.5,
+     "overlap": 0.003,
+     "stretch": 1.972,
+     "slowInside": 0.022,
+     "slowInsideWithCut": 0.033,
+     "outside": 0.612,
+     "omitted": 0.116,
+     "bearings": 0.789,
+     "offFirstView": 0.458,
+     "reach": 729.045,
+     "frame": 283.446,
+     "buildMs": 115,
+     "fold": {
+      "overlap": 0.598,
+      "stretch": 5.405
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd13",
+     "spread": 0,
+     "overlap": 0.006,
+     "stretch": 1.998,
+     "slowInside": 0.007,
+     "slowInsideWithCut": 0.02,
+     "outside": 0.684,
+     "omitted": 0.116,
+     "bearings": 1,
+     "offFirstView": 0.458,
+     "reach": 729.045,
+     "frame": 283.446,
+     "buildMs": 110,
+     "fold": {
+      "overlap": 0.495,
+      "stretch": 7.33
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd19",
+     "spread": 0.5,
+     "overlap": 0.002,
+     "stretch": 1.894,
+     "slowInside": 0.019,
+     "slowInsideWithCut": 0.031,
+     "outside": 0.509,
+     "omitted": 0.108,
+     "bearings": 0.771,
+     "offFirstView": 0.448,
+     "reach": 723.779,
+     "frame": 281.903,
+     "buildMs": 137,
+     "fold": {
+      "overlap": 0.625,
+      "stretch": 5.341
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "wd19",
+     "spread": 0,
+     "overlap": 0.005,
+     "stretch": 1.889,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.019,
+     "outside": 0.613,
+     "omitted": 0.108,
+     "bearings": 1,
+     "offFirstView": 0.448,
+     "reach": 723.779,
+     "frame": 281.903,
+     "buildMs": 113,
+     "fold": {
+      "overlap": 0.533,
+      "stretch": 6.877
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "sa13",
+     "spread": 0.5,
+     "overlap": 0.002,
+     "stretch": 2.007,
+     "slowInside": 0.019,
+     "slowInsideWithCut": 0.03,
+     "outside": 0.66,
+     "omitted": 0.09,
+     "bearings": 0.81,
+     "offFirstView": 0.456,
+     "reach": 721.959,
+     "frame": 276.837,
+     "buildMs": 157,
+     "fold": {
+      "overlap": 0.603,
+      "stretch": 5.218
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "heathrow",
+     "window": "sa13",
+     "spread": 0,
+     "overlap": 0.004,
+     "stretch": 1.963,
+     "slowInside": 0.008,
+     "slowInsideWithCut": 0.02,
+     "outside": 0.711,
+     "omitted": 0.09,
+     "bearings": 1,
+     "offFirstView": 0.456,
+     "reach": 721.959,
+     "frame": 276.837,
+     "buildMs": 142,
+     "fold": {
+      "overlap": 0.506,
+      "stretch": 7.087
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd08",
+     "spread": 0.5,
+     "overlap": 0.007,
+     "stretch": 2.307,
+     "slowInside": 0.005,
+     "slowInsideWithCut": 0.006,
+     "outside": 0.581,
+     "omitted": 0.011,
+     "bearings": 0.915,
+     "offFirstView": 0.696,
+     "reach": 381.938,
+     "frame": 118.293,
+     "buildMs": 135,
+     "fold": {
+      "overlap": 0.495,
+      "stretch": 6.32
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd08",
+     "spread": 0,
+     "overlap": 0.007,
+     "stretch": 2.263,
+     "slowInside": 0.002,
+     "slowInsideWithCut": 0.004,
+     "outside": 0.574,
+     "omitted": 0.011,
+     "bearings": 1,
+     "offFirstView": 0.696,
+     "reach": 381.938,
+     "frame": 118.293,
+     "buildMs": 114,
+     "fold": {
+      "overlap": 0.453,
+      "stretch": 6.633
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd13",
+     "spread": 0.5,
+     "overlap": 0.008,
+     "stretch": 2.068,
+     "slowInside": 0.007,
+     "slowInsideWithCut": 0.012,
+     "outside": 0.511,
+     "omitted": 0.01,
+     "bearings": 0.874,
+     "offFirstView": 0.691,
+     "reach": 380.96,
+     "frame": 117.558,
+     "buildMs": 123,
+     "fold": {
+      "overlap": 0.505,
+      "stretch": 6.251
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd13",
+     "spread": 0,
+     "overlap": 0.007,
+     "stretch": 2.043,
+     "slowInside": 0.004,
+     "slowInsideWithCut": 0.009,
+     "outside": 0.52,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.691,
+     "reach": 380.96,
+     "frame": 117.558,
+     "buildMs": 114,
+     "fold": {
+      "overlap": 0.466,
+      "stretch": 6.367
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd19",
+     "spread": 0.5,
+     "overlap": 0.009,
+     "stretch": 2.199,
+     "slowInside": 0.006,
+     "slowInsideWithCut": 0.008,
+     "outside": 0.539,
+     "omitted": 0.01,
+     "bearings": 0.903,
+     "offFirstView": 0.727,
+     "reach": 388.772,
+     "frame": 116.487,
+     "buildMs": 135,
+     "fold": {
+      "overlap": 0.506,
+      "stretch": 6.328
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "wd19",
+     "spread": 0,
+     "overlap": 0.008,
+     "stretch": 2.198,
+     "slowInside": 0.001,
+     "slowInsideWithCut": 0.004,
+     "outside": 0.542,
+     "omitted": 0.01,
+     "bearings": 1,
+     "offFirstView": 0.727,
+     "reach": 388.772,
+     "frame": 116.487,
+     "buildMs": 124,
+     "fold": {
+      "overlap": 0.469,
+      "stretch": 6.34
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "sa13",
+     "spread": 0.5,
+     "overlap": 0.008,
+     "stretch": 2.01,
+     "slowInside": 0.006,
+     "slowInsideWithCut": 0.008,
+     "outside": 0.507,
+     "omitted": 0.009,
+     "bearings": 0.888,
+     "offFirstView": 0.707,
+     "reach": 386.725,
+     "frame": 109.8,
+     "buildMs": 126,
+     "fold": {
+      "overlap": 0.484,
+      "stretch": 6.465
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    },
+    {
+     "setting": 0,
+     "origin": "croydon",
+     "window": "sa13",
+     "spread": 0,
+     "overlap": 0.008,
+     "stretch": 1.979,
+     "slowInside": 0.002,
+     "slowInsideWithCut": 0.005,
+     "outside": 0.514,
+     "omitted": 0.009,
+     "bearings": 1,
+     "offFirstView": 0.707,
+     "reach": 386.725,
+     "frame": 109.8,
+     "buildMs": 115,
+     "fold": {
+      "overlap": 0.44,
+      "stretch": 6.301
+     },
+     "pass": {
+      "overlap": true,
+      "stretch": true,
+      "slowInside": true
+     },
+     "passAll": true
+    }
+   ],
+   "other_rings_wd08_by_reach": [
+    {
+     "origin": "baker-street",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 30,
+     "overlap": 0.006,
+     "stretch": 2.023,
+     "slowInside": 0.002,
+     "outside": 0.254,
+     "omitted": 0.009
+    },
+    {
+     "origin": "baker-street",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 60,
+     "overlap": 0.002,
+     "stretch": 2.065,
+     "slowInside": 0.006,
+     "outside": 0.195,
+     "omitted": 0.01
+    },
+    {
+     "origin": "baker-street",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 90,
+     "overlap": 0.002,
+     "stretch": 4.172,
+     "slowInside": 0.031,
+     "outside": 0.037,
+     "omitted": 0.009
+    },
+    {
+     "origin": "baker-street",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 120,
+     "overlap": 0.002,
+     "stretch": 5.513,
+     "slowInside": 0.025,
+     "outside": 0.007,
+     "omitted": 0.006
+    },
+    {
+     "origin": "wembley-park",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 30,
+     "overlap": 0.002,
+     "stretch": 1.812,
+     "slowInside": 0.003,
+     "outside": 0.326,
+     "omitted": 0.006
+    },
+    {
+     "origin": "wembley-park",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 60,
+     "overlap": 0.005,
+     "stretch": 2.021,
+     "slowInside": 0.011,
+     "outside": 0.224,
+     "omitted": 0.01
+    },
+    {
+     "origin": "wembley-park",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 90,
+     "overlap": 0.007,
+     "stretch": 4.899,
+     "slowInside": 0.048,
+     "outside": 0.11,
+     "omitted": 0.009
+    },
+    {
+     "origin": "wembley-park",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 120,
+     "overlap": 0.007,
+     "stretch": 9.11,
+     "slowInside": 0.058,
+     "outside": 0.011,
+     "omitted": 0.016
+    },
+    {
+     "origin": "canary-wharf",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 30,
+     "overlap": 0.005,
+     "stretch": 1.846,
+     "slowInside": 0.007,
+     "outside": 0.329,
+     "omitted": 0.01
+    },
+    {
+     "origin": "canary-wharf",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 60,
+     "overlap": 0.003,
+     "stretch": 2.045,
+     "slowInside": 0.012,
+     "outside": 0.202,
+     "omitted": 0.009
+    },
+    {
+     "origin": "canary-wharf",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 90,
+     "overlap": 0.002,
+     "stretch": 5.353,
+     "slowInside": 0.04,
+     "outside": 0.043,
+     "omitted": 0.009
+    },
+    {
+     "origin": "canary-wharf",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 120,
+     "overlap": 0.002,
+     "stretch": 7.32,
+     "slowInside": 0.022,
+     "outside": 0.019,
+     "omitted": 0.007
+    },
+    {
+     "origin": "heathrow",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 30,
+     "overlap": 0.004,
+     "stretch": 1.835,
+     "slowInside": 0,
+     "outside": 0.859,
+     "omitted": 0.061
+    },
+    {
+     "origin": "heathrow",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 60,
+     "overlap": 0.005,
+     "stretch": 4.072,
+     "slowInside": 0.018,
+     "outside": 0.307,
+     "omitted": 0.029
+    },
+    {
+     "origin": "heathrow",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 90,
+     "overlap": 0.003,
+     "stretch": 19.657,
+     "slowInside": 0.186,
+     "outside": 0.207,
+     "omitted": 0
+    },
+    {
+     "origin": "heathrow",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 120,
+     "overlap": 0.007,
+     "stretch": 54.524,
+     "slowInside": 0.069,
+     "outside": 0.06,
+     "omitted": 0
+    },
+    {
+     "origin": "croydon",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 30,
+     "overlap": 0.004,
+     "stretch": 2.391,
+     "slowInside": 0.004,
+     "outside": 0.404,
+     "omitted": 0.054
+    },
+    {
+     "origin": "croydon",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 60,
+     "overlap": 0.007,
+     "stretch": 2.661,
+     "slowInside": 0.01,
+     "outside": 0.173,
+     "omitted": 0.01
+    },
+    {
+     "origin": "croydon",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 90,
+     "overlap": 0.006,
+     "stretch": 8.126,
+     "slowInside": 0.055,
+     "outside": 0.071,
+     "omitted": 0.008
+    },
+    {
+     "origin": "croydon",
+     "window": "wd08",
+     "spread": 0.5,
+     "ring": 120,
+     "overlap": 0.008,
+     "stretch": 13.56,
+     "slowInside": 0.039,
+     "outside": 0.012,
+     "omitted": 0.009
+    }
+   ]
+  },
+  "renderer_gates_wd08": {
+   "baker-street_b": {
+    "G1_maxPx": 0.0004,
+    "G2": true,
+    "G3_radiusMaxPx": 0.06,
+    "G4_within1px_phone": 1,
+    "G4_within1px_desktop": 0.9997,
+    "G5": true,
+    "pass": true
+   },
+   "wembley-park_b": {
+    "G1_maxPx": 0.0005,
+    "G2": true,
+    "G3_radiusMaxPx": 0.062,
+    "G4_within1px_phone": 1,
+    "G4_within1px_desktop": 1,
+    "G5": true,
+    "pass": true
+   },
+   "canary-wharf_b": {
+    "G1_maxPx": 0.0005,
+    "G2": true,
+    "G3_radiusMaxPx": 0.061,
+    "G4_within1px_phone": 1,
+    "G4_within1px_desktop": 1,
+    "G5": true,
+    "pass": true
+   },
+   "heathrow_b": {
+    "G1_maxPx": 0.0018,
+    "G2": true,
+    "G3_radiusMaxPx": 0.061,
+    "G4_within1px_phone": 1,
+    "G4_within1px_desktop": 1,
+    "G5": true,
+    "pass": true
+   },
+   "croydon_b": {
+    "G1_maxPx": 0.0008,
+    "G2": true,
+    "G3_radiusMaxPx": 0.062,
+    "G4_within1px_phone": 1,
+    "G4_within1px_desktop": 1,
+    "G5": true,
+    "pass": true
+   },
+   "baker-street_c": {
+    "G1_maxPx": 0.0001,
+    "G2": true,
+    "G3_radiusMaxPx": 0.06,
+    "G4_within1px_phone": 1,
+    "G4_within1px_desktop": 0.9997,
+    "G5": true,
+    "pass": true
+   }
+  },
+  "first_scene_ms_baker_street": {
+   "runs": [
+    1373,
+    2459,
+    1385,
+    1456,
+    1397,
+    1413,
+    1376,
+    2758,
+    2666,
+    1417
+   ],
+   "median": 1415.0,
+   "max": 2758,
+   "fold_same_setup": [
+    1091,
+    1048,
+    1049,
+    1056
+   ],
+   "setup": "desktop 1440x900, headless Chrome with GPU, wd08, 45 min, by reach, tiles in the browser cache, new page each run, prepareMesh to the whole scene installed (S.timings scene); one run of eleven returned no data and is left out"
+  },
+  "taps_baker_street": {
+   "places_listed": [
+    2,
+    5,
+    5,
+    5,
+    3
+   ]
+  }
  }
 }

@@ -279,9 +279,12 @@ The page draws the field two ways (`static/warp/app.js`):
   the pin proportional to its minutes, in its own direction (by reach, the default, or true
   compass), so the rings are exact circles. The "Time map" button (pressed or not, its label
   never changes) dissolves the real map into the mesh, then morphs it. A tap lists every place
-  drawn under the finger, folds included. For public transport the time map stays hidden
-  (`?polar=1` shows it) because it fails Direction 4's checks at all five test origins: see
-  [docs/warp-time-polar.md](docs/warp-time-polar.md).
+  drawn under the finger, folds included. Public transport's exact time map folds over itself
+  along every fast line, so it is drawn with squash instead: along each line out from the pin,
+  places never come back closer, the rings bend through the first place that many minutes away,
+  and quicker places near stations can sit past their ring. The page says what share does, and
+  colours and taps keep each place's own minutes (#27; checks and numbers in
+  [docs/warp-time-polar.md](docs/warp-time-polar.md), "W-03"). `?layout=fold` shows the fold.
 
 Panning, zooming and resizing never send a request; a new pin, mode or window sends one, and
 the old picture stays up until the new one is ready.

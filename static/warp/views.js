@@ -8,10 +8,11 @@ export const MODES = {
   transit: { label: "Public transport", outer: [30, 45, 60, 90, 120], defaultOuter: 45 },
 };
 
-// The time map (the bent view) is experimental everywhere. For public transport it stays hidden
-// until Direction 4's checks pass at all five test origins (docs/warp-time-polar.md);
-// ?polar=1 shows it anyway, for the comprehension test.
-export const TIME_POLAR = { walking: "experimental", cycling: "experimental", driving: "experimental", transit: "hidden" };
+// The time map (the bent view) is experimental everywhere. Public transport draws it with squash
+// (layoutFor, below), which passed W-03's checks at all five test origins, four windows and both
+// directions settings (#27, docs/warp-time-polar.md); its exact fold still fails Direction 4.
+// A mode set to "hidden" is offered only with ?polar=1.
+export const TIME_POLAR = { walking: "experimental", cycling: "experimental", driving: "experimental", transit: "experimental" };
 
 export function bendOffered(mode, query = "") {
   return TIME_POLAR[mode] !== "hidden" || new URLSearchParams(query).get("polar") === "1";

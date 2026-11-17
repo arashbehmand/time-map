@@ -61,9 +61,11 @@ test("inside the coverage polygon, holes excluded", () => {
   assert.equal(V.fieldKey(-0.12346, 51.5, "transit", "wd08"), "-0.1235,51.5000,transit,wd08");
 });
 
-test("transit stays hidden on the bent map unless ?polar=1", () => {
-  assert.equal(V.bendOffered("walking"), true);
-  assert.equal(V.bendOffered("transit"), false);
+test("every mode may bend, public transport included (W-03: with squash)", () => {
+  for (const m of ["walking", "cycling", "driving", "transit"]) {
+    assert.equal(V.TIME_POLAR[m], "experimental");
+    assert.equal(V.bendOffered(m), true);
+  }
   assert.equal(V.bendOffered("transit", "?polar=1"), true);
   assert.equal(V.DIRECTIONS[V.DEFAULT_DIRECTIONS], 0.5);
 });

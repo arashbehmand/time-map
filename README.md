@@ -646,7 +646,9 @@ Deploy checklist (the app logs a warning at startup for each item it can detect)
 The tables and the Whole city map are copied once onto the service's volume (`/data`) from the
 machine that built them. They are not in git, not in the image and not published. `railway ssh`
 needs your SSH key registered (`railway ssh keys add`) and `ssh.railway.com` in `~/.ssh/known_hosts`
-(`ssh-keyscan ssh.railway.com >> ~/.ssh/known_hosts`, once).
+(`ssh-keyscan ssh.railway.com >> ~/.ssh/known_hosts`, once). The service sleeps when idle, and
+`railway ssh` then answers with your account's details instead of a shell: open the site first
+(`curl https://time-map-production.up.railway.app/api/transit/status`) so there is a container.
 
 ```bash
 ID=<build id>; OUT=<transit out folder>          # e.g. transit/out

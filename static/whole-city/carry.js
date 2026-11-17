@@ -599,3 +599,18 @@ export function modeAvailability(index) {
     car: { on: Boolean(listed.car && listed.car.available), why: listed.car ? "" : "This map has no car." },
   };
 }
+
+// Solved positions where some triangle gets very thin: its larger stretch over its smaller past
+// THIN_MARK (the build's metrics.stretch_max). The page marks them under the slider. On build
+// 2026-11-12 that is car with train and tube at its last two positions, a few triangles at the
+// mesh's south edge; train alone stays under 16:1 and car alone under 21:1.
+export const THIN_MARK = 50;
+
+export function thinPositions(frames, limit = THIN_MARK) {
+  const out = [];
+  frames.forEach((f, i) => {
+    const r = f.metrics && f.metrics.stretch_max;
+    if (i > 0 && r > limit) out.push({ i, ratio: r });
+  });
+  return out;
+}

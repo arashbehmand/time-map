@@ -616,6 +616,13 @@ blends straight across to the other combination where the build checked that ble
 and up the other combination. Both directions of train ↔ car with train and car ↔ car with train
 are checked at every position; train ↔ car always passes through one of them (one toggle at a time).
 
+**Very thin triangles.** The page marks, under the slider and in the readout, every solved position
+of the combination shown where some triangle is stretched past 50:1 (`THIN_MARK` in
+`static/whole-city/carry.js`, from each position's `stretch_max`). The slider keeps every position.
+On build 2026-11-12 that is car with train and tube at ρ = 67 (73:1) and ρ = 100 (140:1): three
+cells at the mesh's south edge, outside Greater London. Train alone stays under 16:1 and car alone
+under 21:1, and at most 4.3% of any combination's drawn area is past 4:1.
+
 **Spot check.** The station pair at least 3 km apart with the biggest gain by car (its table time
 minus the car's door-to-door time along the links, overhead included), and any `[[car_spot]]` row
 in `checks.toml`, with their map distance at train alone's Wembley pick and at the end, for each

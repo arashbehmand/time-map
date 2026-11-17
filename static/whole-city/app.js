@@ -30,7 +30,7 @@ import { forgetCity, keepCity, keptCityWhy } from "/shared/offline.js";
 import { defaultWindow, pollStatus, statusLoading, windowText } from "/shared/transit.js";
 import {
   blend, buildLand, comboOf, createMotion, createPlacer, decodeLand, ease, keyframes, loadSegment, pathLengths,
-  modeAvailability, pullWords, runSteps, segmentAt, switchPlan, switchSteps,
+  modeAvailability, pullWords, runSteps, segmentAt, switchPlan, switchSteps, thinPositions,
 } from "./carry.js";
 
 const $ = (id) => document.getElementById(id);
@@ -515,6 +515,8 @@ function showReadout() {
       `${(m.area_ratio_min * 100).toFixed(1)}% of its area${m.squeezed_near ? ` (near ${m.squeezed_near})` : ""}.`);
   } else lines.push(`${where()}. No triangle turns over anywhere on the way: every step was checked.`);
   lines.push(...modeLines());
+  const thin = i !== null && cur !== "none" ? thinPositions(C.frames).find((t) => t.i === i) : null;
+  if (thin) lines.push(`A few triangles at the edge of the map get very thin here (the thinnest ${Math.round(thin.ratio)}:1).`);
   for (const r of doc.ratios) {
     if (r.station === null || r.reference === null) { if (DETAILS) lines.push(`${r.name}: absent`); continue; }
     const now = km(r.station, r.reference, nodes), was = km(r.station, r.reference, real);
@@ -700,7 +702,7 @@ async function switchModes(mode) {
       cur = id;
       for (const m of ["train", "car"]) { if (next.has(m)) on.add(m); else on.delete(m); }
       updateModeButtons();
-      if (id !== "none") { C = combos[id]; motion = motionOf(C); if (DETAILS) markSlider(); }
+      if (id !== "none") { C = combos[id]; motion = motionOf(C); markSlider(); }
       uploaded = "";
       motion.jump(x);
     },
@@ -767,8 +769,9 @@ stationSel.addEventListener("change", () => {
   showTip(picked);
 });
 
-// Marks under the slider (?details=1), for the combination shown: the first solved position where
-// Wembley Park passes its check against Baker Street, and any place where the layout jumps.
+// Marks under the slider, for the combination shown: the solved positions where a few triangles get
+// very thin (always), and with ?details=1 the first solved position where Wembley Park passes its
+// check against Baker Street and any place where the layout jumps.
 function markSlider() {
   $("marks").replaceChildren();
   const frames = C.frames, mo = C.doc.motion;
@@ -780,6 +783,15 @@ function markSlider() {
     m.title = title;
     $("marks").append(m);
   };
+  const thin = thinPositions(frames);
+  thin.forEach(({ i, ratio }, k) => {
+    // One label for a run of neighbouring positions, a tick for each.
+    const first = k === 0 || thin[k - 1].i !== i - 1;
+    add(i, first ? "Very thin triangles" : "", `At ${fmt(frames[i].rho)} times the grid's strength a few triangles ` +
+      `at the edge of the map get very thin (the thinnest ${Math.round(ratio)}:1); the rest of the map stays readable.`,
+      "mark thin");
+  });
+  if (!DETAILS) return;
   const passes = (f) => Boolean(f.metrics.ratios.wembley_park && f.metrics.ratios.wembley_park.status === "pass");
   const first = frames.findIndex(passes);
   if (first > 0) {
@@ -873,7 +885,7 @@ function hover(x, y) {
   showTip(best);
 }
 
-if (DETAILS) markSlider();
+markSlider();
 new ResizeObserver(resize).observe(glCanvas.parentElement);
 motion.jump(0);
 

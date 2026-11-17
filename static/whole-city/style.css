@@ -53,6 +53,10 @@ body {
 }
 .mark.jump { color: #8a4b00; }
 .mark.jump::before { background: #8a4b00; }
+/* Very thin triangles (car with train and tube at its end): the label ends at its first tick, so a
+   mark near the end of the track stays inside it. */
+.mark.thin { color: #b3261e; transform: translateX(-100%); }
+.mark.thin::before { background: #b3261e; left: 100%; }
 
 .readout { font-variant-numeric: tabular-nums; font-size: 14px; }
 

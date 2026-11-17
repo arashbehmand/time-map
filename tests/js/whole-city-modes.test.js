@@ -107,3 +107,13 @@ test("Walking and Bus are never live; Car only where the build has it", () => {
     { id: "bus", available: false, why: "Later." }, { id: "train", available: true }, { id: "car", available: true }] });
   assert.equal(built.walk.on, false); assert.equal(built.walk.why, "Later."); assert.equal(built.car.on, true);
 });
+
+import { THIN_MARK, thinPositions } from "../../static/whole-city/carry.js";
+
+test("positions with a very thin triangle are marked; the real map never is", () => {
+  const frames = [12, 3, 18, 73.1, 140.1].map((r) => ({ metrics: { stretch_max: r } }));
+  frames[0].metrics.stretch_max = 999;                       // the real map: never marked
+  assert.deepEqual(thinPositions(frames), [{ i: 3, ratio: 73.1 }, { i: 4, ratio: 140.1 }]);
+  assert.equal(THIN_MARK, 50);
+  assert.deepEqual(thinPositions([{ metrics: { stretch_max: 1 } }, { metrics: {} }]), []);
+});

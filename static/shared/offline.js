@@ -65,6 +65,14 @@ export async function keepCity(c, win) {
   } catch { /* nothing kept: offline, the page says it can't be shown */ }
 }
 
+// Drop one window's kept travel-mode files (#23): made with another build of its map.
+export async function forgetModes(win) {
+  try {
+    const cache = await caches.open(CITY_CACHE);
+    for (const f of FILES) if (f.startsWith("modes/")) await cache.delete(`/api/whole-city/${win}/${f}`);
+  } catch { /* nothing kept */ }
+}
+
 export async function forgetCity() {
   try { await caches.delete(CITY_CACHE); } catch { /* nothing to forget */ }
 }

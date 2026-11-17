@@ -26,11 +26,11 @@ import { createMeshRenderer } from "/shared/mesh/renderer.js";
 import { localFrame, makeCamera } from "/shared/mesh/frame.js";
 import { STYLE_ID } from "/shared/mesh/schema-streets-v8.js";
 import { cityUnavailable } from "/shared/tools.js";
-import { forgetCity, keepCity, keptCityWhy } from "/shared/offline.js";
+import { forgetCity, forgetModes, keepCity, keptCityWhy } from "/shared/offline.js";
 import { defaultWindow, pollStatus, statusLoading, windowText } from "/shared/transit.js";
 import {
   blend, buildLand, comboOf, createMotion, createPlacer, decodeLand, ease, keyframes, loadSegment, pathLengths,
-  modeAvailability, pullWords, runSteps, segmentAt, switchPlan, switchSteps, thinPositions,
+  madeWith, modeAvailability, pullWords, runSteps, segmentAt, sha256Hex, switchPlan, switchSteps, thinPositions,
 } from "./carry.js";
 
 const $ = (id) => document.getElementById(id);
@@ -118,10 +118,18 @@ if (built.length > 1) {
   $("when-line").textContent = `When: ${label[win]}.`;
 }
 
-let doc = null, landBuf = null;
+let doc = null, landBuf = null, mapHash = null, landHash = null;
 try {
-  doc = await load(`/api/whole-city/${win}/timemap.json`, "json");
+  // Read as bytes, so the travel modes can be checked against this very file (madeWith).
+  const raw = await load(`/api/whole-city/${win}/timemap.json`, "bin");
+  doc = JSON.parse(new TextDecoder().decode(raw));
   landBuf = doc.land ? await load(`/api/whole-city/${win}/land.bin`, "bin") : null;
+  try {
+    mapHash = await sha256Hex(raw);
+    landHash = await sha256Hex(landBuf || new ArrayBuffer(0));
+  } catch {
+    mapHash = landHash = null;    // no Web Crypto here: the car stays off
+  }
 } catch {
   doc = null;
 }
@@ -157,6 +165,11 @@ let index = null;            // modes/modes.json: the modes, their files, which 
 if (city.modes && city.modes[win]) {
   try {
     index = await load(`/api/whole-city/${win}/modes/modes.json`, "json");
+    if (!madeWith(index, doc, mapHash, landHash)) {
+      // Kept offline from an earlier build of this map: never drawn with this one, and forgotten.
+      index = null;
+      await forgetModes(win);
+    }
   } catch {
     index = null;
   }
@@ -610,7 +623,10 @@ const loading = {};          // each file fetched once, however often it is aske
 function loadCombo(id) {
   if (combos[id]) return Promise.resolve(combos[id]);
   loading[id] ||= load(`/api/whole-city/${win}/modes/${index.combos[id].file}`, "json").then((cdoc) => {
-    if (cdoc.build !== doc.build || cdoc.table_sha256 !== doc.table_sha256) throw new Error("another build");
+    if (!madeWith(cdoc, doc, mapHash, landHash)) {
+      forgetModes(win);
+      throw new Error("made with another map");
+    }
     return addCombo(id, cdoc);
   }).finally(() => { delete loading[id]; });
   return loading[id];

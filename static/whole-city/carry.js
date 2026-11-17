@@ -614,3 +614,18 @@ export function thinPositions(frames, limit = THIN_MARK) {
   });
   return out;
 }
+
+// The sha256 of a file's bytes, as hex (Web Crypto, in the page and in node).
+export async function sha256Hex(buffer) {
+  const d = await globalThis.crypto.subtle.digest("SHA-256", buffer);
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Whether a travel-mode file (modes.json or a combination) was made with this very map: the same
+// build and table, and the timemap.json and land.bin whose sha256 it names. A copy kept offline
+// from an earlier build of the same map fails, so the page never draws car layouts on land that
+// was never checked with them.
+export function madeWith(modeDoc, doc, mapHash, landHash) {
+  return Boolean(modeDoc) && modeDoc.build === doc.build && modeDoc.table_sha256 === doc.table_sha256 &&
+    modeDoc.timemap_sha256 === mapHash && modeDoc.land_sha256 === landHash;
+}

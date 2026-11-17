@@ -117,3 +117,19 @@ test("positions with a very thin triangle are marked; the real map never is", ()
   assert.equal(THIN_MARK, 50);
   assert.deepEqual(thinPositions([{ metrics: { stretch_max: 1 } }, { metrics: {} }]), []);
 });
+
+import { madeWith, sha256Hex } from "../../static/whole-city/carry.js";
+
+test("travel-mode files are used only with the map and land they were made with", async () => {
+  const enc = (s) => new TextEncoder().encode(s).buffer;
+  const map = await sha256Hex(enc('{"build":"b"}\n'));
+  const land = await sha256Hex(new ArrayBuffer(0));
+  assert.equal(land, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");   // sha256 of nothing
+  const doc = { build: "b", table_sha256: "t" };
+  const mode = { build: "b", table_sha256: "t", timemap_sha256: map, land_sha256: land };
+  assert.ok(madeWith(mode, doc, map, land));
+  assert.ok(!madeWith({ ...mode, timemap_sha256: "0" }, doc, map, land));     // an earlier build of the map
+  assert.ok(!madeWith({ ...mode, land_sha256: "0" }, doc, map, land));
+  assert.ok(!madeWith(mode, doc, null, null));                                // no Web Crypto: no car
+  assert.ok(!madeWith(null, doc, map, land));
+});

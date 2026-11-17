@@ -182,6 +182,9 @@ test("offline, Whole city offers only windows viewed under the kept build, until
     assert.deepEqual(await keptCityWhy(), { city: null, reason: "offline" });
     // Build A: both windows viewed.
     await file("wd08", "A"); await keepCity(status("A", "2099-01-01"), "wd08");
+    for (const f of ["modes.json", "combo-bus-walk.json", "combo-car-train.json"]) {    // its travel modes (#23)
+      await (await caches.open(CITY_CACHE)).put(`/api/whole-city/wd08/modes/${f}`, new Response("{}"));
+    }
     await file("wd13", "A"); await keepCity(status("A", "2099-01-01"), "wd13");
     assert.deepEqual((await keptCity()).windows.map((w) => w.id), ["wd08", "wd13"]);
     // Build B: only wd13 viewed. A's wd08 must not be offered with B's dates, and is dropped.
@@ -191,6 +194,8 @@ test("offline, Whole city offers only windows viewed under the kept build, until
     assert.equal(kept.build, "B");
     assert.equal(kept.offline, true);
     assert.equal(await (await caches.open(CITY_CACHE)).match("/api/whole-city/wd08/timemap.json"), undefined);
+    const left = (await (await caches.open(CITY_CACHE)).keys()).filter((k) => String(k).includes("/wd08/modes/"));
+    assert.deepEqual(left, []);                              // every combination, whatever the build had
     // A kept build past its valid-until day is still offered (nothing expires, #30).
     await keepCity(status("B", "2000-01-01"), "wd13");
     assert.equal((await keptCity()).valid_until, "2000-01-01");

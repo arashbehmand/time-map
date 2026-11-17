@@ -22,6 +22,7 @@ import gzip
 import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -41,16 +42,21 @@ FILES = {
     "shepard.svg": "image/svg+xml",
 }
 REPORT = ("report.md", "shepard.svg")     # both present: the page links "How this map was checked"
-# The travel modes (#23, L-03), in the window's modes/ folder: car alone and car with train and tube,
-# served like the map itself, under the same gate.
+# The travel modes (#23), in the window's modes/ folder, served like the map itself, under the same
+# gate: modes.json, report.md, roads.bin (with the car) and the combinations modes.json lists, one
+# file each (combo-car-train.json, combo-bus-walk.json, ...).
 MODES_DIR = "modes"
 MODE_FILES = {
     "modes.json": "application/json",
-    "combo-car.json": "application/json",
-    "combo-car-train.json": "application/json",
     "roads.bin": "application/octet-stream",
     "report.md": "text/plain; charset=utf-8",
 }
+COMBO_NAME = re.compile(r"combo-(bus|car|train|walk)(-(bus|car|train|walk))*\.json")
+
+
+def is_mode_file(name: str) -> bool:
+    """Whether `name` can be a travel-mode file (what is served is only what a window loaded)."""
+    return name in MODE_FILES or COMBO_NAME.fullmatch(name) is not None
 DTYPE_BYTES = {"uint8": 1, "uint16": 2, "uint32": 4, "int32": 4, "float32": 4}
 GZIP_MIN = 500                            # as the app's GZipMiddleware
 
@@ -146,16 +152,30 @@ def load_window(d: Path) -> CityWindow:
 
 
 def _load_modes(d: Path, doc: dict, made_with: dict | None = None) -> dict[str, Blob]:
-    """The window's travel modes, every file present and made with this very map: the same build,
-    window, table and node count, and the timemap.json and land.bin they name (their blends and the
-    land's sliver check were made for exactly those). Otherwise none."""
+    """The window's travel modes: modes.json, report.md, roads.bin when modes.json has roads, and
+    every combination file modes.json lists, each present and made with this very map: the same
+    build, window, table and node count, and the timemap.json and land.bin they name (their blends
+    and the land's sliver check were made for exactly those). Otherwise none."""
     md = d / MODES_DIR
     if not (md / "modes.json").is_file():
         return {}
     nodes = len((doc.get("nodes") or {}).get("kind") or [])
     out = {}
     try:
-        for name, media in MODE_FILES.items():
+        index = json.loads((md / "modes.json").read_bytes())
+        if not isinstance(index, dict) or not isinstance(index.get("combos"), dict):
+            raise ValueError("modes.json lists no combinations")
+        names = ["modes.json", "report.md"] + (["roads.bin"] if index.get("roads") else [])
+        for c in index["combos"].values():
+            if c is None:                         # train alone: the map itself
+                continue
+            name = c.get("file") if isinstance(c, dict) else None
+            if not isinstance(name, str) or COMBO_NAME.fullmatch(name) is None:
+                log.warning("whole city: window %s's travel modes left out (modes.json names a file %r)", d.name, name)
+                return {}
+            names.append(name)
+        for name in names:
+            media = MODE_FILES.get(name, "application/json")
             body = (md / name).read_bytes()
             if name.endswith(".json"):
                 m = json.loads(body)

@@ -556,27 +556,28 @@ def test_lab_fallback_hides_the_overlay_and_skips_checks():
 
 
 def test_whole_city_has_a_toggle_per_way_of_travelling():
-    """Travel modes (#23, L-03): Walking and Bus wait for the map to use their times and say so; Train and
-    tube is on; Car is enabled where the server lists the modes (the build has them)."""
+    """Travel modes (#23): Train and tube is on; Walking, Bus and Car start disabled and are enabled where
+    the build has them (modes.json lists them available)."""
     html = (ROOT / "whole-city/index.html").read_text()
     modes = html.split('<fieldset id="modes"')[1].split("</fieldset>")[0]
     buttons = re.findall(r'<button class="btn" type="button" data-mode="(\w+)"([^>]*)>([^<]+)</button>', modes)
     assert [(m, label) for m, _, label in buttons] == [("walk", "Walking"), ("bus", "Bus"), ("train", "Train and tube"),
                                                        ("car", "Car")]
     attrs = {m: a for m, a, _ in buttons}
-    assert "disabled" in attrs["walk"] and "Coming next" in attrs["walk"]
-    assert "disabled" in attrs["bus"] and "Coming next" in attrs["bus"]
+    for m in ("walk", "bus", "car"):
+        assert 'aria-pressed="false"' in attrs[m] and "disabled" in attrs[m] and "title" not in attrs[m], m
+    assert "Coming next" not in html
     assert 'aria-pressed="true"' in attrs["train"] and "disabled" not in attrs["train"]
-    assert 'aria-pressed="false"' in attrs["car"] and "disabled" in attrs["car"]
     # The Metropolitan line isn't special: rail and tube are one layer that follows Train and tube.
     assert 'id="line"' not in html and "Metropolitan line" not in html
     js = (ROOT / "whole-city/app.js").read_text()
     assert 'if (city.modes && city.modes[win])' in js
     assert "load(`/api/whole-city/${win}/modes/modes.json`" in js
     assert "load(`/api/whole-city/${win}/modes/${index.combos[id].file}`" in js
-    # Walking and Bus stay off whatever the script finds (carry.js modeAvailability), and a switch takes
-    # its lock before anything loads.
+    # A mode is enabled only as modes.json says (carry.js modeAvailability), the switch keeps all four
+    # modes' state, and a switch takes its lock before anything loads.
     assert "b.disabled = busy || !available[b.dataset.mode].on;" in js
+    assert "for (const m of MODES) { if (next.has(m)) on.add(m); else on.delete(m); }" in js
     body = js.split("async function switchModes")[1].split("\n}\n")[0]
     assert body.index("setBusy(true)") < body.index("await loadCombo")
     assert 'if (name === "rail" && !modes.has("train")) continue;' in js
@@ -584,9 +585,11 @@ def test_whole_city_has_a_toggle_per_way_of_travelling():
 
 
 def test_the_travel_modes_are_kept_and_forgotten_with_the_map():
-    """Offline (#28): the car's files are Whole city data like the map; a build change drops them."""
+    """Offline (#28): the travel modes' files are Whole city data like the map; a build change drops
+    them, whatever combinations the build had (everything under the window's modes/)."""
     sw = (ROOT / "sw.js").read_text()
     assert "/modes/" not in sw
     off = (ROOT / "shared/offline.js").read_text()
-    for name in ("modes/modes.json", "modes/combo-car.json", "modes/combo-car-train.json", "modes/roads.bin"):
-        assert f'"{name}"' in off, name
+    assert "const prefix = `/api/whole-city/${win}/modes/`;" in off and "await cache.keys()" in off
+    assert off.count("await dropModes(cache, ") == 2                     # keepCity's old windows and forgetModes
+    assert "combo-car" not in off

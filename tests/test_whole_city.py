@@ -275,8 +275,9 @@ def test_the_loader_needs_nothing_the_image_doesnt_ship():
 
 
 # ── travel modes (#23, L-03) ────────────────────────────────────────
-def make_modes(city: Path, win: str = "wd13", **over) -> Path:
-    """A modes/ folder beside the window's map, made with it unless `over` says otherwise."""
+def make_modes(city: Path, win: str = "wd13", combos=("car", "car-train"), roads: bool = True, **over) -> Path:
+    """A modes/ folder beside the window's map, made with it unless `over` says otherwise: modes.json
+    listing `combos` (a file each), roads.bin when `roads`, report.md."""
     d = city / win
     doc = json.loads((d / "timemap.json").read_text())
     doc.setdefault("nodes", {"kind": [0, 0, 1, 2]})
@@ -287,10 +288,13 @@ def make_modes(city: Path, win: str = "wd13", **over) -> Path:
     common = {"build": doc["build"], "window": win, "table_sha256": doc["table_sha256"], "nodes": 4, **bound, **over}
     md = d / "modes"
     md.mkdir(exist_ok=True)
-    (md / "modes.json").write_text(json.dumps({"kind": "london-time-map-modes", **common}))
-    for cid in ("car", "car-train"):
+    listed = {"train": None, **{cid: {"file": f"combo-{cid}.json", "modes": cid.split("-")} for cid in combos}}
+    (md / "modes.json").write_text(json.dumps({"kind": "london-time-map-modes", "combos": listed,
+                                               "roads": {"file": "roads.bin"} if roads else None, **common}))
+    for cid in combos:
         (md / f"combo-{cid}.json").write_text(json.dumps({"kind": "london-time-map-combo", "id": cid, **common}))
-    (md / "roads.bin").write_bytes(bytes(range(60)))
+    if roads:
+        (md / "roads.bin").write_bytes(bytes(range(60)))
     (md / "report.md").write_text("# Travel modes\n")
     return city
 
@@ -343,6 +347,33 @@ def test_a_missing_travel_mode_file_leaves_them_all_out(tmp_path):
     city = make_modes(make_city(tmp_path, build))
     (city / "wd13" / "modes" / "roads.bin").unlink()
     assert load_dir(city)["wd13"].modes == {}
+
+
+def test_the_combinations_modes_json_lists_are_served_and_no_others(make_client, settings, cleared):
+    """Bus and walking (#23 part 2): whatever combinations the build made, each a file named in
+    modes.json; a run without the car has no roads.bin."""
+    build, city = cleared
+    make_modes(city, combos=("bus", "walk", "bus-train", "bus-train-walk"), roads=False)
+    (city / "wd13" / "modes" / "combo-car.json").write_text("{}")         # a stray file modes.json doesn't list
+    c = _client(make_client, settings, build, city)
+    for name in ("modes.json", "combo-bus.json", "combo-walk.json", "combo-bus-train.json",
+                 "combo-bus-train-walk.json", "report.md"):
+        assert c.get(f"/api/whole-city/wd13/modes/{name}").status_code == 200, name
+    for name in ("combo-car.json", "roads.bin", "report.json", "combo-boat.json", "combo-bus.json.bak"):
+        assert c.get(f"/api/whole-city/wd13/modes/{name}").status_code == 404, name
+
+
+def test_a_listed_combination_that_is_missing_or_badly_named_leaves_them_all_out(tmp_path, caplog):
+    build = make_build(tmp_path, cleared=True)
+    city = make_modes(make_city(tmp_path, build), combos=("bus", "bus-walk"), roads=False)
+    assert set(load_dir(city)["wd13"].modes) == {"modes.json", "report.md", "combo-bus.json", "combo-bus-walk.json"}
+    (city / "wd13" / "modes" / "combo-bus-walk.json").unlink()
+    assert load_dir(city)["wd13"].modes == {}
+    md = city / "wd13" / "modes"
+    idx = json.loads((md / "modes.json").read_text())
+    idx["combos"] = {"train": None, "bus": {"file": "../timemap.json"}}
+    (md / "modes.json").write_text(json.dumps(idx))
+    assert load_dir(city)["wd13"].modes == {} and "names a file" in caplog.text
 
 
 def test_travel_modes_made_with_an_earlier_map_are_left_out(tmp_path, caplog):

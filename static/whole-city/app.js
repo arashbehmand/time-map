@@ -17,10 +17,10 @@
 // and smooth lines round off the small bends they take where they cross a mesh edge (carry.js says
 // how). ?details=1 shows the build's own numbers as well.
 //
-// Travel modes (#23, L-03): Walking, Bus, Train and tube, Car. Train and tube alone is the time map
-// above. Where the build has them (the server lists them), car alone and car with train and tube
-// come from its modes/ folder, each fetched the first time it is switched on; a switch moves the
-// map only along blends the build checked.
+// Travel modes (#23): Walking, Bus, Train and tube, Car. Train and tube alone is the time map above.
+// Where the build has them (the server lists them, modes.json says which modes), every other
+// combination comes from its modes/ folder, each fetched the first time it is switched on; a switch
+// moves the map only along blends the build checked.
 import { readHandoff, writeHandoff } from "/shared/handoff.js";
 import { createMeshRenderer } from "/shared/mesh/renderer.js";
 import { localFrame, makeCamera } from "/shared/mesh/frame.js";
@@ -30,7 +30,8 @@ import { forgetCity, forgetModes, keepCity, keptCityWhy } from "/shared/offline.
 import { defaultWindow, pollStatus, statusLoading, timetableLine, windowText } from "/shared/transit.js";
 import {
   blend, buildLand, comboOf, createMotion, createPlacer, decodeLand, ease, keyframes, loadSegment, pathLengths,
-  madeWith, modeAvailability, pullWords, runSteps, segmentAt, sha256Hex, switchPlan, switchSteps, thinPositions,
+  comboName, keepRecent, madeWith, MODES, modeAvailability, pullWords, runSteps, segmentAt, sha256Hex, switchPlan,
+  switchSteps, thinPositions,
 } from "./carry.js";
 
 const $ = (id) => document.getElementById(id);
@@ -150,8 +151,8 @@ const inner = kinds.map((k, i) => (k !== 2 ? i : -1)).filter((i) => i >= 0);
 
 // ── combinations of travel modes ────────────────────────────────────
 // Train and tube alone is the time map itself (timemap.json). Where the build has them (the server
-// lists them), car alone and car with train and tube come from modes/, each fetched the first time
-// it is switched on. With no mode on the map is the real map.
+// lists them), the other combinations of Walking, Bus, Train and tube and Car come from modes/, each
+// fetched the first time it is switched on. With no mode on the map is the real map.
 const combos = {};
 function addCombo(id, cdoc) {
   const keys = keyframes(cdoc);
@@ -176,7 +177,7 @@ if (city.modes && city.modes[win]) {
   }
 }
 const on = new Set(["train"]);
-let cur = "train";            // "train", "car", "car-train", or "none" (the real map)
+let cur = "train";            // a combination's id ("train", "car-train", "bus-walk"…), or "none" (the real map)
 
 // A public page's line about where this comes from (the build's own notice is for its report).
 // Said again when a tab left open comes back, and hourly while it stays in view: past the
@@ -223,9 +224,14 @@ let roadsLoaded = false;
 
 // The land placed on a combination's keyframes (and the roads too, once Car has been on): one
 // placer per combination, made when it is first drawn.
+// Only the PLACERS_KEPT most recently drawn combinations keep theirs: switching through all fifteen
+// would otherwise hold every one's placed land.
+const PLACERS_KEPT = 3;
+const placedRecently = [];
 function placerOf(c) {
   if (!scene) return null;
   if (!c.placer) c.placer = createPlacer(scene, c.keys, { triangles: tri, smooth: smoothBox.checked });
+  for (const old of keepRecent(placedRecently, c, PLACERS_KEPT)) old.placer = null;
   return c.placer;
 }
 
@@ -371,12 +377,11 @@ function onMain() {
 
 // ρ to three significant figures, so neighbouring keyframes read apart (44.9 and 45.2).
 const fmt = (rho) => String(Number(rho.toPrecision(3)));
-const NAMES = { train: "Train and tube", car: "Car", "car-train": "Car with train and tube", none: "No way of travelling" };
 
 // Where the map is, in plain words; with ?details=1, in the build's own terms (the springs'
 // strength, and where the layout jumps).
 function where() {
-  if (switching) return `Switching to ${NAMES[switching.to].toLowerCase()}`;
+  if (switching) return `Switching to ${comboName(switching.to).toLowerCase()}`;
   if (cur === "none") return "The real map: no way of travelling is on";
   const i = onMain();
   if (i === 0) return "The real map";
@@ -516,7 +521,9 @@ function modeLines() {
   if (!index || cur === "none") return [];
   const i = Math.round(v);
   const pulls = cur === "train" ? (index.train_pulls[i] || {}) : (C.frames[i].pulls || {});
-  const lines = ["train", "car"].filter((m) => on.has(m)).map((m) => pullWords(m, pulls[m], i, index.overhead_min));
+  const kmh = index.s_m_per_min ? (index.s_m_per_min * 60) / 1000 : 0;
+  const lines = ["walk", "bus", "train", "car"].filter((m) => on.has(m))
+    .map((m) => pullWords(m, pulls[m], i, index.overhead_min || 0, kmh));
   const acc = pulls.car_access;
   if (DETAILS && acc && on.has("car")) {
     lines.push(`Car access springs (the ${index.overhead_min}-minute overhead): ${acc.n} of ${acc.of} pulling.`);
@@ -725,7 +732,7 @@ async function switchModes(mode) {
     cross({ at }, done) { crossBlend(C, combos[to], at, done); },
     enter(id, x) {
       cur = id;
-      for (const m of ["train", "car"]) { if (next.has(m)) on.add(m); else on.delete(m); }
+      for (const m of MODES) { if (next.has(m)) on.add(m); else on.delete(m); }
       updateModeButtons();
       if (id !== "none") { C = combos[id]; motion = motionOf(C); markSlider(); }
       uploaded = "";
@@ -744,24 +751,40 @@ async function switchModes(mode) {
 
 for (const b of modeButtons) {
   const a = available[b.dataset.mode];
-  b.title = a.on ? "" : (b.dataset.mode === "car" && city.modes && city.modes[win]
-    ? "Car didn't load. Reload the page to try again." : a.why);
+  b.title = a.on ? "" : (city.modes && city.modes[win] && !index
+    ? `${b.textContent.trim()} didn't load. Reload the page to try again.` : a.why);
 }
 if (index) {
-  const box = index.data_box_lonlat;
-  const cov = index.coverage || {};
-  $("modes-note").textContent = "Car: typical weekday speeds from 13:00 to 14:00 (HERE Traffic4cast, 2019 to " +
-    `2020), with ${index.overhead_min} minutes once a trip for parking and getting to the car.` +
-    (box ? " The speeds cover London from about Hounslow to Woolwich only, so Car reshapes that band" +
-      (cov.motorway_inside_the_data_box != null && cov.motorway_inside_the_data_box < 0.5
-        ? ", and few motorways have a speed." : ".") : "");
-  $("modes-note").hidden = false;
+  const notes = [];
+  if (available.car.on) {
+    const box = index.data_box_lonlat;
+    const cov = index.coverage || {};
+    notes.push("Car: typical weekday speeds from 13:00 to 14:00 (HERE Traffic4cast, 2019 to " +
+      `2020), with ${index.overhead_min} minutes once a trip for parking and getting to the car.` +
+      (box ? " The speeds cover London from about Hounslow to Woolwich only, so Car reshapes that band" +
+        (cov.motorway_inside_the_data_box != null && cov.motorway_inside_the_data_box < 0.5
+          ? ", and few motorways have a speed." : ".") : ""));
+  }
+  const scale = index.s_m_per_min ? ` (about ${Math.round((index.s_m_per_min * 60) / 1000)} km/h door to door)` : "";
+  if (available.bus.on) {
+    notes.push("Bus: buses from the timetable, weekdays 13:00 to 14:00, with the walk to and from the stop and the " +
+      `wait. Few beat this map's scale${scale}, so Bus barely moves it.`);
+  }
+  if (available.walk.on) {
+    const kmh = index.walk && index.walk.speed_kmh;
+    notes.push(`Walking: along the streets${kmh ? ` at ${kmh} km/h` : ""}, slower than this map's scale${scale}, ` +
+      "so Walking on its own leaves the map as it is.");
+  }
+  $("modes-note").textContent = notes.join(" ");
+  $("modes-note").hidden = !notes.length;
   $("modes-report-link").href = `/api/whole-city/${win}/modes/report.md`;
   $("modes-report-item").hidden = false;
   $("checked").hidden = false;
-  $("credits").textContent = [$("credits").textContent.replace(/\.$/, ""),
-    "Car speeds: HERE Traffic4cast (MeTS-10), academic and non-commercial use."].filter(Boolean).join("; ")
-    .replace(/^; /, "");
+  if (available.car.on) {
+    $("credits").textContent = [$("credits").textContent.replace(/\.$/, ""),
+      "Car speeds: HERE Traffic4cast (MeTS-10), academic and non-commercial use."].filter(Boolean).join("; ")
+      .replace(/^; /, "");
+  }
 }
 setBusy(false);
 updateModeButtons();

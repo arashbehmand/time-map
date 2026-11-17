@@ -20,7 +20,7 @@ It writes, per build, into `transit/out/<build>/` (git-ignored):
 | `tt_*.fingerprint.json` | What each table was built from (settings, code, points, feeds, OSM clip, departure) and whether it is complete. A table made from anything else is rebuilt, never resumed |
 | `point_ok.npy` | False where a point could not be snapped to a street, or is cut off from the network (it reaches, and is reached by, under 10% of the others in every window); its row and column, diagonal included, are 255. `points.json` lists them |
 | `walksheds.npz` | Access points and the H3 res-10 cells reached from them on foot: each usable station to the cells within 2 km, each usable table cell to the cells within 1 km (a cell's row carries its bus access). Cell centres with no street within 150 m (water, large parks) are left out (`points`, `indptr`, `cells`, `minutes`; see `transit/tables.py`, `Walksheds`) |
-| `tt_wd13_bus.npy`, `tt_wd13_walk.npy` | #23's per-mode times (`modetimes` stage): the same points, mask and encoding as `tt_wd13.npy`. **Bus:** the faster of a bus trip (buses only, walking to and from the stops) and walking straight there within 30 min, as the tables are the faster of transit and walking: R5 keeps the walk-only option whatever the modes (`transit/calibrate.py`). A pair whose bus time equals its walking time has no bus in it. **Walk:** walking only, one departure, up to 180 min (255 beyond). The app doesn't read them and they aren't packaged; Whole city's Walking and Bus will use them (#23 part 2) |
+| `tt_wd13_bus.npy`, `tt_wd13_walk.npy` | #23's per-mode times (`modetimes` stage): the same points, mask and encoding as `tt_wd13.npy`. **Bus:** the faster of a bus trip (buses only, walking to and from the stops) and walking straight there within 30 min, as the tables are the faster of transit and walking: R5 keeps the walk-only option whatever the modes (`transit/calibrate.py`). A pair whose bus time equals its walking time has no bus in it. **Walk:** walking only, one departure, up to 180 min (255 beyond). The app doesn't read them and they aren't packaged; the time map's Walking and Bus springs are built from them (`--modes bus walk`, "Travel modes" below) |
 | `manifest.json` | Service dates, every input's URL, version, sha256 and "timetable as of" date, every routing setting, versions, output hashes, `valid_until` |
 | `feeds-check.md`, `gonogo.md`, `gate/<sample>/report.md` | The feed audit, the go/no-go and the gate |
 
@@ -238,7 +238,7 @@ A rebuild, start to finish:
    dates after a timetable change), then the quick look (`transit.gate --provisional`) before the
    service dates pass.
 2. Whole city from the same build: `transit.layout.car --build <id>`, then
-   `transit.layout.timemap --build <id> --modes car`.
+   `transit.layout.timemap --build <id> --modes car bus walk`.
 3. Copy both onto the Railway volume and point `TRANSIT_DIR` and `TIMEMAP_DIR` at them (main
    README, "How the tables reach Railway").
 
@@ -530,25 +530,63 @@ and never goes into git or `static/`. Unlike the stations-only layout, it is pub
 shows it as Whole city (#28), from `TIMEMAP_DIR`, under the tables' own licence gate.
 Its report and Shepard plot are linked from the page.
 
-## Travel modes (#23, L-03)
+## Travel modes (#23)
 
 Whole city has a toggle for each way of travelling: Walking, Bus, Train and tube, Car. Every mode
 is a family of pull-only springs like the train springs, at the same scale s, and the build solves
-each combination over the same 25 positions of ρ from the real map. Part 1 (this) is car with
-train and tube: three combinations (train alone, the time map above; car alone; car with train
-and tube) and the real map, with no mode on. Walking and Bus wait for part 2, which uses the
-walking-only and bus-only tables the `modetimes` stage now builds; their toggles say so.
+each combination over the same 25 positions of ρ from the real map: with all four modes, fifteen
+combinations (train alone is the time map above) and the real map, with no mode on. Part 1 (L-03)
+added the car; part 2 (L-04) bus and walking, from the bus-only and walking-only tables the
+`modetimes` stage builds.
 
 ```bash
 export TRANSIT_OUT=<builds> TRANSIT_DATA=<their data> T4C_ZIP=<path>/LONDON_2022.zip
 transit/.venv/bin/python -m transit.layout.carspeed                       # once per zip
-transit/.venv/bin/python -m transit.layout.car --build 2026-11-12         # once per build
-transit/.venv/bin/python -m transit.layout.timemap --build 2026-11-12 --modes car
+transit/.venv/bin/python -m transit.layout.car --build 2026-11-17         # once per build
+transit/.venv/bin/python -m transit.layout.timemap --build 2026-11-17 --modes car bus walk
 ```
 
-The speeds are weekday 13:00–14:00, so the car job and `--modes car` refuse any window but wd13
-(`CAR_WINDOW`). The car's files must name this build, window, table and mesh, or the job refuses
-them; the speed cache must name the zip's sha256 and the rules and bins in `transit/settings.py`.
+`--modes` takes any of car, bus and walk; the job solves every combination of train and tube with
+them (`--modes car` alone gives car and car with train and tube). The car's speeds and the bus and
+walking tables are weekday 13:00–14:00, so `--modes` refuses any window but wd13 (`CAR_WINDOW`).
+The car's files must name this build, window, table and mesh, or the job refuses them; the speed
+cache must name the zip's sha256 and the rules and bins in `transit/settings.py`; the bus and
+walking tables must be the ones the build's manifest lists (sha256, fingerprint, points, departure),
+and the prepared bus feed (`bods.gtfs.zip`) the one it records.
+
+**Bus and walking** (`modelinks.py`). Both take their times from the build's tables, so the job runs
+no routing. A pair of nodes has a time when each way some table point of one reaches some table
+point of the other (a station node's points are its merged stations, a cell's its own point); the
+time is the mean of the two ways, floored at half a minute: the train rule.
+
+- **Walking springs** sit on the mesh's edges between two stations or cells (never a guard node),
+  at s × the walking-only time. Walking has no routes, and these are the neighbours the mesh holds
+  apart. At s (about 17 km/h door to door) a walk is always slower than the map, so on the real
+  map no walking spring pulls and Walking alone *is* the real map. That is the shared scale at
+  work, not a failed mode: the page and the report say so, and the report counts any walking
+  spring that pulls in another combination (where the map has stretched two neighbours past
+  their walk).
+- **Bus springs** join nodes a bus serves one after the other: bus trips (route_type 3 or 700–799)
+  of the prepared bus feed running on the build's weekday, each stop given to its nearest station
+  or cell, a hop counted when its stops are one stop_sequence apart and it leaves the first between
+  13:00 and 14:00. Consecutive stops on one node merge; each pair of nodes is one link however many
+  trips use it. A link is kept when the bus-only table has a time both ways and it is below the
+  walking-only time: the bus table is the faster of a bus and a direct walk, so a time no faster
+  than walking has no bus in it. Every dropped hop and pair is counted, and every pair left out is
+  named in the report. Bus links come from the bus feed only: the rail feed's only buses are rail
+  replacement (route_type 714). The bus feed's route types don't tell a replacement bus from any
+  other either, so its own replacement services are kept like any bus (on build 2026-11-17 the one
+  bus spring that ever pulls is route "TUBE", Victoria – Marble Arch); the report says so.
+- **Pulling and taut.** The report and the page count a spring as *pulling* when it is more than 1%
+  past its rest length, and as *taut* when it is at or past it: every taut spring acts on the solve.
+  Bus and walking are judged by their taut springs (a single taut walking spring between the two
+  Bank nodes moves train and tube + walking by up to 2.8 m from train and tube alone on 2026-11-17),
+  and the report gives, for each of them, the largest shift it causes: each combination with it
+  against the same combination without it.
+- Bus and walking springs are plain families on the mesh's nodes, weighted like train springs, and
+  sit in parallel with train springs on a shared pair, as the issue's model says: the faster mode's
+  shorter rest length pulls first. Their times already include the walk to the stop and the wait,
+  so they need no road layer.
 
 **The car's speeds** (`carspeed.py`). `LONDON_2022.zip` is HERE's Traffic4cast 2022 sample data
 (<https://developer.here.com/sample-data>, 2.8 GB; the owner downloads it). It holds, per day from
@@ -611,31 +649,33 @@ reach a place only through its access spring and the tie. So train and car never
 both can pull in the same area at once, the car holding a pair at most s·(5 min + drive) apart.
 Train hops come from the tables and include a wait at each; a car trip pays its overhead once.
 
-**What it writes** (into `modes/` of the time map's folder, only with `--modes car`; without it
+**What it writes** (into `modes/` of the time map's folder, only with `--modes`; without it
 the time map is what it was, except two station names that lose a stray "(N/A), London"):
 
 | File | What it is |
 |---|---|
-| `modes.json` | The modes (Walking and Bus not available yet, and why), which combination is in which file, train and tube's pulling springs at each position, whether each switch goes straight across, `roads.bin`'s header, every file's size |
-| `combo-car.json`, `combo-car-train.json` | Each car combination: every solved position in whole decimetres, its measures and each mode's pulling springs, and its in-between keyframes |
-| `roads.bin` | The main roads carried through the mesh like the rail (`land.py`), drawn while Car is on |
-| `report.md`, `report.json` | The car data (licence, days, window, coverage before and after), the Thames crossings, the combinations compared at train alone's Wembley pick and at the end (node shift from the real map and from train alone, each mode's pulling share, Wembley Park, σ₁ against the all-mode tables, the thinnest triangle), every switch, the restart check per car combination, the spot check, every position |
+| `modes.json` | The modes (and why one isn't there), which combination is in which file, train and tube's pulling springs at each position, whether each switch goes straight across, `roads.bin`'s header (with the car), the bus and walking springs' counts, every file's size |
+| `combo-<id>.json` | One combination, its id the modes' names sorted and joined by "-" (`combo-car-train.json`, `combo-bus-walk.json`, … `combo-bus-car-train-walk.json`): every solved position in whole decimetres, its measures and each mode's pulling springs, and its in-between keyframes |
+| `roads.bin` | With the car: the main roads carried through the mesh like the rail (`land.py`), drawn while Car is on |
+| `report.md`, `report.json` | The bus and walking times (tables, links, everything left out and why), the car data (licence, days, window, coverage before and after) and Thames crossings, the combinations compared at train alone's Wembley pick and at the end (node shift from the real map and from train alone, each mode's pulling share, Wembley Park, σ₁ against the all-mode tables, the thinnest triangle), every switch, the restart check per combination, the car's spot check, every position |
 
 `timemap.json` and `land.bin` stay train and tube alone, so the page's first load is unchanged;
-the land's Float32 sliver check covers every blend any combination draws, switches included. The
-`modes/` files name the sha256 of the `timemap.json` and `land.bin` they were made with, and the
-app serves them with no other; a run without `--modes` removes an old `modes/` folder. Each
-car file must be under 2 MB gzipped; the page fetches a combination the first time it is switched
-on.
+the land's Float32 sliver check covers every blend any combination draws, switches included (a
+blend between two identical layouts, as a slack mode gives, is checked once). The `modes/` files
+name the sha256 of the `timemap.json` and `land.bin` they were made with, and the app serves them
+with no other; a run removes any `modes/` file it didn't write (a run without `--modes`, the whole
+folder). Each file must be under 2 MB gzipped; the page fetches a combination the first time it is
+switched on.
 
 **No folds.** Every combination is solved and checked like the time map: 0 flipped triangles at
 every shipped position, as shipped and in Float32, and every blend between neighbouring keyframes
-checked exactly; the restart check (nudged starts, other ladders of ρ) runs for each car
-combination. **Switching** happens at solved positions: the page glides to the nearest one, then
-blends straight across to the other combination where the build checked that blend
+checked exactly; the restart check (nudged starts, other ladders of ρ) runs for every combination.
+**Switching** happens at solved positions: the page glides to the nearest one, then blends
+straight across to the other combination where the build checked that blend
 (`mesh.blend_min_area` on whole decimetres), or else goes back down its own path to the real map
-and up the other combination. Both directions of train ↔ car with train and car ↔ car with train
-are checked at every position; train ↔ car always passes through one of them (one toggle at a time).
+and up the other combination. Every pair of combinations one toggle apart is checked at every
+position (28 pairs with all four modes); switching the last mode off, or the first on, goes
+through the real map.
 
 **Very thin triangles.** The page marks, under the slider and in the readout, every solved position
 of the combination shown where some triangle is stretched past 50:1 (`THIN_MARK` in

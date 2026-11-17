@@ -150,22 +150,120 @@ def _sha(path: Path) -> str:
 
 
 def write_timemap_build(tmp: Path, feed_hook=None) -> tuple[Path, Path]:
-    """The build under tmp/out/<build>/ and its prepared feed and (stand-in) clip under
-    tmp/data/work/<build>/, the manifest recording both. Returns (build dir, data dir)."""
+    """The build under tmp/out/<build>/ and its prepared feeds (rail and bus) and (stand-in) clip
+    under tmp/data/work/<build>/, and the bus-only and walking-only tables (#23 part 2) beside its
+    table, the manifest recording all of them. Returns (build dir, data dir)."""
     data = Path(tmp) / "data"
     work = data / "work" / BUILD
     feed = write_gtfs(work / "gbt.gtfs.zip")
     if feed_hook:
         feed_hook(feed)
+    bods = write_gtfs(work / "bods.gtfs.zip", bus_tables())
     clip = work / "london.osm.pbf"
     clip.write_bytes(b"not a real OSM file: the tests hand the land over directly")
+    out = Path(tmp) / "out" / BUILD
 
     def hook(manifest):
-        manifest["inputs"] = {"prepared": {"gbt": {"file": feed.name, "sha256": _sha(feed)}},
+        manifest["inputs"] = {"prepared": {"gbt": {"file": feed.name, "sha256": _sha(feed)},
+                                           "bods": {"file": bods.name, "sha256": _sha(bods)}},
                               "osm_clip": {"file": clip.name, "sha256": _sha(clip)}}
+        write_mode_tables(out, manifest)
 
     build_dir = write_build(Path(tmp) / "out", manifest_hook=hook, n_cells=N_CELLS)
     return build_dir, data
+
+
+# ── bus and walking (#23 part 2) ────────────────────────────────────
+WALK_SLOWER = 3.0                # the walking table is this many times the stations' walking time
+BUS_MIN = 5                      # the bus corridor along row 1: this many minutes a hop, both ways
+BUS_CORRIDOR = [f"syn:G1{c}" for c in range(6)]
+SLOW_BUS = ("syn:G30", "syn:G31", "syn:G32")          # bus times no faster than walking: no spring
+NO_BUS = ("syn:G40", "syn:G41")                       # no bus time one way: no spring
+
+
+def _station_xy() -> dict[str, tuple[float, float]]:
+    from layout_network import _stations
+    return _stations()
+
+
+def bus_tables() -> dict[str, list[list]]:
+    """A prepared bus feed (BODS-like, route_type 3) over the synthetic stations:
+    - route "25" along row 1 at 13:05, with an extra stop 20 m from G10 (merged into its node): five links;
+    - route "26" along G30-G31-G32: its bus times are no faster than walking, so no spring;
+    - route "27" G40-G41: no bus time one way, so no spring;
+    - row 1 again at 15:00 (outside the window), on a service not running that day, and with a
+      stop_sequence gap (G13 -> G15): none of them adds a link."""
+    st = _station_xy()
+    stops = {s.split(":")[1]: st[s] for s in st}
+    gx, gy = st["syn:G10"]
+    stops["G10b"] = (gx + 20, gy)
+    row1 = [s.split(":")[1] for s in BUS_CORRIDOR]
+    trips = [
+        _trip("b25", "25", "WD", ["G10", "G10b"] + row1[1:]),
+        _trip("b26", "26", "WD", [s.split(":")[1] for s in SLOW_BUS]),
+        _trip("b27", "27", "WD", [s.split(":")[1] for s in NO_BUS]),
+        _trip("b25_late", "25", "WD", list(reversed(row1)), start="15:00:00"),
+        _trip("b25_off", "25", "OFF", row1),
+        _trip("b28_gap", "28", "WD", ["G03", "G04", "G05"], seqs=[1, 3, 4]),
+    ]
+    rows = [["stop_id", "stop_name", "stop_lat", "stop_lon"]]
+    for sid, (x, y) in sorted(stops.items()):
+        lon, lat = lonlat(x, y)
+        rows.append([sid, f"Bus stop {sid}", f"{lat:.7f}", f"{lon:.7f}"])
+    return {
+        "agency.txt": [["agency_id", "agency_name", "agency_url", "agency_timezone"],
+                       ["B", "Synthetic buses", "https://example.invalid", "Europe/London"]],
+        "routes.txt": [["route_id", "agency_id", "route_short_name", "route_long_name", "route_type"]]
+        + [[r, "B", r, f"Route {r}", "3"] for r in ("25", "26", "27", "28")],
+        "trips.txt": [["route_id", "service_id", "trip_id"]] + [t["trip"] for t in trips],
+        "stop_times.txt": [["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence"]]
+        + [r for t in trips for r in t["rows"]],
+        "stops.txt": rows,
+        "calendar_dates.txt": [["service_id", "date", "exception_type"], ["WD", DAY, "1"], ["OFF", "20260108", "1"]],
+    }
+
+
+def mode_minutes(out: Path) -> tuple:
+    """The walking-only and bus-only tables of the build in `out` (its points.csv): walking is
+    WALK_SLOWER times the stations' walk, between every two usable points (cells too), 255 past
+    180 min; buses are the same but BUS_MIN a hop along row 1 and no time G40 -> G41."""
+    import numpy as np
+    with open(out / "points.csv", newline="") as f:
+        pts = list(csv.DictReader(f))
+    cos0 = math.cos(math.radians(LAT0))
+    xy = np.array([[(float(p["lon"]) - LON0) * M_PER_DEG * cos0, (float(p["lat"]) - LAT0) * M_PER_DEG] for p in pts])
+    d = np.hypot(*(xy[:, None, :] - xy[None, :, :]).transpose(2, 0, 1))
+    from layout_network import WALK_M_PER_MIN
+    walk_f = np.floor(WALK_SLOWER * (d / WALK_M_PER_MIN + 1) + 0.5)
+    walk = np.where(walk_f <= 180, walk_f, 255).astype(np.uint8)
+    np.fill_diagonal(walk, 0)
+    ok = np.load(out / "point_ok.npy")
+    walk[~ok, :] = 255
+    walk[:, ~ok] = 255
+    at = {p["id"]: i for i, p in enumerate(pts)}
+    bus = walk.copy()
+    for a, b in zip(BUS_CORRIDOR, BUS_CORRIDOR[1:]):
+        bus[at[a], at[b]] = bus[at[b], at[a]] = BUS_MIN
+    bus[at[NO_BUS[0]], at[NO_BUS[1]]] = 255
+    return walk, bus
+
+
+def write_mode_tables(out: Path, manifest: dict) -> None:
+    """tt_wd13_walk.npy and tt_wd13_bus.npy with their fingerprints, listed in `manifest` as the
+    build's modetimes stage lists them."""
+    import numpy as np
+    walk, bus = mode_minutes(out)
+    dep = manifest["outputs"][f"tt_{WINDOW_ID}"]["departure"]
+    points_sha = _sha(out / "points.csv")
+    manifest.setdefault("mode_tables_fingerprints", {})
+    for kind, t in (("walk", walk), ("bus", bus)):
+        p = out / f"tt_{WINDOW_ID}_{kind}.npy"
+        np.save(p, t)
+        inputs = {"points_sha256": points_sha, "departure": dep, "kind": kind}
+        (out / f"tt_{WINDOW_ID}_{kind}.fingerprint.json").write_text(json.dumps({"inputs": inputs, "complete": True}))
+        manifest["outputs"][f"tt_{WINDOW_ID}_{kind}"] = {"file": p.name, "bytes": p.stat().st_size, "sha256": _sha(p),
+                                                         "shape": list(t.shape), "kind": kind, "departure": dep}
+        manifest["mode_tables_fingerprints"][kind] = inputs
 
 
 def write_checks_l02(path: Path) -> Path:

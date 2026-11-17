@@ -39,9 +39,19 @@ export async function keptCityWhy() {
   } catch { return none; }
 }
 
-const FILES = ["timemap.json", "land.bin", "report.md", "shepard.svg",
-  // the travel modes (#23), fetched when first switched on
-  "modes/modes.json", "modes/combo-car.json", "modes/combo-car-train.json", "modes/roads.bin", "modes/report.md"];
+const FILES = ["timemap.json", "land.bin", "report.md", "shepard.svg"];
+
+// The travel modes (#23), fetched when first switched on: everything kept under the window's
+// modes/ folder, whatever combinations its build had.
+async function dropModes(cache, win) {
+  const prefix = `/api/whole-city/${win}/modes/`;
+  try {
+    for (const req of await cache.keys()) {
+      const url = typeof req === "string" ? req : req.url;
+      if (new URL(url, "http://localhost").pathname.startsWith(prefix)) await cache.delete(req);
+    }
+  } catch { /* nothing kept, or nothing to list: the map's own files still go */ }
+}
 
 // Keep the status a window was shown with (`win`, its files just fetched through the service
 // worker). Windows viewed earlier under the same build stay offered; when the build has
@@ -56,6 +66,7 @@ export async function keepCity(c, win) {
       for (const w of prev.viewed || c.windows.map((x) => x.id)) {
         if (w === win) continue;
         for (const f of FILES) await cache.delete(`/api/whole-city/${w}/${f}`);
+        await dropModes(cache, w);
       }
     }
     const viewed = [...new Set([...(same ? prev.viewed : []), win])];
@@ -68,7 +79,7 @@ export async function keepCity(c, win) {
 export async function forgetModes(win) {
   try {
     const cache = await caches.open(CITY_CACHE);
-    for (const f of FILES) if (f.startsWith("modes/")) await cache.delete(`/api/whole-city/${win}/${f}`);
+    await dropModes(cache, win);
   } catch { /* nothing kept */ }
 }
 

@@ -718,11 +718,11 @@ def write(out: Path, *, b, pairs, mesh, links, model, frames, cells, pick, check
                                           stress_scale=doc["stress_scale"], code=code, page_gzip=gz,
                                           land_dropped=dropped, bound=bound) if modes else ({}, [])
     out.mkdir(parents=True, exist_ok=True)
-    if not modes:
-        # A run without the modes leaves no car behind: old modes/ files were made with another land.bin.
-        for name in tm.MODES_FILES:
-            if (out / name).is_file():
-                (out / name).unlink()
+    # A run leaves no modes/ file it didn't write: old ones were made with another land.bin, or for
+    # modes this run doesn't have (a run without the modes leaves none at all).
+    for name in tm.MODES_FILES:
+        if name not in mfiles and (out / name).is_file():
+            (out / name).unlink()
     (out / "timemap.json").write_text(text + "\n", encoding="utf-8")
     (out / "land.bin").write_bytes(blob)
     (out / "report.json").write_text(json.dumps(rep, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

@@ -647,6 +647,8 @@ async def solve_stations(req: SolveRequest, data: TransitData, router: Router, p
         quickest=result(quickest) if quickest is not None else None,
         window=window,
         window_label=window_label(data.windows[window]),
+        service_date=data.window_date(window),
+        valid_until=data.valid_until.isoformat(),
         credits=credits(data.manifest),
         venue=g.venue,
         venue_fallback=fallback,

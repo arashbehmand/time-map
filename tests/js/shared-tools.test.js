@@ -8,7 +8,7 @@ import { APP_NAME, cityShort, cityUnavailable, MAP_WORDS, MODE_LABEL, minutesTex
 import { mins } from "../../static/meetup/words.js";
 import { CITY_CACHE, cityOrKept, keepCity, keptCity, keptCityWhy } from "../../static/shared/offline.js";
 import * as W from "../../static/warp/words.js";
-import { defaultWindow, expired, pollStatus, WINDOWS, windowText } from "../../static/shared/transit.js";
+import { dateText, defaultWindow, pastValidUntil, pollStatus, timetableLine, WINDOWS, windowText } from "../../static/shared/transit.js";
 import * as V from "../../static/warp/views.js";
 
 function memory() {
@@ -112,7 +112,6 @@ test("minutes read the same everywhere", () => {
 test("why Whole city can't be opened, in plain words", () => {
   assert.equal(cityUnavailable("not_configured"), "Whole city isn't on this server yet.");
   assert.equal(cityUnavailable("missing"), "Whole city isn't on this server yet.");
-  assert.equal(cityUnavailable("expired"), "Whole city is out of date until the timetables are rebuilt.");
   for (const r of ["licences_not_cleared", "override_refused_here", "development_only"]) {
     assert.equal(cityUnavailable(r), "Whole city isn't published yet.");
   }
@@ -120,8 +119,8 @@ test("why Whole city can't be opened, in plain words", () => {
   assert.equal(cityUnavailable("build_mismatch"), "Whole city isn't available right now.");
   assert.equal(cityUnavailable(""), "Whole city isn't available right now.");
   // The switcher's short form, visible on a phone.
-  assert.deepEqual(["not_configured", "expired", "licences_not_cleared", "build_mismatch"].map(cityShort),
-    ["not here yet", "out of date", "not published yet", "not available"]);
+  assert.deepEqual(["not_configured", "licences_not_cleared", "build_mismatch"].map(cityShort),
+    ["not here yet", "not published yet", "not available"]);
 });
 
 test("the status is asked for again while loading or after an error, but not for long without a network", async () => {
@@ -192,14 +191,13 @@ test("offline, Whole city offers only windows viewed under the kept build, until
     assert.equal(kept.build, "B");
     assert.equal(kept.offline, true);
     assert.equal(await (await caches.open(CITY_CACHE)).match("/api/whole-city/wd08/timemap.json"), undefined);
-    // An expired kept build is dropped, and says so.
+    // A kept build past its valid-until day is still offered (nothing expires, #30).
     await keepCity(status("B", "2000-01-01"), "wd13");
-    assert.deepEqual(await keptCityWhy(), { city: null, reason: "expired" });
-    assert.equal(await caches.has(CITY_CACHE), false);
+    assert.equal((await keptCity()).valid_until, "2000-01-01");
     // Online, a server that refuses Whole city makes it forget; no answer means the kept copy.
     await file("wd13", "C"); await keepCity(status("C", "2099-01-01"), "wd13");
     assert.equal((await cityOrKept(null)).whole_city.build, "C");
-    await cityOrKept({ whole_city: { available: false, reason: "expired" } });
+    await cityOrKept({ whole_city: { available: false, reason: "build_mismatch" } });
     assert.equal(await cityOrKept(null), null);
   } finally {
     globalThis.caches = real;
@@ -207,8 +205,27 @@ test("offline, Whole city offers only windows viewed under the kept build, until
 });
 
 test("From here's views re-export the shared timetable helpers", () => {
-  assert.equal(V.expired, expired);
+  assert.equal(V.pastValidUntil, pastValidUntil);
+  assert.equal(V.timetableLine, timetableLine);
   assert.equal(V.defaultWindow, defaultWindow);
   assert.deepEqual(V.WINDOWS, WINDOWS);
   assert.equal(windowText("a weekday, 08:00–09:00"), "A weekday, 08:00–09:00");
+});
+
+test("the timetable's date reads as a calendar date, whatever the reader's time zone (#30)", () => {
+  assert.equal(dateText("2026-12-16"), "16 December 2026");
+  assert.equal(dateText("2027-01-06"), "6 January 2027");
+  for (const bad of [undefined, null, "", "soon", "2026-13-01", "2026-02-30", 20261216]) assert.equal(dateText(bad), "", String(bad));
+});
+
+test("a transit answer says how old its timetable is, and past valid_until that it may have changed", () => {
+  const before = new Date("2026-12-20T12:00:00Z"), after = new Date("2027-01-21T12:00:00Z");
+  assert.equal(timetableLine("2026-12-16", "2027-01-20", before), "Timetable as of 16 December 2026.");
+  assert.equal(timetableLine("2026-12-16", "2027-01-20", after),
+    "Timetable as of 16 December 2026. Services may have changed since.");
+  assert.equal(timetableLine("2026-12-16", null, after), "Timetable as of 16 December 2026.");
+  assert.equal(timetableLine(undefined, "2027-01-20", after), "");       // an older kept copy: no line
+  assert.equal(pastValidUntil("2026-12-12", new Date("2026-12-12T23:30:00Z")), false);   // GMT: still the 12th
+  assert.equal(pastValidUntil("2026-12-12", new Date("2026-12-13T00:30:00Z")), true);
+  assert.equal(pastValidUntil(null), false);
 });

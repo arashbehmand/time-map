@@ -213,7 +213,8 @@ def test_landing_mentions_public_transport_only_when_the_tables_are_there():
     html = (ROOT / "portfolio/index.html").read_text()
     lines = re.findall(r'<p class="transit-line"( hidden)?>', html)
     assert len(lines) == 2 and all(lines)
-    assert 'import { expired, pollStatus, statusLoading } from "/shared/transit.js";' in html
+    assert 'import { pollStatus, statusLoading } from "/shared/transit.js";' in html
+    assert "expired" not in html                               # nothing expires (#30)
     assert ".transit-line[hidden]" in html
     # The status comes from one shared helper, not from another tool's folder (#28).
     assert "/warp/" not in html and "views.js" not in html
@@ -453,13 +454,13 @@ def test_whole_city_loads_only_its_data_through_the_gate():
     assert '<link rel="stylesheet" href="/shared/ui.css" />' in html
 
 
-def test_whole_city_offline_only_until_its_build_expires():
-    """Offline (#28): the kept copy is used only with no answer from the server, only while its
-    valid-until date hasn't passed, only for the windows whose files were kept; a server that
+def test_whole_city_offline_whatever_its_date():
+    """Offline (#28): the kept copy is used only with no answer from the server, whatever its
+    date (nothing expires, #30), only for the windows whose files were kept; a server that
     refuses Whole city makes the pages forget it."""
     off = (ROOT / "shared/offline.js").read_text()
     kept = off.split("export async function keptCityWhy")[1].split("\n}\n")[0]
-    assert "expired(c.valid_until)" in kept and "caches.delete(CITY_CACHE)" in kept and '"expired"' in kept
+    assert "valid_until" not in kept and "caches.delete(CITY_CACHE)" in kept and '"expired"' not in kept
     assert "cache.match(`/api/whole-city/${w.id}/timemap.json`)" in kept
     gate = off.split("export async function cityOrKept")[1].split("\n}\n")[0]
     assert "if (!status)" in gate and 'c.reason !== "loading") await forgetCity()' in gate
@@ -555,7 +556,7 @@ def test_lab_fallback_hides_the_overlay_and_skips_checks():
 
 
 def test_whole_city_has_a_toggle_per_way_of_travelling():
-    """Travel modes (#23, L-03): Walking and Bus wait for the next table rebuild and say so; Train and
+    """Travel modes (#23, L-03): Walking and Bus wait for the map to use their times and say so; Train and
     tube is on; Car is enabled where the server lists the modes (the build has them)."""
     html = (ROOT / "whole-city/index.html").read_text()
     modes = html.split('<fieldset id="modes"')[1].split("</fieldset>")[0]
@@ -563,8 +564,8 @@ def test_whole_city_has_a_toggle_per_way_of_travelling():
     assert [(m, label) for m, _, label in buttons] == [("walk", "Walking"), ("bus", "Bus"), ("train", "Train and tube"),
                                                        ("car", "Car")]
     attrs = {m: a for m, a, _ in buttons}
-    assert "disabled" in attrs["walk"] and "next table rebuild" in attrs["walk"]
-    assert "disabled" in attrs["bus"] and "next table rebuild" in attrs["bus"]
+    assert "disabled" in attrs["walk"] and "Coming next" in attrs["walk"]
+    assert "disabled" in attrs["bus"] and "Coming next" in attrs["bus"]
     assert 'aria-pressed="true"' in attrs["train"] and "disabled" not in attrs["train"]
     assert 'aria-pressed="false"' in attrs["car"] and "disabled" in attrs["car"]
     # The Metropolitan line isn't special: rail and tube are one layer that follows Train and tube.

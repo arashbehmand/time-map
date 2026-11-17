@@ -15,7 +15,7 @@ import { createLatest } from "/shared/latest.js";
 import { locate, offerLocation } from "/shared/locate.js";
 import { updateSwitcher, watchCity } from "/shared/nav.js";
 import { MODE_LABEL } from "/shared/tools.js";
-import { expired, insideArea, windowOptions } from "/shared/transit.js";
+import { insideArea, timetableLine, windowOptions } from "/shared/transit.js";
 import { decodeGroup, encodeGroup, isGroupHash, linkAtLoad, reconcileGroup, STATE_KEY } from "./share.js";
 import {
   ALL_TIES_TEXT, altText, answerNotes, headline, isPlace, isVenue, journeyLink, journeyNote, meaning, mins,
@@ -262,7 +262,7 @@ async function loadTransitStatus() {
   // Whole city may still be loading: the switcher asks alone, so this handler (and the people
   // list it redraws) runs once.
   if (!statusSeen) { statusSeen = true; watchCity(status); }
-  transit = status.available && !expired(status.valid_until) ? status : { available: false };
+  transit = status.available ? status : { available: false };
   $("transit-chip").hidden = !transit.available;
   if (!transit.available && addMode() === "transit") setAddMode("walking");
   if (transit.available) {
@@ -628,7 +628,7 @@ async function solve() {
     updateFind();
     // "No place works" names who is stuck; other errors use the server's own sentence.
     setStatus(noPlaceSentence(err, snap.people.map(nameOf)) || friendly(err), "error");
-    // The tables went away (expired, say) while the page was open: ask again, which takes
+    // The tables went away (withdrawn, say) while the page was open: ask again, which takes
     // public transport off the page and moves anyone on it to walking.
     if (err && err.code === "transit_unavailable") loadTransitStatus();
     return;
@@ -752,6 +752,7 @@ function renderStations() {
       <p class="hint">${esc(meaning("minimax"))}</p>
       ${answerNotes(data).map((n) => `<p class="hint answer-note">${esc(n)}</p>`).join("")}
       ${tripRows(data.best, snap)}
+      ${timetableLine(data.service_date, data.valid_until) ? `<p class="hint">${esc(timetableLine(data.service_date, data.valid_until))}</p>` : ""}
       <p class="hint">${esc(journeyNote(data.window_label, data.best))}</p>
       ${isVenue(data.best) ? `<p class="hint">${esc(OPEN_HOURS_HINT)}</p>` : ""}
     </div>

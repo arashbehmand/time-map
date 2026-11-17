@@ -593,8 +593,8 @@ export function runSteps(steps, ops) {
 export function modeAvailability(index) {
   const listed = Object.fromEntries(((index && index.modes) || []).map((m) => [m.id, m]));
   return {
-    walk: { on: false, why: (listed.walk && listed.walk.why) || "Comes with the next table rebuild." },
-    bus: { on: false, why: (listed.bus && listed.bus.why) || "Comes with the next table rebuild." },
+    walk: { on: false, why: (listed.walk && listed.walk.why) || "Coming next." },
+    bus: { on: false, why: (listed.bus && listed.bus.why) || "Coming next." },
     train: { on: true, why: "" },
     car: { on: Boolean(listed.car && listed.car.available), why: listed.car ? "" : "This map has no car." },
   };

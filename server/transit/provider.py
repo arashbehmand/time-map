@@ -21,6 +21,7 @@ import hashlib
 import json
 import logging
 import math
+import time
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -192,8 +193,10 @@ class TransitData:
         self.directory = directory
         self.manifest = manifest
         self.build = str(manifest.get("build", ""))
+        # Advisory only (#30): past it, the pages say services may have changed; nothing expires.
         self.valid_until = date.fromisoformat(manifest["valid_until"])
         self.windows = {w: manifest["windows"][w] for w in WINDOWS}
+        self.service_dates = service_dates(manifest)
         self.development_only = development_only
         self.lon, self.lat, self.ok = lon, lat, ok
         # Where each point's times were measured from: R5 snaps it to the street network.
@@ -210,11 +213,13 @@ class TransitData:
         self._build_egress()
         self._build_raster()
         self._build_coverage()
+        started = time.perf_counter()
         try:
             self._build_venues(venues or [])
         except Exception as exc:  # noqa: BLE001 - venues are optional: never lose the tables to them
             log.warning("transit: venues left out (%s)", type(exc).__name__)
             self.venues, self._pools = {}, {}
+        self.venue_links_s = time.perf_counter() - started
 
     # ── loading ──────────────────────────────────────────────────────
     @classmethod
@@ -237,11 +242,9 @@ class TransitData:
                 raise TransitUnavailable("override_refused_here")
             development_only = True
         try:
-            valid_until = date.fromisoformat(manifest["valid_until"])
-        except (KeyError, ValueError):
+            date.fromisoformat(manifest["valid_until"])
+        except (KeyError, TypeError, ValueError):
             raise TransitUnavailable("bad_manifest") from None
-        if valid_until < (today or london_today()):
-            raise TransitUnavailable("expired")
         outputs = manifest.get("outputs", {})
         for name in [*(f"tt_{w}" for w in WINDOWS), "point_ok.npy", "walksheds.npz", "points.csv"]:
             out = outputs.get(name)
@@ -442,8 +445,10 @@ class TransitData:
         self.coverage_bbox = (float(lon0), float(lat0), float(lon1), float(lat1))
 
     # ── queries ──────────────────────────────────────────────────────
-    def valid_on(self, today: date | None = None) -> bool:
-        return self.valid_until >= (today or london_today())
+    def window_date(self, window: str) -> str | None:
+        """The service date a window's times are for (YYYY-MM-DD), or None if the manifest
+        doesn't say."""
+        return self.service_dates.get(self.windows[window].get("day", ""))
 
     def covered(self, lon: float, lat: float) -> bool:
         """Inside the area the tables cover: the same polygon the page enables the chip by."""
@@ -596,13 +601,28 @@ class TransitData:
             "available": True,
             "build": self.build,
             "valid_until": self.valid_until.isoformat(),
-            "windows": [{"id": w, "label": window_label(self.windows[w])} for w in WINDOWS],
+            "service_dates": self.service_dates,
+            "windows": [{"id": w, "label": window_label(self.windows[w]), "date": self.window_date(w)}
+                        for w in WINDOWS],
             "coverage": self.coverage,
             "credits": credits(self.manifest),
             "development_only": self.development_only,
             "venues": {"kinds": {k: len(v.places) for k, v in self.venues.items()},
                        "walk_max_min": VENUE_WALK_MAX_MIN},
         }
+
+
+def service_dates(manifest: dict) -> dict[str, str]:
+    """The build's service dates, {"weekday": "YYYY-MM-DD", "saturday": ...}: only the ones that
+    parse. They label the times; a build without them is still served."""
+    raw = manifest.get("service_dates")
+    out = {}
+    for day, value in (raw.items() if isinstance(raw, dict) else ()):
+        try:
+            out[str(day)] = date.fromisoformat(str(value)).isoformat()
+        except ValueError:
+            pass
+    return out
 
 
 def credits(manifest: dict) -> list[str]:
@@ -649,13 +669,17 @@ class TransitHolder:
         self.reason = "loading" if configured else "not_configured"
 
     def load(self, directory: str, *, allow_uncleared: bool, on_railway: bool) -> None:
+        started = time.perf_counter()
         try:
             self.data = TransitData.load(directory, allow_uncleared=allow_uncleared, on_railway=on_railway)
             self.reason = ""
             if self.data.development_only:
                 log.warning("transit: serving tables whose licences are not cleared "
                             "(TRANSIT_ALLOW_UNCLEARED=1): local development only")
-            log.info("transit: build %s loaded, valid until %s", self.data.build, self.data.valid_until)
+            kinds = ", ".join(f"{k} {len(v.places)}" for k, v in self.data.venues.items()) or "none"
+            log.info("transit: build %s loaded in %.1f s (venue links %.1f s; venues: %s), "
+                     "service dates %s", self.data.build, time.perf_counter() - started,
+                     self.data.venue_links_s, kinds, self.data.service_dates or "not recorded")
         except TransitUnavailable as exc:
             self.reason = exc.reason
             log.warning("transit: not available (%s)", exc.reason)
@@ -666,17 +690,15 @@ class TransitHolder:
             self.loading = False
 
     def usable(self, today: date | None = None, *, local: bool = False) -> TransitData | None:
-        """The build, if it may be served to this request: unexpired, and, if its licences
-        are not cleared (the development override), only to a request from this machine."""
-        if self.data is not None and not self.data.valid_on(today):
-            self.reason = "expired"
-            return None
+        """The build, if it may be served to this request: if its licences are not cleared (the
+        development override), only to a request from this machine. A build never expires: past
+        its valid_until the pages say services may have changed (#30)."""
         if self.data is not None and self.data.development_only and not local:
             return None
         return self.data
 
     def reason_for(self, local: bool) -> str:
-        if self.data is not None and self.data.development_only and not local and self.data.valid_on():
+        if self.data is not None and self.data.development_only and not local:
             return "development_only"
         return self.reason or "unavailable"
 

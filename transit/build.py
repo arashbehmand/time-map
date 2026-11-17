@@ -34,7 +34,9 @@ from transit import settings
 log = logging.getLogger("transit.build")
 
 STAGES = ("fetch", "dates", "prep", "check", "network", "points", "journeys", "tables",
-          "walksheds", "venues", "manifest", "package")
+          "walksheds", "venues", "modetimes", "manifest", "package")
+# #23's per-mode times (#30): bus-only and walking-only tables, for the car's window only.
+MODE_KINDS = ("bus", "walk")
 FEEDS = {"gbt": ("gb_transit", "gtfs-rail-and-tfl.zip", None),
          "bods": ("bods", "itm_london_gtfs.zip", [3])}
 
@@ -92,7 +94,7 @@ STAGE_CODE = {
     "network": ["r5.py"], "points": ["points.py", "r5.py"],
     "journeys": ["r5.py", "tfl.py", "calibrate.py", "cases.toml"],
     "tables": ["r5.py", "tables.py", "calibrate.py"], "walksheds": ["r5.py", "tables.py"],
-    "venues": ["venues.py"],
+    "venues": ["venues.py"], "modetimes": ["r5.py", "tables.py"],
     "manifest": ["manifest.py"], "package": [],
 }
 
@@ -196,13 +198,15 @@ def stage_dates(b: Build, args) -> None:
         log.info("keeping the service dates in dates.json (--redate picks new ones)")
         return
     today = date.fromisoformat(args.today) if args.today else date.today()
+    # --not-before: no service date before this day (dates after a timetable change, #30).
+    first = max(today, date.fromisoformat(args.not_before)) if getattr(args, "not_before", None) else today
     bh_raw = json.loads((b.raw / "bank-holidays.json").read_text())
     bank = {date.fromisoformat(e["date"]) for e in bh_raw["england-and-wales"]["events"]}
     feeds = {fid: read_gtfs(b.raw_feed(fid), ("agency", "routes", "trips", "calendar", "calendar_dates"))
              for fid in FEEDS}
     # Timetable changes are on Sundays and the week runs Wednesday to Saturday, so a week never
     # straddles one; the next change only ends the tables' validity (see stage_manifest).
-    weeks = candidate_weeks(today, today, today + timedelta(days=120), bank, settings.DATE_LEAD_DAYS,
+    weeks = candidate_weeks(today, first, first + timedelta(days=120), bank, settings.DATE_LEAD_DAYS,
                             None, settings.WEEKDAY, count=settings.CANDIDATE_WEEKS)
     days = sorted({d for w in weeks for d in w})
     on = {fid: trips_by_agency_on(feed, days) for fid, feed in feeds.items()}
@@ -249,6 +253,7 @@ def stage_dates(b: Build, args) -> None:
     wd, sat = min(good, key=lambda w: (score(w), w[0]))
     b.write_json("dates.json", {
         "weekday": wd.isoformat(), "saturday": sat.isoformat(), "picked_on": today.isoformat(),
+        "not_before": getattr(args, "not_before", None),
         "candidates": [{"weekday": w.isoformat(), "saturday": s.isoformat(), "score": score((w, s)),
                         "weekday_report": reports[w.isoformat()],
                         "saturday_report": reports[s.isoformat()],
@@ -673,6 +678,39 @@ def stage_venues(b: Build, args) -> None:
     run(b.out, b.work, b.osm_clip)
 
 
+def mode_table_path(b: Build, kind: str) -> Path:
+    return b.out / f"tt_{settings.CAR_WINDOW}_{kind}.npy"
+
+
+def mode_table_fingerprint(b: Build, kind: str) -> dict:
+    return {**table_fingerprint(b, settings.CAR_WINDOW), "kind": kind}
+
+
+def stage_modetimes(b: Build, args):
+    """
+    #23's per-mode times (#30): a bus-only table (buses, walking to and from them) and a
+    walking-only one (up to MAX_MINUTES), for CAR_WINDOW, on the same points, mask and encoding
+    as the tables. The app doesn't read them; Whole city's Walking and Bus will (#23 part 2).
+    """
+    from transit.r5 import fingerprint_path, table_window
+
+    w = settings.CAR_WINDOW
+    fp = fingerprint_path(b.out / f"tt_{w}.npy")
+    if not fp.exists() or not json.loads(fp.read_text()).get("complete"):
+        raise SystemExit(f"tt_{w}.npy is missing or incomplete: run the tables stage to the end first")
+    pts, ok = load_points(b), usable_points(b)
+    info = {}
+    for kind in MODE_KINDS:
+        p = mode_table_path(b, kind)
+        info[kind] = table_window(network(b), pts, ok, b.window_start(w), p, threads=args.threads,
+                                  limit_origins=args.limit_origins, force=args.force, kind=kind,
+                                  fingerprint=mode_table_fingerprint(b, kind))
+        if info[kind]["complete"]:
+            info[kind]["share_255"] = float((np.load(p, mmap_mode="r") == settings.UNREACHABLE).mean())
+    b.write_json("modetimes.json", info)
+    return None if all(i["complete"] for i in info.values()) else "incomplete"
+
+
 def attribution() -> list[str]:
     seen, out = set(), []
     for src in sources().values():
@@ -706,6 +744,18 @@ def stage_manifest(b: Build, args) -> None:
         if differ:
             raise SystemExit(f"tt_{w}.npy was built from other inputs than the current ones "
                              f"({', '.join(differ)}): run the tables stage again")
+    # The per-mode tables, when the build has them: complete and from these same inputs.
+    mode_fps = {}
+    for kind in MODE_KINDS:
+        p = mode_table_path(b, kind)
+        if not p.exists():
+            continue
+        fp = fingerprint_path(p)
+        f = json.loads(fp.read_text()) if fp.exists() else {}
+        if not f.get("complete") or f.get("inputs") != mode_table_fingerprint(b, kind):
+            raise SystemExit(f"{p.name} is incomplete or was built from other inputs: run the "
+                             "modetimes stage again")
+        mode_fps[kind] = f["inputs"]
     built_with = [f["settings"] for f in fps.values()]
     srcs = json.loads((b.raw / "sources.json").read_text())
     prep = b.read_json("prep.json")
@@ -736,6 +786,10 @@ def stage_manifest(b: Build, args) -> None:
         if p.exists():
             outputs[f"tt_{w}"] = manifest.output_entry(p, shape=list(np.load(p, mmap_mode="r").shape),
                                                        departure=b.window_start(w).isoformat())
+    for kind in mode_fps:
+        p = mode_table_path(b, kind)
+        outputs[p.stem] = manifest.output_entry(p, shape=list(np.load(p, mmap_mode="r").shape), kind=kind,
+                                                departure=b.window_start(settings.CAR_WINDOW).isoformat())
     for name in ("point_ok.npy", "walksheds.npz", "points.csv", "venues.csv", "venues.json"):
         if (b.out / name).exists():
             outputs[name] = manifest.output_entry(b.out / name)
@@ -750,6 +804,8 @@ def stage_manifest(b: Build, args) -> None:
         b.read_json("points.json") | {"file": "points.csv"}, outputs,
         b.read_json("network.json"), stages, feed_ends, attribution(), table_settings=built_with[0])
     m["tables_fingerprints"] = fps
+    if mode_fps:
+        m["mode_tables_fingerprints"] = mode_fps
     m["licences_cleared"] = licences_cleared()
     m["licences_cleared_on"] = sources().get("publication", {}).get("cleared_on")
     manifest.write(b.out / "manifest.json", m)
@@ -856,14 +912,14 @@ def stage_check_keys(b: Build, args) -> None:
 RUNNERS = {"fetch": stage_fetch, "dates": stage_dates, "prep": stage_prep, "check": stage_check,
            "network": stage_network, "points": stage_points, "journeys": stage_journeys,
            "tables": stage_tables, "walksheds": stage_walksheds, "venues": stage_venues,
-           "manifest": stage_manifest,
+           "modetimes": stage_modetimes, "manifest": stage_manifest,
            "package": stage_package}
 
 
 # Options that change what a stage does: they are part of its key, so `all --redate` re-picks
 # the dates and `all --with-tfl-txc` downloads TfL's zip even when nothing else changed.
 STAGE_OPTIONS = {
-    "fetch": ("gb_transit_tag", "with_tfl_txc"), "dates": ("redate", "today", "no_tfl"),
+    "fetch": ("gb_transit_tag", "with_tfl_txc"), "dates": ("redate", "today", "not_before", "no_tfl"),
     "prep": ("keep_england",), "check": ("no_tfl", "allow_missing", "allow_stale_tfl"),
 }
 
@@ -892,8 +948,11 @@ def stage_inputs(b: Build, name: str) -> tuple[list[Path], list[Path]]:
                       [b.out / "walksheds.npz"]),
         "venues": ([b.osm_clip, b.out / "points.csv", b.out / "point_ok.npy"],
                    [b.out / "venues.csv", b.out / "venues.json"]),
+        "modetimes": (prepped + [b.osm_clip, b.out / "dates.json", b.out / "points.csv", b.out / "point_ok.npy"],
+                      [mode_table_path(b, k) for k in MODE_KINDS]),
         "manifest": ([b.out / f"tt_{w}.npy" for w in settings.WINDOWS] +
-                     [b.out / n for n in ("walksheds.npz", "venues.csv")], [b.out / "manifest.json"]),
+                     [b.out / n for n in ("walksheds.npz", "venues.csv")] +
+                     [mode_table_path(b, k) for k in MODE_KINDS], [b.out / "manifest.json"]),
         "package": ([b.out / "manifest.json"], [b.out / f"transit-london-{b.id}.tar.xz"]),
     }
     return io[name]
@@ -907,6 +966,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--build", default=date.today().isoformat(), help="build id (default: today)")
     p.add_argument("--force", action="store_true", help="redo stages even if nothing changed")
     p.add_argument("--today", help="pretend today is this date when picking service dates")
+    p.add_argument("--not-before", help="dates: no service date before this day (YYYY-MM-DD), e.g. "
+                   "the Monday after a timetable change")
     p.add_argument("--gb-transit-tag", help="gb-transit release tag (default: latest)")
     p.add_argument("--with-tfl-txc", action="store_true",
                    help="also download TfL's TransXChange zip (UK2GTFS check, bus fallback)")
@@ -914,7 +975,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-tfl", action="store_true", help="skip TfL API calls in dates and check")
     p.add_argument("--allow-missing", action="store_true", help="do not fail on feed-check problems")
     p.add_argument("--window", choices=list(settings.WINDOWS), help="tables: only this window")
-    p.add_argument("--limit-origins", type=int, help="tables: stop after this many origins (pilot)")
+    p.add_argument("--limit-origins", type=int, help="tables, modetimes: stop after this many origins (pilot)")
     p.add_argument("--threads", type=int, default=settings.MATRIX_THREADS)
     p.add_argument("--confirm", action="store_true", help="publish: the licences allow it")
     p.add_argument("--redate", action="store_true", help="dates: pick new service dates (the gate's "

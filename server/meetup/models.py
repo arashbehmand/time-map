@@ -95,6 +95,10 @@ class SolveResponse(BaseModel):
     # Stations: the timetable window the public transport times are for.
     window: Optional[str] = None
     window_label: Optional[str] = None
+    # Public transport: the date the timetable's times are for (YYYY-MM-DD), and the day after
+    # which the pages say services may have changed (advisory: the tables never expire).
+    service_date: Optional[str] = None
+    valid_until: Optional[str] = None
     # Stations: the data credits the tables' licences ask for.
     credits: list[str] = Field(default_factory=list)
     # Public transport: the kind of place asked for, and, when the answer is a station instead,

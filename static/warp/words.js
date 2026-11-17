@@ -2,6 +2,7 @@
 // checks these strings, and tests/js/warp-words.test.js checks what they say.
 import { spacing } from "../shared/mesh/rings.js";
 import { minutesText as measured } from "../shared/tools.js";
+import { timetableLine } from "../shared/transit.js";
 
 const VERBS = { walking: "walk", cycling: "cycle", driving: "drive", transit: "get" };
 
@@ -21,11 +22,12 @@ export function sentence(mode, outer, plan, bent, layout = "fold") {
   return `The coloured bands show where you can ${VERBS[mode]} to within ${outer} minutes, a band ${spacingWords(plan)}.`;
 }
 
-export function limits(field) {
+export function limits(field, now = new Date()) {
   if (!field) return "";
   if (field.mode === "transit") {
     const parts = [`Rough estimates from the timetable for ${field.window_label}.`,
-                   "Walking near the pin, then trains, trams and buses."];
+                   timetableLine(field.service_date, field.valid_until, now),
+                   "Walking near the pin, then trains, trams and buses."].filter(Boolean);
     if ((field.notes || []).includes("near_field_missing")) parts.push("Walking near the pin is estimated from the timetable this time.");
     return parts.join(" ");
   }
@@ -43,7 +45,6 @@ export const PREPARING = "Preparing the time map…";
 export const TILES_MISSING = "Some map tiles didn't load. Trying again…";
 export const TILES_FAILED = "The map tiles didn't load, so the time map can't be shown right now.";
 export const BEND_FAILED = "The time map couldn't be prepared. Press Time map to try again.";
-export const EXPIRED = "These public transport times have expired, so this shows walking.";
 export const UPDATING = "Updating…";
 
 export function beyond(outer, layout = "fold") {

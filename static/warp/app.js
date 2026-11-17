@@ -62,7 +62,7 @@ const S = {
   renderer: null, worker: null, // worker: the map's scene; fieldWorker: bands, band layer, taps
   fieldWorker: null,
   frameWhenReady: false,
-  notice: "",            // why the page is showing something else (London only, expired): stays until the next choice
+  notice: "",            // why the page is showing something else (London only, say): stays until the next choice
   tapSeq: 0, bandsSeq: 0,
   placed: [], tap: null, tapMark: null,
   requests: 0, timings: [], drawn: 0,
@@ -132,11 +132,7 @@ function requestField({ frame = false, delay = 0 } = {}) {
   latest.cancel();
   if (frame) S.frameWhenReady = true;
   const key = currentKey();
-  let cached = fields.get(key);
-  if (cached && cached.json.mode === "transit" && V.expired(cached.json.valid_until)) {
-    fields.delete(key);                    // a tab left open past the tables' last day
-    cached = null;
-  }
+  const cached = fields.get(key);
   if (cached) { remember(key, cached); activate(key, cached); return; }
   setStatus(T.UPDATING, "busy");
   const snap = { lon: S.origin.lon, lat: S.origin.lat, mode: S.mode, window: S.window, key };
@@ -1056,13 +1052,9 @@ function initControls() {
     handOn();
     requestField();
   });
-  // A tab left open: check the tables again when it comes back (they may have expired).
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) loadTransitStatus(); });
-  // And while it stays open and in view: the tables can expire at midnight in London.
-  setInterval(() => {
-    const j = S.active && S.active.json;
-    if (!document.hidden && j && j.mode === "transit" && V.expired(j.valid_until)) loadTransitStatus();
-  }, 10 * 60_000);
+  // A tab left open: check the tables again when it comes back (they may have been withdrawn),
+  // and say again how old the timetable is (past its valid-until day it may have changed, #30).
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { loadTransitStatus(); updateLegend(); } });
   toggleBtn.addEventListener("click", () => setBent(!S.bent));
   $("tap-close").addEventListener("click", hideTapList);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("tap-list").hidden) hideTapList(); });
@@ -1089,10 +1081,10 @@ async function loadTransitStatus() {
   // Public transport asked for by the link (?mode=transit), or handed on with a pin by another
   // tool (a mode alone, without its pin, would turn the example into a public transport request).
   const wantTransit = Q.get("mode") ? Q.get("mode") === "transit" : Boolean(HANDOFF.pin) && HANDOFF.mode === "transit";
-  if (!S.transit.available || V.expired(S.transit.valid_until)) {
+  if (!S.transit.available) {
     show($("transit-chip"), false);
     for (const k of [...fields.keys()]) if (k.includes(",transit,")) fields.delete(k);
-    const why = S.transit.reason === "expired" ? T.EXPIRED : T.NO_TRANSIT;
+    const why = T.NO_TRANSIT;
     if (S.mode === "transit") toWalking(why);
     else if (!S.statusSeen && wantTransit) { S.notice = why; updateLegend(); }
     S.statusSeen = true;

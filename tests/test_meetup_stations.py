@@ -4,7 +4,7 @@ the shortlist for people on Mapbox, and the API around it, on tiny and random tr
 import asyncio
 import math
 import random
-from datetime import date, timedelta
+from datetime import date
 
 import httpx
 import numpy as np
@@ -280,6 +280,10 @@ class _FakeData:
         self.windows = {w: {"day": "weekday", "start": "19:00", "minutes": 60}
                         for w in ("wd08", "wd13", "wd19", "sa13")}
         self.manifest, self.build, self._n = {}, "fake", 0
+        self.valid_until = date(2026, 12, 12)
+
+    def window_date(self, window):
+        return "2026-12-09"
 
     def covered(self, lon, lat):
         return True
@@ -475,6 +479,7 @@ def test_three_on_public_transport_meet_at_a_named_station(mapbox, tiny_client):
     data = resp.json()
     assert data["best"]["name"] in ("Alpha Road", "Bravo") and data["best"]["kind"] == "station"
     assert data["window"] == "wd19" and data["window_label"] == "a weekday, 19:00–20:00"
+    assert data["service_date"] == "2026-12-09" and data["valid_until"]
     assert data["meeting_area_geojson"] is None
     assert data["credits"] == ["Powered by TfL Open Data", "© OpenStreetMap contributors"]
     assert data["notes"][0] == "Public transport times are for a weekday, 19:00–20:00."
@@ -557,10 +562,6 @@ def test_public_transport_without_a_way_in_is_named(tiny_client):
 def test_no_tables_means_no_public_transport(make_client, settings, tmp_path, client):
     resp = client.post(SOLVE, json=body(person("a", A), person("b", B)))
     assert resp.status_code == 503 and resp.json()["code"] == "transit_unavailable"
-    old = make_build(tmp_path / "old", cleared=True, valid_until=date.today() - timedelta(days=1))
-    expired = make_client(settings.with_(transit_dir=str(old), transit_block_startup=True))
-    resp = expired.post(SOLVE, json=body(person("a", A), person("b", B)))
-    assert resp.status_code == 503 and resp.json()["reason"] == "expired"
     dev = make_client(settings.with_(transit_dir=str(make_build(tmp_path / "dev")),
                                      transit_allow_uncleared=True, transit_block_startup=True))
     resp = dev.post(SOLVE, json=body(person("a", A), person("b", B)))

@@ -45,9 +45,9 @@ MAX_GZIP_BYTES = 2_000_000          # each file a car combination loads, as the 
 ROAD_TOL_M = 20.0                   # the drawn roads are simplified this much
 MODE_LIST = (
     {"id": "walk", "label": "Walking", "available": False,
-     "why": "Comes with the next table rebuild: it needs walking-only times between the map's points."},
+     "why": "Coming next: the map doesn't use walking-only times between its points yet."},
     {"id": "bus", "label": "Bus", "available": False,
-     "why": "Comes with the next table rebuild: it needs bus-only times between the map's points."},
+     "why": "Coming next: the map doesn't use bus-only times between its points yet."},
     {"id": "train", "label": "Train and tube", "available": True, "why": ""},
     {"id": "car", "label": "Car", "available": True, "why": ""},
 )

@@ -141,17 +141,17 @@
     © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a></footer>
   <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js");</script>
   <script type="module">
-    // Public transport is mentioned only while this server has London's tables, unexpired (the
-    // same rule as the tools), and Whole city is a link only while its map can be shown here.
+    // Public transport is mentioned only while this server has London's tables (the same rule as
+    // the tools), and Whole city is a link only while its map can be shown here.
     // Right after a deploy the server may still be loading them: pollStatus asks again, and
     // while Whole city is still loading the card keeps asking. The card is an <a> from the start
     // and only gains its href, so its animation isn't restarted.
-    // Offline, a Whole city kept from an earlier visit (and not expired) is still a link.
+    // Offline, a Whole city kept from an earlier visit is still a link.
     import { cityOrKept } from "/shared/offline.js";
     import { cityUnavailable } from "/shared/tools.js";
-    import { expired, pollStatus, statusLoading } from "/shared/transit.js";
+    import { pollStatus, statusLoading } from "/shared/transit.js";
     let s = await pollStatus();
-    if (s && s.available && !expired(s.valid_until)) {
+    if (s && s.available) {
       for (const el of document.querySelectorAll(".transit-line")) el.hidden = false;
     }
     for (let round = 0; statusLoading(s) && round < 6; round++) s = await pollStatus();

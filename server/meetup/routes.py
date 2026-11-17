@@ -65,9 +65,9 @@ async def solve_endpoint(req: SolveRequest, request: Request):
 
 async def _solve_at_stations(req: SolveRequest, request: Request) -> SolveResponse:
     """A group with someone on public transport meets at a station (server/meetup/stations.py).
-    The tables are served on the same terms as the warp page's fields: unexpired, and an
-    uncleared build to this machine only. An all-transit group sends no Matrix request, so it
-    doesn't wait for a solve slot."""
+    The tables are served on the same terms as the warp page's fields: an uncleared build to
+    this machine only. An all-transit group sends no Matrix request, so it doesn't wait for a
+    solve slot."""
     state = request.app.state
     started = time.perf_counter()
     local = is_local(request)

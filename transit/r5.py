@@ -287,11 +287,16 @@ def fingerprint_path(out_path: Path) -> Path:
     return out_path.with_suffix(".fingerprint.json")
 
 
+TABLE_KINDS = ("transit", "bus", "walk")
+
+
 def table_window(tn, points, ok: np.ndarray, departure: datetime, out_path: Path,
                  threads: int = settings.MATRIX_THREADS, limit_origins: int | None = None,
-                 fingerprint: dict | None = None, force: bool = False) -> dict:
+                 fingerprint: dict | None = None, force: bool = False, kind: str = "transit") -> dict:
     """
-    Fill out_path (N x N uint8 .npy memmap) for one window. Rows already listed in the
+    Fill out_path (N x N uint8 .npy memmap) for one window. `kind` is what may carry the trip:
+    "transit" (every mode, the tables), "bus" (buses only, walking to and from them) or "walk"
+    (walking only, up to MAX_MINUTES): the last two are #23's per-mode times (#30). Rows already listed in the
     done-list next to it are skipped, so a stopped build resumes where it was, but only when
     the table's fingerprint (settings, points, feeds, network, departure, code) is the one
     given: otherwise, or with `force`, the table starts again. The fingerprint file records
@@ -326,8 +331,16 @@ def table_window(tn, points, ok: np.ndarray, departure: datetime, out_path: Path
     lon = points["snap_lon"].to_numpy(float)
     lat = points["snap_lat"].to_numpy(float)
     dest_idx = np.where(ok)[0]
+    if kind not in TABLE_KINDS:
+        raise ValueError(f"kind {kind!r} is not one of {TABLE_KINDS}")
+    if kind == "bus" and not hasattr(r5py().TransportMode, "BUS"):
+        raise SystemExit("r5py has no TransportMode.BUS; it has "
+                         f"{', '.join(m.name for m in r5py().TransportMode)}")
     task = regional_task(tn, _gdf(points["idx"].to_numpy()[dest_idx], lon[dest_idx], lat[dest_idx]),
-                         departure)
+                         departure, walking_only=kind == "walk",
+                         max_time_min=settings.MAX_MINUTES if kind == "walk" else None)
+    if kind == "bus":
+        task.transport_modes = [_mode("BUS")]
     todo = [int(i) for i in np.where(ok)[0] if int(i) not in done]
     if limit_origins is not None:
         todo = todo[:limit_origins]
@@ -335,7 +348,8 @@ def table_window(tn, points, ok: np.ndarray, departure: datetime, out_path: Path
     lock = threading.Lock()
     finished = 0
 
-    ride_cost = settings.R5.get("ride_cost_min", 0.0)
+    # The ride cost (off by default) is a costing of the all-mode tables only.
+    ride_cost = settings.R5.get("ride_cost_min", 0.0) if kind == "transit" else 0.0
     if ride_cost:
         from transit.calibrate import RIDE_LIMITS, costed, with_rides
 

@@ -12,7 +12,8 @@ USAGE_DB_PATH): every solve spends Matrix elements. Pass --group G1 --group G2 -
 the street groups only: T1 and T2 need TRANSIT_DIR. --repeat N runs each group N times and
 prints the median and p95 wall time of the solves that answered 200, with the count of each
 status; --pause S waits between solves so the Matrix rate window (60 requests a minute) is
-not what is measured.
+not what is measured. --venue pub (or bar, cafe, restaurant, park, station) asks the public
+transport groups to meet at that kind of place (#19).
 
 The groups are public landmarks, never anybody's home.
 """
@@ -66,8 +67,9 @@ DIAG_KEYS = ("path", "shortlist", "checked_by_road", "places", "lower_bound_prov
              "estimated_matrix_elements", "named_over_best_min", "elapsed_ms")
 
 
-def solve_once(client: httpx.Client, name: str, objective: str) -> dict:
-    body = {"participants": GROUPS[name], "objective": objective, "search": {"top_k": 4}}
+def solve_once(client: httpx.Client, name: str, objective: str, venue: str | None = None) -> dict:
+    body = {"participants": GROUPS[name], "objective": objective, "search": {"top_k": 4},
+            **({"venue": venue} if venue and any(p["mode"] == "transit" for p in GROUPS[name]) else {})}
     started = time.perf_counter()
     resp = client.post("/api/meetup/solve", json=body)
     wall = time.perf_counter() - started
@@ -79,8 +81,9 @@ def solve_once(client: httpx.Client, name: str, objective: str) -> dict:
         return row
     if resp.is_success:
         best = data["best"]
-        row["best"] = {k: best.get(k) for k in ("lon", "lat", "name", "snap_m", "score",
-                                                "max_time_min", "mean_time_min")}
+        row["best"] = {k: best.get(k) for k in ("lon", "lat", "name", "kind", "snap_m", "score",
+                                                "max_time_min", "mean_time_min", "times")}
+        row["venue"], row["venue_fallback"] = data.get("venue"), data.get("venue_fallback")
         row["diagnostics"] = {k: data["diagnostics"][k] for k in DIAG_KEYS if k in data["diagnostics"]}
         row["notes"] = data.get("notes", [])
     else:
@@ -96,6 +99,7 @@ def main() -> None:
     parser.add_argument("--objective", choices=["minimax", "sum"], default="minimax")
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--pause", type=float, default=0.0, help="seconds to wait between solves")
+    parser.add_argument("--venue", help="public transport groups: meet at this kind of place")
     args = parser.parse_args()
 
     names = args.group or sorted(GROUPS)
@@ -108,7 +112,7 @@ def main() -> None:
                 if not first and args.pause:
                     time.sleep(args.pause)
                 first = False
-                row = solve_once(client, name, args.objective)
+                row = solve_once(client, name, args.objective, args.venue)
                 statuses[row["status"]] += 1
                 if row["status"] == 200:
                     walls[name].append(row["wall_s"])

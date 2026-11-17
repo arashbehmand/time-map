@@ -204,13 +204,15 @@ node --test tests/js/*.test.js   # Node 20+, no packages to install
 ```
 
 `tests/test_meetup_solver.py` checks the solver against brute force (within a minute of the
-best cell at the final resolution, on 100 seeded cases) and checks that the order of people
-doesn't change the answer. `tests/test_matrix_router.py` covers batching, strict replies and
+best cell at the final resolution, two finer than coarse, on 100 seeded cases, and never
+worse than the coarse stage alone or the first two stages alone; these use places with no
+street names, so the named-street rule below is tested on its own) and checks that the order
+of people doesn't change the answer. `tests/test_matrix_router.py` covers batching, strict replies and
 NoRoute; `tests/test_meetup_robustness.py` sends 100 random requests at a misbehaving Matrix
 API.
 
 To time real solves, run a server and `python scripts/try_solves.py http://localhost:8000
---repeat 4 --pause 15`. Against live Mapbox, cap the spend on that server first
+--group G1 --group G2 --group G3 --repeat 4 --pause 15` (T1 and T2 need `TRANSIT_DIR`). Against live Mapbox, cap the spend on that server first
 (`MATRIX_DAILY_BUDGET=8000`, `CLIENT_DAILY_SHARE=1` so the one client running the script may
 use all of it, and a scratch `USAGE_DB_PATH`). The p95 it prints counts only solves that
 answered 200, and it says so when some didn't.
@@ -321,17 +323,28 @@ See [transit/README.md](transit/README.md#full-london-time-map-6-l-02).
    - **minimax** — minimise the longest individual travel time (fairest)
    - **sum** — minimise weighted average travel time (most efficient)
    - **hybrid** — blend of both (API only)
-4. Refine: score the children of the best coarse cells at the next finer resolution, and keep
-   whichever stage has the better answer, so refining never makes it worse.
+4. Refine: score the children of the best coarse cells at the next finer resolution. Then
+   refine again: score the children of the three best of those finer cells, one resolution
+   finer still (at most 21 places, about one more Matrix request per travel mode). Without
+   this third stage, two walkers 14 km apart (Wembley Park and Bank) got the snapped centre of
+   a cell 1.4 km across, about 4 minutes above the straight-line best; with it they get about
+   1.4 minutes above it (issue #26). Keep whichever stage has the best answer (a later stage
+   wins a tie), so refining never makes it worse.
 5. Return the best meeting point, top-k runners-up and a meeting area polygon. With
    `minimax` (the page's only objective), also return `quickest`: the place with the lowest
-   average trip among the places both stages checked, when it is at least 150 m from the best
+   average trip among the places the stages checked, when it is at least 150 m from the best
    and saves at least a minute on the average trip. It costs no extra Matrix call, and
    because the finer stage refines around the fairest places, it is the quickest of the
    places checked, which the page says. Alternatives at the same spot are left out.
 
 Each answer is shown where the Matrix API snapped it onto the street network, with the
-street's name when Mapbox gives one. Each travel mode's times are to that mode's own snapped
+street's name when Mapbox gives one. Mapbox often gives no name, for example on a footpath.
+When the best place has none, the best place in the same stage that has one is shown instead
+if it costs at most three minutes more, and at most 12% of the best place's score (so a short
+trip can't nearly double). This is the one case where the answer shown is worse
+than the best place found: a note says by how much, the page leaves out its "as short as it
+can be" line, and the unnamed places stay among the alternatives
+(`diagnostics.named_over_best_min` says what it cost, 0 when nothing was passed over). Each travel mode's times are to that mode's own snapped
 point; the point shown is the walking one (then cycling, then driving), and `snap_m` is its
 distance from the grid point searched. A candidate is offered only if every mode's snapped
 point is within 150 m of the grid point (10% of the cell edge on coarse grids, where hex
@@ -352,19 +365,24 @@ the others reach, which is then a confirmed "no route" for that person. Splittin
 where the solve's recovery allowance runs out; what is left is unchecked. Anything else
 that is missing or malformed (wrong row or column count, a value that isn't a number of
 seconds, a missing waypoint) is a provider error: it is asked for once more, then the solve
-answers `502 upstream_error`. It is never read as "unreachable".
+answers `502 upstream_error`. A request that never reached Mapbox (the connection timed out
+or was refused) is asked for once more in the same way; a request that timed out after
+reaching it is not, and the solve answers `504 upstream_timeout`. It is never read as "unreachable".
 
 People are named only from replies that answered for them. An unchecked pair says nothing
 about anyone's start: more than a quarter of a stage's places unchecked fails the search
-(`422 unroutable_area`), or, in the finer stage, keeps the coarse answer.
+(`422 unroutable_area`), or, in a finer stage, keeps the earlier answer.
 
 An answer that is less good than usual says so in `notes` (shown on the page): places were
-left unchecked, the finer stage didn't finish, few places were near a street, some trips
-end a short way from the star, or the map service sent a bad reply that was asked for
-again. `diagnostics` counts what was dropped (`dropped_no_route`, `unchecked_for_budget`,
+left unchecked, a finer stage didn't finish or was left out to fit the allowance, few places
+were near a street, some trips end a short way from the star, the star was moved to a named
+street, or the map service sent a bad reply that was asked for again. `diagnostics` counts what was dropped (`dropped_no_route`, `unchecked_for_budget`,
 `dropped_off_street`, over the stages the answer was chosen from), retried (`retries`,
-`bad_replies`) and sent (`matrix_requests`, `matrix_elements`). `fine_resolution` is the
-finer resolution searched and `answer_resolution` the one the answer came from.
+`bad_replies`) and sent (`matrix_requests`, `matrix_elements`). `fine_resolution` and
+`finest_resolution` are the finer resolutions searched (`finest_candidates` is the places
+the third stage asked about, 0 when it wasn't tried; when it was tried and failed, `stage`
+is not `finest`), `answer_resolution` the one the answer came from, and `stage` says
+which stage that was (`coarse`, `fine` or `finest`).
 
 ### Meeting at a station (public transport)
 
@@ -559,10 +577,13 @@ A meetup search is then *sized to fit*. The candidate count starts at `max_candi
 - what is left of today's budget and of this client's share;
 - the rate slots free right now.
 
-If even 20 candidates don't fit, the search is refused before any Mapbox call. The finer
-second stage is capped at the same count, and the better of the two stages is kept. If the
-finer stage can't run (budget, rate or upstream trouble), the coarse result is returned with
-a note (`diagnostics.stage` says which). One search runs at a time.
+The plan counts all three stages: the second is capped at the same count, the third at 21.
+The count shrinks before the third stage is given up: a busy rate window can shrink the
+second stage's cap while the third stays. If even 20 candidates don't fit, the third stage
+is dropped from the plan (the answer then has the "less precise" note), and if that still
+doesn't fit, the search is refused before any Mapbox call. The best of the stages is kept. If
+a finer stage can't run (budget, rate or upstream trouble), the earlier result is returned
+with a note (`diagnostics.stage` says which). One search runs at a time.
 
 A search may also spend a little beyond its plan on recovery: up to 10 more requests per
 travel mode (never above the bucket's rate) for asking again after a bad reply or splitting

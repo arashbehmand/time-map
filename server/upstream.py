@@ -11,7 +11,14 @@ from typing import Any
 
 import httpx
 
-from server.errors import ApiError, Busy, UpstreamError, UpstreamTimeout
+from server.errors import (
+    ApiError,
+    Busy,
+    UpstreamConnectTimeout,
+    UpstreamError,
+    UpstreamNotConnected,
+    UpstreamTimeout,
+)
 
 log = logging.getLogger("time_map.upstream")
 
@@ -25,9 +32,14 @@ async def mapbox_send(
     params: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
 ) -> httpx.Response:
-    """Send a GET and return the response, whatever its status. Transport errors become ApiErrors."""
+    """Send a GET and return the response, whatever its status. Transport errors become
+    ApiErrors; when the connection could not be made, they are also NotSent."""
     try:
         return await client.get(url, params=params, headers=headers)
+    except (httpx.ConnectTimeout, httpx.ConnectError) as exc:
+        log.warning("upstream not connected api=%s profile=%s error=%s", api, profile, type(exc).__name__)
+        raise (UpstreamConnectTimeout() if isinstance(exc, httpx.ConnectTimeout)
+               else UpstreamNotConnected()) from None
     except httpx.TimeoutException as exc:
         log.warning("upstream timeout api=%s profile=%s error=%s", api, profile, type(exc).__name__)
         raise UpstreamTimeout() from None

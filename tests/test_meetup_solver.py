@@ -48,7 +48,7 @@ def best_point(resp):
 def test_two_walkers_meet_near_the_midpoint():
     resp = run([person("a", -1, 0), person("b", 1, 0)], FixedRouter(straight_line))
     assert km_between(best_point(resp), at(0, 0)) < 0.6
-    assert resp.diagnostics["stage"] == "fine"
+    assert resp.diagnostics["stage"] in ("fine", "finest")
     assert set(resp.best.times) == {"a", "b"}
 
 
@@ -104,6 +104,96 @@ def _coarse_only(people, router, objective="minimax"):
         solver._fine_candidates = real
 
 
+def _two_stage_only(people, router, objective="minimax"):
+    """Coarse and fine only: no third stage."""
+    real = solver.FINEST_SEEDS
+    solver.FINEST_SEEDS = 0
+    try:
+        return run(people, router, objective)
+    finally:
+        solver.FINEST_SEEDS = real
+
+
+# ── the third stage ─────────────────────────────────────────────────
+class StageRouter(FixedRouter):
+    """Calls `hook(stage, result)` on each stage's result (stage 1, 2, 3; one mode)."""
+
+    def __init__(self, fn, hook):
+        super().__init__(fn)
+        self.hook = hook
+
+    async def duration_matrix(self, mode, origins, destinations):
+        result = await super().duration_matrix(mode, origins, destinations)
+        return self.hook(self.calls, result)
+
+
+def test_walkers_far_apart_get_a_finer_answer_from_the_third_stage():
+    # Wembley Park and Bank are about 14 km apart: the fine cells are 1.4 km across.
+    people = [person("a", -7, 0), person("b", 7, 0)]
+    resp = run(people, FixedRouter(straight_line))
+    two = _two_stage_only(people, FixedRouter(straight_line))
+    d = resp.diagnostics
+    assert d["stage"] == "finest"
+    assert d["answer_resolution"] == d["finest_resolution"] == d["coarse_resolution"] + 2
+    assert 0 < d["finest_candidates"] <= 21
+    assert resp.best.score < two.best.score - 0.5
+    assert resp.best.score <= 7.0 / 4.8 * 60 + 2.0    # within 2 min of the straight-line best
+
+
+def test_a_worse_third_stage_keeps_the_fine_answer():
+    people = [person("a", -7, 0), person("b", 7, 0)]
+
+    def worse(stage, result):
+        if stage == 3:
+            result.minutes = result.minutes + 100.0
+        return result
+
+    resp = run(people, StageRouter(straight_line, worse))
+    two = _two_stage_only(people, FixedRouter(straight_line))
+    assert resp.diagnostics["stage"] == "fine"
+    assert resp.best.score == pytest.approx(two.best.score)
+    assert solver.NOTE_FINE_SKIPPED not in resp.notes
+
+
+def test_a_busy_third_stage_keeps_the_fine_answer_with_one_note():
+    people = [person("a", -7, 0), person("b", 7, 0)]
+
+    def busy(stage, result):
+        if stage == 3:
+            raise Busy()
+        return result
+
+    resp = run(people, StageRouter(straight_line, busy))
+    assert resp.diagnostics["stage"] == "fine"
+    assert resp.notes.count(solver.NOTE_FINE_SKIPPED) == 1
+
+
+def test_a_failed_fine_stage_runs_no_third_stage():
+    people = [person("a", -7, 0), person("b", 7, 0)]
+    router = BusyFineStage(straight_line)
+    resp = run(people, router)
+    assert resp.diagnostics["stage"] == "coarse"
+    assert resp.diagnostics["finest_candidates"] == 0
+    assert router.calls == 2
+    assert resp.notes.count(solver.NOTE_FINE_SKIPPED) == 1
+
+
+def test_an_equal_third_stage_wins_the_tie():
+    people = [person("a", -7, 0), person("b", 7, 0)]
+    best_fine = {}
+
+    def same(stage, result):
+        if stage == 2:
+            best_fine["score"] = float(result.minutes.max(axis=0).min())
+        if stage == 3:   # nowhere better than the best fine place
+            result.minutes = np.maximum(result.minutes, best_fine["score"])
+        return result
+
+    resp = run(people, StageRouter(straight_line, same))
+    assert resp.diagnostics["stage"] == "finest"
+    assert resp.best.score == pytest.approx(round(best_fine["score"], 2))
+
+
 # ── against brute force ─────────────────────────────────────────────
 def _random_case(rng):
     n = rng.randint(2, 4)
@@ -136,12 +226,14 @@ def test_within_a_minute_of_brute_force_and_never_worse_than_coarse():
     for _ in range(100):
         people, objective, fn = _random_case(rng)
         resp = run(people, FixedRouter(fn), objective)
-        res = resp.diagnostics["coarse_resolution"] + 1
+        res = resp.diagnostics["coarse_resolution"] + 2
         brute = _brute_force(people, objective, fn, res)
         gaps.append(resp.best.score - brute)
         assert resp.best.score <= brute + 1.0, (people, objective, fn.__name__)
         coarse = _coarse_only(people, FixedRouter(fn), objective)
         assert resp.best.score <= coarse.best.score + 1e-9
+        two = _two_stage_only(people, FixedRouter(fn), objective)
+        assert resp.best.score <= two.best.score + 1e-9
     assert max(gaps) <= 1.0
 
 
@@ -413,9 +505,9 @@ def test_a_lopsided_group_also_gets_the_quickest_place():
     assert km_between((q.lon, q.lat), best_point(resp)) * 1000 >= solver.MIN_ALT_GAP_M
     assert q.mean_time_min <= resp.best.mean_time_min - solver.QUICKEST_MIN_GAIN_MIN
     assert q.max_time_min >= resp.best.max_time_min
-    assert resp.diagnostics["quickest_stage"] in ("coarse", "fine")
+    assert resp.diagnostics["quickest_stage"] in ("coarse", "fine", "finest")
     # From the places already checked: no more routing than the fairest answer alone.
-    assert router.calls == 2
+    assert router.calls == 3
 
 
 def test_no_alternative_repeats_the_quickest_place():
@@ -503,3 +595,98 @@ def test_trips_ending_away_from_the_quickest_place_are_said():
     assert resp.quickest is not None and km_between((resp.quickest.lon, resp.quickest.lat), pair) < 1.0
     assert solver.NOTE_SPREAD_QUICKEST in resp.notes
     assert solver.NOTE_SPREAD not in resp.notes
+
+
+# ── a place with a street name over an unnamed one ──────────────────
+def _named_beyond(km):
+    """Places further than `km` from the middle are on High Street; nearer ones are unnamed."""
+    return lambda mode, d: Snap(d[0], d[1], "High Street" if km_between(d, at(0, 0)) > km else None)
+
+
+CYCLISTS = [person("a", -1, 0, "cycling"), person("b", 1, 0, "cycling")]
+
+
+def test_an_unnamed_best_place_gives_way_to_a_named_one_a_little_slower():
+    plain = run(CYCLISTS, FixedRouter(straight_line))
+    resp = run(CYCLISTS, FixedRouter(straight_line, snap_fn=_named_beyond(0.15)))
+    assert plain.best.name is None
+    assert resp.best.name == "High Street"
+    cost = resp.diagnostics["named_over_best_min"]
+    assert 0 < cost <= min(solver.NAMED_SLACK_MIN, solver.NAMED_SLACK_SHARE * plain.best.score) + 0.01
+    assert resp.best.score == pytest.approx(plain.best.score + cost, abs=0.01)
+    assert resp.top[0] == resp.best
+    assert all(km_between((c.lon, c.lat), best_point(resp)) * 1000 >= solver.MIN_ALT_GAP_M
+               for c in resp.top[1:])
+    # The answer says so, and keeps the stage it was chosen from.
+    named_notes = [n for n in resp.notes if n.startswith("The star is on a named street")]
+    assert len(named_notes) == 1 and "longest trip" in named_notes[0]
+    assert resp.diagnostics["stage"] == plain.diagnostics["stage"]
+    assert resp.diagnostics["answer_resolution"] == plain.diagnostics["answer_resolution"]
+    # The unnamed fairer place stays among the alternatives.
+    assert min(c.score for c in resp.top[1:]) < resp.best.score
+
+
+def test_a_named_place_too_much_slower_is_not_shown_instead():
+    plain = run(CYCLISTS, FixedRouter(straight_line))
+    resp = run(CYCLISTS, FixedRouter(straight_line, snap_fn=_named_beyond(3.0)))
+    assert resp.best.name is None
+    assert resp.diagnostics["named_over_best_min"] == 0
+    assert resp.best.score == plain.best.score
+    assert not any(n.startswith("The star is on a named street") for n in resp.notes)
+
+
+def test_a_named_best_place_is_kept():
+    plain = run(CYCLISTS, FixedRouter(straight_line))
+    resp = run(CYCLISTS, FixedRouter(straight_line, snap_fn=_named_beyond(-1.0)))
+    assert resp.best.name == "High Street"
+    assert resp.diagnostics["named_over_best_min"] == 0
+    assert resp.best.score == plain.best.score
+
+
+
+class NamedInFirstStage(FixedRouter):
+    """Every place is on High Street in the coarse stage only."""
+
+    async def duration_matrix(self, mode, origins, destinations):
+        result = await super().duration_matrix(mode, origins, destinations)
+        if self.calls == 1:
+            result.snaps = [Snap(s.lon, s.lat, "High Street") for s in result.snaps]
+        return result
+
+
+def test_a_named_place_in_an_earlier_stage_does_not_replace_the_answer():
+    plain = run(CYCLISTS, FixedRouter(straight_line))
+    resp = run(CYCLISTS, NamedInFirstStage(straight_line))
+    assert resp.best.name is None
+    assert resp.diagnostics["stage"] == plain.diagnostics["stage"] == "finest"
+    assert resp.diagnostics["named_over_best_min"] == 0
+    assert resp.best.score == plain.best.score
+
+
+def test_a_named_star_sits_in_the_meeting_area_and_the_quickest_place_is_another():
+    from shapely.geometry import Point, shape
+
+    plain = run(LOPSIDED, FixedRouter(straight_line))
+    resp = run(LOPSIDED, FixedRouter(straight_line, snap_fn=_named_beyond(0.35)))
+    assert plain.best.name is None and resp.best.name == "High Street"
+    assert resp.diagnostics["named_over_best_min"] > 0
+    area = shape(resp.meeting_area_geojson["geometry"])
+    assert area.buffer(1e-9).contains(Point(resp.best.lon, resp.best.lat))
+    q = resp.quickest
+    assert q is not None
+    assert km_between((q.lon, q.lat), best_point(resp)) * 1000 >= solver.MIN_ALT_GAP_M
+    assert q.mean_time_min <= resp.best.mean_time_min - solver.QUICKEST_MIN_GAIN_MIN
+    assert all(km_between((c.lon, c.lat), (q.lon, q.lat)) * 1000 >= solver.MIN_ALT_GAP_M
+               for c in resp.top[1:])
+
+
+
+def test_on_a_short_trip_the_name_allowance_is_a_share_of_it():
+    # About 4-minute trips: a named place 0.6 km off the middle costs well under 3 minutes
+    # but more than 12% of the trip, so it is not shown instead.
+    plain = run(CYCLISTS, FixedRouter(straight_line))
+    resp = run(CYCLISTS, FixedRouter(straight_line, snap_fn=_named_beyond(0.6)))
+    assert plain.best.score < 6
+    assert resp.best.name is None
+    assert resp.best.score == plain.best.score
+    assert resp.diagnostics["named_over_best_min"] == 0

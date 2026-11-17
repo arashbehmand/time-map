@@ -30,7 +30,7 @@ from typing import Any, Awaitable, Iterable
 import httpx
 import numpy as np
 
-from server.errors import ApiError, Busy, UpstreamError
+from server.errors import ApiError, Busy, NotSent, UpstreamError
 from server.guard.guard import UpstreamGuard
 from server.meetup.candidates import haversine_km
 from server.meetup.limits import (
@@ -536,6 +536,8 @@ class MapboxMatrixRouter(Router):
 
     async def _get(self, url: str, mode: str, n_orig: int, n_padded: int,
                    gate: asyncio.Semaphore, recovery: bool) -> tuple[np.ndarray, list[Snap]]:
+        # A connection that could not be made (connect timeout or refused) is asked for once
+        # more too: the request never left, so it is retried like a 5xx (#26).
         # Each attempt, retries included, takes a rate slot, is charged to the budget and
         # counts against this solve's allowance. Optional sends (a recovery request, or the
         # one retry of a bad reply) go only if the allowance has room after every planned
@@ -563,10 +565,18 @@ class MapboxMatrixRouter(Router):
                             allowance.sent_requests += 1
                             allowance.sent_elements += units
                         resp = await mapbox_send(self.client, url, api="matrix", profile=mode)
-            except ApiError:
+            except ApiError as exc:
                 if retried:
                     raise UpstreamError() from None
-                raise
+                if not isinstance(exc, NotSent) or attempt == 2:
+                    raise
+                # The request never reached the map service: ask once more, as for a 5xx.
+                log.warning("matrix not connected, asking again profile=%s", mode)
+                retried = True
+                if allowance is not None:
+                    allowance.retries += 1
+                await self.guard.clock.sleep(BAD_REPLY_RETRY_S)
+                continue
             if resp.status_code == 429:
                 fail(resp, api="matrix", profile=mode)
                 if attempt == 2:

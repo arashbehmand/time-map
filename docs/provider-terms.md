@@ -71,6 +71,11 @@ They are made by `scripts/make_examples.py` and committed, so they are a stored 
 Mapbox-derived results shown to every visitor. The Isochrone clause above (results shown on a
 Mapbox map) applies to the warp example in the same way it applies to live answers.
 
+`tests/fixtures/mapbox_matrix/` also holds two Matrix replies, trimmed to what the parser
+reads (a walking tile with a point in the Thames, and a walking Dover to Calais pair,
+2026-11-16), so the parser is tested against real replies (#26). They are stored Mapbox
+output too, and the question below applies to them as well.
+
 **Open question:** whether Mapbox's product terms allow storing and redistributing these
 results. Those terms were not read (see the tiles note below). If they don't, drop the files
 and let each page ask for its first answer, or take the examples from a source with

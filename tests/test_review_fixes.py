@@ -8,6 +8,7 @@ import httpx
 import pytest
 from conftest import FakeClock
 
+import server.meetup.solver as solver
 from server.errors import Busy
 from server.guard.budget import BudgetExhausted, UsageStore
 from server.guard.guard import ClientShareExhausted, UpstreamGuard, current_client
@@ -118,6 +119,9 @@ def test_solve_shrinks_to_the_clients_share(make_client, settings, mapbox):
     assert resp.status_code == 200, resp.text
     share = 100  # ceil(1_000_000 * 0.0001)
     assert resp.json()["diagnostics"]["estimated_matrix_elements"] <= share
+    # The third stage was left out to fit, and the answer says it is less precise.
+    assert resp.json()["diagnostics"]["finest_candidates"] == 0
+    assert resp.json()["notes"].count(solver.NOTE_FINE_SKIPPED) == 1
 
 
 def test_share_refusal_without_a_client_is_skipped(tmp_path):

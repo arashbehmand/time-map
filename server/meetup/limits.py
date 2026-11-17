@@ -27,6 +27,12 @@ MATRIX_DEFAULT_COORDS = 25
 # The smallest candidate count a plan shrinks to before refusing.
 MIN_CANDIDATES = 20
 
+# The third (finest) stage refines around this many of the best fine cells, their children
+# only (7 each), so it has at most FINEST_MAX places. 21 destinations and up to 4 origins fit
+# one 25-coordinate request, so for most groups it costs one request per mode (issue #26).
+FINEST_SEEDS = 3
+FINEST_MAX = 7 * FINEST_SEEDS
+
 # Extra requests per mode a solve may spend on recovery (a retried bad reply, or splitting a
 # NoRoute reply to find the point that fails). Not part of admission: a plan is admitted on
 # its own cost, and recovery spends only what is left after every planned request still to
@@ -88,6 +94,8 @@ class SolvePlan:
     # per mode.
     recovery_requests: dict[str, int] = field(default_factory=dict)
     recovery_elements: int = 0
+    # Places in the third stage at two resolutions finer than coarse (0: no third stage).
+    finest_max: int = 0
 
 
 class GroupTooSpread(ApiError):
@@ -118,25 +126,27 @@ def _candidate_caps(max_candidates: int) -> list[int]:
     return caps + [MIN_CANDIDATES]
 
 
-def _cost(radius: float, n_origins: int, modes: Counter, cap: int):
-    """(resolution, coarse_max, fine_max, elements, requests, max_tile) for a cap, or None."""
+def _cost(radius: float, n_origins: int, modes: Counter, cap: int, finest: bool = True):
+    """(resolution, coarse_max, fine_max, elements, requests, max_tile, finest_max) for a cap,
+    or None. finest=False plans no third stage."""
     res = choose_resolution(radius, cap)
     if res is None:
         return None
     coarse_max = disk_size(disk_k(radius, res)) + n_origins
     fine_max = cap
+    finest_max = min(FINEST_MAX, cap) if finest else 0
     elements = 0
     max_tile = 2
     requests: Counter[str] = Counter()
     for mode, n in modes.items():
-        for stage in (coarse_max, fine_max):
+        for stage in (coarse_max, fine_max, finest_max):
             tiles = matrix_tiles(n, stage, matrix_max_coords(mode))
             requests[rate_bucket(mode)] += len(tiles)
             for o, d in tiles:
                 units = tile_elements(len(o), len(d))
                 elements += units
                 max_tile = max(max_tile, units)
-    return res, coarse_max, fine_max, elements, dict(requests), max_tile
+    return res, coarse_max, fine_max, elements, dict(requests), max_tile, finest_max
 
 
 def plan_solve(req: SolveRequest, settings: Settings, limits: SolveLimits | None = None) -> SolvePlan:
@@ -160,19 +170,21 @@ def plan_solve(req: SolveRequest, settings: Settings, limits: SolveLimits | None
             f"{MODE_WORDS[slowest]} is {limit:.0f} km. Pick a faster mode or move people closer."
         )
     smallest = None
-    for cap in _candidate_caps(req.search.max_candidates):
-        cost = _cost(radius, len(origins), modes, cap)
+    # The third stage is dropped only as a last resort, at the smallest cap, before refusing.
+    tries = [(cap, True) for cap in _candidate_caps(req.search.max_candidates)]
+    for cap, finest in tries + [(MIN_CANDIDATES, False)]:
+        cost = _cost(radius, len(origins), modes, cap, finest)
         if cost is None:
             continue
         smallest = cost
         if not _over_static(cost[3], cost[4], settings, limits) and \
                 _over_live(cost[3], cost[4], limits) is None:
-            res, coarse_max, fine_max, elements, requests, max_tile = cost
+            res, coarse_max, fine_max, elements, requests, max_tile, finest_max = cost
             recovery = Counter()
             for mode in modes:
                 recovery[rate_bucket(mode)] += RECOVERY_REQUESTS
             return SolvePlan(center, radius, res, coarse_max, fine_max, elements, requests, max_tile,
-                             dict(recovery), 2 * max_tile * len(modes))
+                             dict(recovery), 2 * max_tile * len(modes), finest_max)
 
     if smallest is None:
         raise SearchTooExpensive()

@@ -21,8 +21,15 @@ Algorithm
    point is near it, and near the point shown, so everyone's trip ends close to the star.
    Others can still guide the next stage.
 4. Refine: score the children of the best coarse cells at the next finer resolution.
-5. Keep whichever stage has the better answer (refinement never makes it worse), and
+5. Refine again: score the children of the few best fine cells one resolution finer still
+   (at most FINEST_MAX places, about one request per mode), so the answer is a cell about
+   half a kilometre across or less rather than one about a kilometre and a half (#26).
+6. Keep whichever stage has the best answer (refinement never makes it worse), and
    return the top-K distinct places, each at its snapped point with its street name.
+7. If the best place has no street name, show the best place in that stage that has one
+   instead, when it scores at most NAMED_SLACK_MIN minutes and NAMED_SLACK_SHARE worse,
+   and say so in a note. This is
+   the one step that can make the shown answer worse than the best found.
 
 The same group in any order gets the same answer: people are scored in id order, and
 ties are broken by a fixed rule.
@@ -46,7 +53,7 @@ from server.meetup.candidates import (
     generate_candidates,
     haversine_km,
 )
-from server.meetup.limits import SolvePlan
+from server.meetup.limits import FINEST_SEEDS, SolvePlan
 from server.meetup.models import (
     CandidateResult,
     Participant,
@@ -81,6 +88,11 @@ QUICKEST_MIN_GAIN_MIN = 1.0
 MAX_UNRESOLVED_SHARE = 0.25
 # More than this share of the reachable places too far from a street gets a note.
 FEW_STREETS_SHARE = 0.5
+# When the best place has no street name, a place that has one is shown instead if it costs
+# at most this much more (minutes, in the objective's score), so people know where to go.
+NAMED_SLACK_MIN = 3.0
+# ...and at most this share of the best place's score, so short trips don't double.
+NAMED_SLACK_SHARE = 0.12
 # The shown point and name come from the first mode present: people meet on foot.
 MODE_ORDER = ("walking", "cycling", "driving", "driving-traffic")
 
@@ -334,6 +346,28 @@ def _distinct(ev: Evaluation, ranked: np.ndarray, k: int) -> list[int]:
     return picked
 
 
+def _named_near_best(ev: Evaluation, scores: np.ndarray, ranked: np.ndarray,
+                     limit: float) -> int | None:
+    """The best-ranked place in this stage with a street name scoring at most `limit`."""
+    for i in ranked:
+        if float(scores[i]) > limit + 1e-9:
+            return None
+        if ev.shown[int(i)].name:
+            return int(i)
+    return None
+
+
+def _minutes_words(x: float) -> str:
+    return "less than a minute" if x < 1.0 else f"about {round(x)} minute{'s' if round(x) != 1 else ''}"
+
+
+def note_named(cost: float, objective: str) -> str:
+    """Said when the star is on a named street and an unnamed place nearby scores better."""
+    what = {"minimax": "a longest trip", "sum": "an average trip"}.get(objective, "a score")
+    return ("The star is on a named street so it is easy to find. A place nearby with no "
+            f"street name has {what} {_minutes_words(cost)} shorter.")
+
+
 def _quickest(stages: list[Evaluation], offered, kept: Evaluation,
               best: int) -> tuple[Evaluation, int] | None:
     """Quickest on average among the places offered in either stage, when it is another
@@ -387,24 +421,46 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
         _fine_candidates, [coarse_coords[int(i)] for i in seeds], coarse_res, fine_res,
         req.search.neighbor_ring, plan.center, radius, plan.fine_max,
     )
-    fine: Evaluation | None = None
-    if fine_coords:
+    async def optional_stage(name: str, coords: list[Coord], res: int) -> Evaluation | None:
+        """A refining stage: budget, rate, in-flight or upstream trouble, or too much left
+        unchecked, drops it with a note. The earlier answer is already paid for, so it is
+        returned rather than nothing."""
+        if not coords:
+            return None
         try:
-            fine = await _evaluate(router, participants, fine_coords, req.objective, req.alpha,
-                                   fine_res)
+            ev = await _evaluate(router, participants, coords, req.objective, req.alpha, res)
         except ApiError as exc:
-            # Budget, rate, in-flight or upstream trouble in the optional fine stage: the
-            # coarse answer is already paid for, so return it rather than nothing.
-            log.warning("fine stage skipped: %s", exc.code)
-            notes.append(NOTE_FINE_SKIPPED)
+            log.warning("%s stage skipped: %s", name, exc.code)
         else:
-            if _unresolved_share(fine) > MAX_UNRESOLVED_SHARE:
-                log.warning("fine stage skipped: too many places unchecked")
-                notes.append(NOTE_FINE_SKIPPED)
-                fine = None
+            if _unresolved_share(ev) <= MAX_UNRESOLVED_SHARE:
+                return ev
+            log.warning("%s stage skipped: too many places unchecked", name)
+        if NOTE_FINE_SKIPPED not in notes:
+            notes.append(NOTE_FINE_SKIPPED)
+        return None
 
-    # ── Keep the better stage ─────────────────────────────────────────
-    stages = [coarse] + ([fine] if fine is not None else [])
+    fine = await optional_stage("fine", fine_coords, fine_res)
+
+    # ── Phase 3: refine again around the best fine cells ──────────────
+    finest_res: int | None = None
+    finest_coords: list[Coord] = []
+    finest: Evaluation | None = None
+    if fine is not None and plan.finest_max and fine_res < 15:
+        finest_res = fine_res + 1
+        seeds = _ranked(fine, fine.raw, req.objective)[:FINEST_SEEDS]
+        finest_coords = await asyncio.to_thread(
+            _fine_candidates, [fine_coords[int(i)] for i in seeds], fine_res, finest_res, 0,
+            plan.center, radius, plan.finest_max,
+        )
+        finest = await optional_stage("finest", finest_coords, finest_res)
+    elif fine is not None and not plan.finest_max and NOTE_FINE_SKIPPED not in notes:
+        # Admission left the third stage out to fit what is left of the allowance.
+        notes.append(NOTE_FINE_SKIPPED)
+
+    # ── Keep the best stage ───────────────────────────────────────────
+    named = [(name, ev) for name, ev in (("coarse", coarse), ("fine", fine), ("finest", finest))
+             if ev is not None]
+    stages = [ev for _, ev in named]
     if any(np.isfinite(ev.eligible()).any() for ev in stages):
         waived = False
     elif any(np.isfinite(ev.waived()).any() for ev in stages):
@@ -416,14 +472,30 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
     def offered(ev: Evaluation) -> np.ndarray:
         return ev.waived() if waived else ev.eligible()
 
+    # A later stage wins ties: refinement never makes the answer worse.
     kept, stage = coarse, "coarse"
-    if fine is not None and np.isfinite(offered(fine)).any() and \
-            offered(fine).min() <= offered(coarse).min():
-        kept, stage = fine, "fine"
+    for name, ev in named[1:]:
+        if np.isfinite(offered(ev)).any() and offered(ev).min() <= offered(kept).min():
+            kept, stage = ev, name
 
     # ── Compile results ───────────────────────────────────────────────
     scores = offered(kept)
     ranked = _ranked(kept, scores, req.objective)
+    # A best place with no street name gives way to a named one in the same stage at most
+    # NAMED_SLACK_MIN minutes and NAMED_SLACK_SHARE worse (#26): a star on an unnamed path is hard to find. The answer says
+    # so, and the unnamed places stay in the alternatives.
+    named_cost = 0.0
+    if not kept.shown[int(ranked[0])].name:
+        unnamed_best = float(scores[ranked[0]])
+        slack = min(NAMED_SLACK_MIN, NAMED_SLACK_SHARE * unnamed_best)
+        idx = _named_near_best(kept, scores, ranked, unnamed_best + slack)
+        if idx is not None:
+            ranked = np.concatenate(([idx], ranked[ranked != idx]))
+            # Rounded once, as reported, so the note and the page's check always agree: a
+            # cost that rounds to 0 is no worse, and gets no note.
+            named_cost = round(float(scores[idx]) - unnamed_best, 2)
+            if named_cost > 0:
+                notes.append(note_named(named_cost, req.objective))
     picks = _distinct(kept, ranked, req.search.top_k)
     top = [_make_result(i, kept, scores, participants) for i in picks]
     best_score = float(scores[ranked[0]])
@@ -438,7 +510,7 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
         if q is not None:
             q_ev, q_idx = q
             quickest = _make_result(q_idx, q_ev, offered(q_ev), participants)
-            quickest_stage = "coarse" if q_ev is coarse else "fine"
+            quickest_stage = next(name for name, ev in named if ev is q_ev)
             quickest_spread_m = float(q_ev.spread_m[q_idx])
             top = [top[0]] + [c for c in top[1:]
                               if haversine_km(c.lon, c.lat, quickest.lon, quickest.lat) * 1000.0
@@ -483,6 +555,8 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
         "answer_resolution": kept.res,
         "coarse_candidates": len(coarse_coords),
         "fine_candidates": len(fine_coords),
+        "finest_resolution": finest_res,
+        "finest_candidates": len(finest_coords),
         "feasible_count": int(np.isfinite(scores).sum()),
         "search_radius_km": round(radius, 2),
         "estimated_matrix_elements": plan.elements,
@@ -496,6 +570,8 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
         "matrix_requests": allowance.sent_requests if allowance is not None else 0,
         "matrix_elements": allowance.sent_elements if allowance is not None else 0,
         "quickest_stage": quickest_stage,
+        # Minutes the shown place costs over an unnamed better one (0: none was passed over).
+        "named_over_best_min": named_cost,
         "elapsed_ms": round((time.perf_counter() - started) * 1000),
     }
     return SolveResponse(

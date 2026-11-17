@@ -3,20 +3,25 @@ import asyncio
 import json
 import logging
 import math
+import pathlib
 
 import httpx
 import numpy as np
 import pytest
 from conftest import FakeClock, assert_clean, matrix_reply
 
-from server.errors import UpstreamError
+import server.meetup.solver as solver
+from server.errors import UpstreamError, UpstreamTimeout
 from server.guard.budget import UsageStore
 from server.guard.guard import UpstreamGuard
+from server.meetup.candidates import haversine_km
 from server.meetup.limits import matrix_max_coords, matrix_tiles
+from server.meetup.models import Participant
 from server.meetup.routing import (
     MapboxMatrixRouter,
     SolveAllowance,
     gather_or_cancel,
+    parse_matrix,
     solve_allowance,
 )
 from server.settings import Settings
@@ -222,6 +227,53 @@ def test_a_5xx_is_asked_for_again_once(tmp_path):
                   allowance)
     assert np.isfinite(result.minutes).all()
     assert allowance.retries == 1 and allowance.bad_replies == 0 and len(calls) == 2
+
+
+@pytest.mark.parametrize("failure", [httpx.ConnectTimeout, httpx.ConnectError])
+def test_a_connection_that_could_not_be_made_is_asked_for_again_once(tmp_path, failure):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            raise failure("could not connect", request=request)
+        return httpx.Response(200, json=matrix_reply(request))
+
+    router = _router(handler, tmp_path)
+    allowance = _roomy()
+    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], [(0.01, 51.5), (0.02, 51.5)]),
+                  allowance)
+    assert np.isfinite(result.minutes).all()
+    assert allowance.retries == 1 and len(calls) == 2
+
+
+def test_a_connection_failing_twice_is_a_502_after_one_retry(tmp_path):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        raise httpx.ConnectTimeout("could not connect", request=request)
+
+    router = _router(handler, tmp_path)
+    allowance = _roomy()
+    with pytest.raises(UpstreamError):
+        _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], [(0.01, 51.5)]), allowance)
+    assert len(calls) == 2 and allowance.retries == 1
+
+
+def test_a_read_timeout_is_not_asked_for_again(tmp_path):
+    # The request reached the map service, which may have charged for it.
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        raise httpx.ReadTimeout("slow", request=request)
+
+    router = _router(handler, tmp_path)
+    allowance = _roomy()
+    with pytest.raises(UpstreamTimeout):
+        _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], [(0.01, 51.5)]), allowance)
+    assert len(calls) == 1 and allowance.retries == 0
 
 
 def test_two_429s_then_a_bad_reply_is_a_502_without_another_wait(tmp_path):
@@ -530,3 +582,101 @@ def test_a_solve_spends_what_its_diagnostics_say_and_stays_inside_the_allowance(
                    for r in sent)
     assert diag["matrix_requests"] == len(sent)
     assert diag["matrix_elements"] == elements <= diag["estimated_matrix_elements"]
+
+
+# ── saved real replies (tests/fixtures/mapbox_matrix, issue #26) ────
+# Live Matrix replies, trimmed to what the parser reads, with the request that got them.
+FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "mapbox_matrix"
+
+
+def _saved(name):
+    return json.loads((FIXTURES / f"{name}.json").read_text())
+
+
+def _replay(saved, tmp_path):
+    """A router answered by the saved reply, for exactly the saved request only."""
+    sent = []
+
+    def handler(request):
+        coords, src, dst = _coords(request)
+        req = saved["request"]
+        assert np.allclose(coords, req["coordinates"], rtol=0, atol=1e-6)
+        assert (src, dst) == (req["sources"], req["destinations"])
+        sent.append(request)
+        return httpx.Response(saved["status"], json=saved["body"])
+
+    return _router(handler, tmp_path), sent
+
+
+def _metres(a, b):
+    return haversine_km(a[0], a[1], b[0], b[1]) * 1000.0
+
+
+def test_a_point_in_the_thames_snaps_to_the_far_bank(tmp_path):
+    # Rotherhithe to four places; the first is mid-river in Limehouse Reach. Mapbox puts it
+    # on the Isle of Dogs bank 145 m away, just inside the solver's 150 m limit, and times
+    # the walk to there; every waypoint comes back with an empty name.
+    saved = _saved("thames")
+    body, coords = saved["body"], saved["request"]["coordinates"]
+    minutes, snaps = parse_matrix(body, 1, 4)
+    assert minutes == pytest.approx(np.array(body["durations"]) / 60.0)
+    assert [(s.lon, s.lat) for s in snaps] == [tuple(w["location"]) for w in body["destinations"]]
+    assert all(s.name is None for s in snaps)
+    river = coords[1]
+    assert 140 < _metres(river, (snaps[0].lon, snaps[0].lat)) < solver.MAX_SNAP_M
+    assert snaps[0].lon > river[0]                      # east, onto the Isle of Dogs
+
+    router, sent = _replay(saved, tmp_path)
+    allowance = _roomy()
+    result = _run(router, lambda r: r.duration_matrix(
+        "walking", [tuple(coords[0])], [tuple(c) for c in coords[1:]]), allowance)
+    assert len(sent) == 1
+    assert result.minutes == pytest.approx(minutes)
+    assert not result.unresolved.any()
+    assert result.snaps == snaps
+    assert (allowance.retries, allowance.bad_replies, allowance.no_route_replies) == (0, 0, 0)
+
+
+def test_walking_from_dover_to_calais_is_a_ferry_trip_not_no_route(tmp_path):
+    # One origin and one destination, padded to the two-element minimum as every live
+    # request is. Mapbox answers Ok with a walking time across the Channel (by ferry), so the
+    # pair is answered and finite, never dropped as unchecked.
+    saved = _saved("dover_calais")
+    body, coords = saved["body"], saved["request"]["coordinates"]
+    assert coords[1] == coords[2]                       # the padding
+    minutes, snaps = parse_matrix(body, 1, 2)
+    assert minutes[0, 0] == pytest.approx(body["durations"][0][0] / 60.0)
+    assert minutes[0, 0] > 120
+
+    router, sent = _replay(saved, tmp_path)
+    allowance = _roomy()
+    result = _run(router, lambda r: r.duration_matrix(
+        "walking", [tuple(coords[0])], [tuple(coords[1])]), allowance)
+    assert len(sent) == 1
+    assert result.minutes.shape == (1, 1)
+    assert result.minutes[0, 0] == pytest.approx(minutes[0, 0])
+    assert not result.unresolved.any()
+    assert (result.snaps[0].lon, result.snaps[0].lat) == tuple(body["destinations"][0]["location"])
+    assert (allowance.retries, allowance.bad_replies, allowance.no_route_replies) == (0, 0, 0)
+
+
+def test_the_solver_offers_the_river_point_on_the_far_bank(tmp_path):
+    # Through the solver's own snap check: the river point is within the snap limit, so it
+    # is offered as an answer, shown on the bank it snapped to.
+    saved = _saved("thames")
+    coords = saved["request"]["coordinates"]
+    router, _ = _replay(saved, tmp_path)
+    people = [Participant(id="a", lon=coords[0][0], lat=coords[0][1], mode="walking")]
+    ev = _run(router, lambda r: solver._evaluate(r, people, [tuple(c) for c in coords[1:]],
+                                                 "minimax", 0.65, 9), _roomy())
+    assert not ev.off_street[0]
+    assert 140 < ev.shown_m[0] < solver.MAX_SNAP_M
+    assert (ev.shown[0].lon, ev.shown[0].lat) == tuple(saved["body"]["destinations"][0]["location"])
+
+
+@pytest.mark.parametrize("path", sorted(FIXTURES.glob("*.json")), ids=lambda p: p.name)
+def test_saved_replies_hold_no_token_and_stay_small(path):
+    text = path.read_text()
+    assert path.stat().st_size < 20_000
+    for secret in ("access_token", "pk.", "sk.", "api.mapbox"):
+        assert secret not in text

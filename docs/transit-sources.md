@@ -124,9 +124,8 @@ What this changes:
   ODbL licence text with every credit, and `publish --confirm` makes a draft GitHub release.
 - **The app** serves a build whose manifest says `licences_cleared: true` to every visitor,
   with the credits from the manifest under the map whenever a transit field is drawn.
-- **Build 2026-11-12** was written with the flag false. Its manifest can't be rewritten
-  without rebuilding the tables, because the build code changed after they were made. The
-  next monthly rebuild (due before its `valid_until`, 2026-12-12) writes a cleared manifest.
+- **Build 2026-11-12** was written with the flag false. **Build 2026-11-17** (#30) carries
+  `licences_cleared: true` and is the one served on Railway.
 - **The clause 3.3.2 notice is not settled yet** (the owner was asked for RSP's wording).
   `[publication] rsp_notice` in `transit/sources.toml` holds it, or "none" once RSP says none is
   needed; while it is empty, `publish` refuses. If RSP asks for one, it also goes in the

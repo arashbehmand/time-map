@@ -653,10 +653,11 @@ needs your SSH key registered (`railway ssh keys add`) and `ssh.railway.com` in 
 ```bash
 ID=<build id>; OUT=<transit out folder>          # e.g. transit/out
 # The files the server reads (not the bus and walking tables, which only the build uses)
-tar -czf /tmp/transit-$ID.tgz -C $OUT/$ID tt_wd08.npy tt_wd13.npy tt_wd19.npy tt_sa13.npy \
+export COPYFILE_DISABLE=1   # macOS: no ._ files or extended attributes in the archives
+tar --no-xattrs -czf /tmp/transit-$ID.tgz -C $OUT/$ID tt_wd08.npy tt_wd13.npy tt_wd19.npy tt_sa13.npy \
   tt_wd08.fingerprint.json tt_wd13.fingerprint.json tt_wd19.fingerprint.json tt_sa13.fingerprint.json \
   point_ok.npy points.csv walksheds.npz venues.csv venues.json manifest.json
-tar -czf /tmp/timemap-$ID.tgz -C $OUT/timemap/$ID .
+tar --no-xattrs -czf /tmp/timemap-$ID.tgz -C $OUT/timemap/$ID .
 railway ssh -- sh -c "mkdir -p /data/transit/$ID && tar -xzf - -C /data/transit/$ID" < /tmp/transit-$ID.tgz
 railway ssh -- sh -c "mkdir -p /data/timemap/$ID && tar -xzf - -C /data/timemap/$ID" < /tmp/timemap-$ID.tgz
 railway ssh -- sh -c "cd /data/transit/$ID && sha256sum *"     # compare with: cd $OUT/$ID && shasum -a 256 <the same files>

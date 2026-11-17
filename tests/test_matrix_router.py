@@ -10,11 +10,13 @@ import numpy as np
 import pytest
 from conftest import FakeClock, assert_clean, matrix_reply
 
+import server.meetup.solver as solver
 from server.errors import UpstreamError
 from server.guard.budget import UsageStore
 from server.guard.guard import UpstreamGuard
 from server.meetup.candidates import haversine_km
 from server.meetup.limits import matrix_max_coords, matrix_tiles
+from server.meetup.models import Participant
 from server.meetup.routing import (
     MapboxMatrixRouter,
     SolveAllowance,
@@ -574,7 +576,7 @@ def test_a_point_in_the_thames_snaps_to_the_far_bank(tmp_path):
     assert [(s.lon, s.lat) for s in snaps] == [tuple(w["location"]) for w in body["destinations"]]
     assert all(s.name is None for s in snaps)
     river = coords[1]
-    assert 140 < _metres(river, (snaps[0].lon, snaps[0].lat)) < 150
+    assert 140 < _metres(river, (snaps[0].lon, snaps[0].lat)) < solver.MAX_SNAP_M
     assert snaps[0].lon > river[0]                      # east, onto the Isle of Dogs
 
     router, sent = _replay(saved, tmp_path)
@@ -609,6 +611,20 @@ def test_walking_from_dover_to_calais_is_a_ferry_trip_not_no_route(tmp_path):
     assert not result.unresolved.any()
     assert (result.snaps[0].lon, result.snaps[0].lat) == tuple(body["destinations"][0]["location"])
     assert (allowance.retries, allowance.bad_replies, allowance.no_route_replies) == (0, 0, 0)
+
+
+def test_the_solver_offers_the_river_point_on_the_far_bank(tmp_path):
+    # Through the solver's own snap check: the river point is within the snap limit, so it
+    # is offered as an answer, shown on the bank it snapped to.
+    saved = _saved("thames")
+    coords = saved["request"]["coordinates"]
+    router, _ = _replay(saved, tmp_path)
+    people = [Participant(id="a", lon=coords[0][0], lat=coords[0][1], mode="walking")]
+    ev = _run(router, lambda r: solver._evaluate(r, people, [tuple(c) for c in coords[1:]],
+                                                 "minimax", 0.65, 9), _roomy())
+    assert not ev.off_street[0]
+    assert 140 < ev.shown_m[0] < solver.MAX_SNAP_M
+    assert (ev.shown[0].lon, ev.shown[0].lat) == tuple(saved["body"]["destinations"][0]["location"])
 
 
 @pytest.mark.parametrize("path", sorted(FIXTURES.glob("*.json")), ids=lambda p: p.name)

@@ -27,10 +27,11 @@ MATRIX_DEFAULT_COORDS = 25
 # The smallest candidate count a plan shrinks to before refusing.
 MIN_CANDIDATES = 20
 
-# Places in the third (finest) stage: the children of a few of the best fine cells. 21
-# destinations and up to 4 origins fit one 25-coordinate request, so for most groups the
-# stage costs one request per mode (issue #26).
-FINEST_MAX = 21
+# The third (finest) stage refines around this many of the best fine cells, their children
+# only (7 each), so it has at most FINEST_MAX places. 21 destinations and up to 4 origins fit
+# one 25-coordinate request, so for most groups it costs one request per mode (issue #26).
+FINEST_SEEDS = 3
+FINEST_MAX = 7 * FINEST_SEEDS
 
 # Extra requests per mode a solve may spend on recovery (a retried bad reply, or splitting a
 # NoRoute reply to find the point that fails). Not part of admission: a plan is admitted on

@@ -205,8 +205,9 @@ node --test tests/js/*.test.js   # Node 20+, no packages to install
 
 `tests/test_meetup_solver.py` checks the solver against brute force (within a minute of the
 best cell at the final resolution, two finer than coarse, on 100 seeded cases, and never
-worse than the coarse stage alone or the first two stages alone) and checks that the order of people
-doesn't change the answer. `tests/test_matrix_router.py` covers batching, strict replies and
+worse than the coarse stage alone or the first two stages alone; these use places with no
+street names, so the named-street rule below is tested on its own) and checks that the order
+of people doesn't change the answer. `tests/test_matrix_router.py` covers batching, strict replies and
 NoRoute; `tests/test_meetup_robustness.py` sends 100 random requests at a misbehaving Matrix
 API.
 
@@ -337,10 +338,12 @@ See [transit/README.md](transit/README.md#full-london-time-map-6-l-02).
    places checked, which the page says. Alternatives at the same spot are left out.
 
 Each answer is shown where the Matrix API snapped it onto the street network, with the
-street's name when Mapbox gives one. Mapbox often gives no name, for example on a footpath. When the best
-place has none, the best place that has one is shown instead if it costs at most three minutes
-more, from any stage (`diagnostics.named_over_best_min` says how much it cost, 0 when
-nothing was passed over). Each travel mode's times are to that mode's own snapped
+street's name when Mapbox gives one. Mapbox often gives no name, for example on a footpath.
+When the best place has none, the best place in the same stage that has one is shown instead
+if it costs at most three minutes more. This is the one case where the answer shown is worse
+than the best place found: a note says by how much, the page leaves out its "as short as it
+can be" line, and the unnamed places stay among the alternatives
+(`diagnostics.named_over_best_min` says what it cost, 0 when nothing was passed over). Each travel mode's times are to that mode's own snapped
 point; the point shown is the walking one (then cycling, then driving), and `snap_m` is its
 distance from the grid point searched. A candidate is offered only if every mode's snapped
 point is within 150 m of the grid point (10% of the cell edge on coarse grids, where hex
@@ -368,13 +371,14 @@ about anyone's start: more than a quarter of a stage's places unchecked fails th
 (`422 unroutable_area`), or, in a finer stage, keeps the earlier answer.
 
 An answer that is less good than usual says so in `notes` (shown on the page): places were
-left unchecked, a finer stage didn't finish, few places were near a street, some trips
-end a short way from the star, or the map service sent a bad reply that was asked for
-again. `diagnostics` counts what was dropped (`dropped_no_route`, `unchecked_for_budget`,
+left unchecked, a finer stage didn't finish or was left out to fit the allowance, few places
+were near a street, some trips end a short way from the star, the star was moved to a named
+street, or the map service sent a bad reply that was asked for again. `diagnostics` counts what was dropped (`dropped_no_route`, `unchecked_for_budget`,
 `dropped_off_street`, over the stages the answer was chosen from), retried (`retries`,
 `bad_replies`) and sent (`matrix_requests`, `matrix_elements`). `fine_resolution` and
-`finest_resolution` are the finer resolutions searched (`finest_candidates` is 0 when the
-third stage didn't run), `answer_resolution` the one the answer came from, and `stage` says
+`finest_resolution` are the finer resolutions searched (`finest_candidates` is the places
+the third stage asked about, 0 when it wasn't tried; when it was tried and failed, `stage`
+is not `finest`), `answer_resolution` the one the answer came from, and `stage` says
 which stage that was (`coarse`, `fine` or `finest`).
 
 ### Meeting at a station (public transport)
@@ -571,7 +575,9 @@ A meetup search is then *sized to fit*. The candidate count starts at `max_candi
 - the rate slots free right now.
 
 The plan counts all three stages: the second is capped at the same count, the third at 21.
-If even 20 candidates don't fit, the third stage is dropped from the plan, and if that still
+The count shrinks before the third stage is given up: a busy rate window can shrink the
+second stage's cap while the third stays. If even 20 candidates don't fit, the third stage
+is dropped from the plan (the answer then has the "less precise" note), and if that still
 doesn't fit, the search is refused before any Mapbox call. The best of the stages is kept. If
 a finer stage can't run (budget, rate or upstream trouble), the earlier result is returned
 with a note (`diagnostics.stage` says which). One search runs at a time.

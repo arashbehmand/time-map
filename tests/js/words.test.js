@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ApiError } from "../../static/shared/api.js";
 import {
   ALL_TIES_TEXT, altText, answerNotes, headline, isPlace, isStation, isVenue, joinNames, journeyLink,
-  journeyNote, noPlaceSentence, OPEN_HOURS_HINT, placeHeadline,
+  journeyNote, namedOverBest, noPlaceSentence, OPEN_HOURS_HINT, placeHeadline,
   quickestText, shareChanged, stationAltText, TIE_TEXT,
 } from "../../static/meetup/words.js";
 
@@ -29,6 +29,13 @@ test("notes are the server's strings, or none", () => {
   assert.deepEqual(answerNotes({ notes: ["Some places couldn't be checked.", 3, ""] }), ["Some places couldn't be checked."]);
   assert.deepEqual(answerNotes({}), []);
   assert.deepEqual(answerNotes({ notes: "nope" }), []);
+});
+
+test("a star moved to a named street is told apart", () => {
+  assert.equal(namedOverBest({ diagnostics: { named_over_best_min: 2.64 } }), true);
+  assert.equal(namedOverBest({ diagnostics: { named_over_best_min: 0 } }), false);
+  assert.equal(namedOverBest({ diagnostics: {} }), false);
+  assert.equal(namedOverBest({}), false);
 });
 
 test("names are joined in plain English", () => {

@@ -19,7 +19,8 @@ import { expired, insideArea, windowOptions } from "/shared/transit.js";
 import { decodeGroup, encodeGroup, isGroupHash, linkAtLoad, reconcileGroup, STATE_KEY } from "./share.js";
 import {
   ALL_TIES_TEXT, altText, answerNotes, headline, isPlace, isVenue, journeyLink, journeyNote, meaning, mins,
-  noPlaceSentence, OPEN_HOURS_HINT, placeHeadline, quickestText, SHARE_BAD_LINK, SHARE_COPIED, SHARE_FAILED,
+  namedOverBest, noPlaceSentence, OPEN_HOURS_HINT, placeHeadline, quickestText, SHARE_BAD_LINK, SHARE_COPIED,
+  SHARE_FAILED,
   SHARE_LABEL, SHARE_RESTORED, SHARE_WAITING, shareChanged, stationAltText, TIE_TEXT, VENUE_WORD,
 } from "./words.js";
 
@@ -790,7 +791,7 @@ function renderAnswer() {
   answerEl.innerHTML = `
     <div class="answer-card">
       <p class="headline">${esc(headline(best, snap.objective))}</p>
-      <p class="hint">${esc(meaning(snap.objective))}</p>
+      ${namedOverBest(data) ? "" : `<p class="hint">${esc(meaning(snap.objective))}</p>`}
       ${answerNotes(data).map((n) => `<p class="hint answer-note">${esc(n)}</p>`).join("")}
       <ul class="bars" aria-label="Each person's trip">
         ${times.map(({ p, t }) => `

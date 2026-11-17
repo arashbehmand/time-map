@@ -26,6 +26,9 @@ Algorithm
    half a kilometre across or less rather than one about a kilometre and a half (#26).
 6. Keep whichever stage has the best answer (refinement never makes it worse), and
    return the top-K distinct places, each at its snapped point with its street name.
+7. If the best place has no street name, show the best place in that stage that has one
+   instead, when it scores at most NAMED_SLACK_MIN worse, and say so in a note. This is
+   the one step that can make the shown answer worse than the best found.
 
 The same group in any order gets the same answer: people are scored in id order, and
 ties are broken by a fixed rule.
@@ -49,7 +52,7 @@ from server.meetup.candidates import (
     generate_candidates,
     haversine_km,
 )
-from server.meetup.limits import SolvePlan
+from server.meetup.limits import FINEST_SEEDS, SolvePlan
 from server.meetup.models import (
     CandidateResult,
     Participant,
@@ -84,8 +87,6 @@ QUICKEST_MIN_GAIN_MIN = 1.0
 MAX_UNRESOLVED_SHARE = 0.25
 # More than this share of the reachable places too far from a street gets a note.
 FEW_STREETS_SHARE = 0.5
-# The third stage refines around this many of the best fine cells (their children only).
-FINEST_SEEDS = 3
 # When the best place has no street name, a place that has one is shown instead if it costs
 # at most this much more (minutes, in the objective's score), so people know where to go.
 NAMED_SLACK_MIN = 3.0
@@ -342,22 +343,26 @@ def _distinct(ev: Evaluation, ranked: np.ndarray, k: int) -> list[int]:
     return picked
 
 
-def _named_near_best(named: list[tuple[str, Evaluation]], offered, objective: str,
-                     limit: float) -> tuple[str, Evaluation, int] | None:
-    """The best offered place with a street name scoring at most `limit`, from any stage.
-    Ties: a later stage, then that stage's ranking."""
-    found: tuple[tuple[float, int], str, Evaluation, int] | None = None
-    for s_idx, (name, ev) in enumerate(named):
-        scores = offered(ev)
-        for i in _ranked(ev, scores, objective):
-            if float(scores[i]) > limit + 1e-9:
-                break
-            if ev.shown[int(i)].name:
-                key = (round(float(scores[i]), 6), -s_idx)
-                if found is None or key < found[0]:
-                    found = (key, name, ev, int(i))
-                break
-    return None if found is None else found[1:]
+def _named_near_best(ev: Evaluation, scores: np.ndarray, ranked: np.ndarray,
+                     limit: float) -> int | None:
+    """The best-ranked place in this stage with a street name scoring at most `limit`."""
+    for i in ranked:
+        if float(scores[i]) > limit + 1e-9:
+            return None
+        if ev.shown[int(i)].name:
+            return int(i)
+    return None
+
+
+def _minutes_words(x: float) -> str:
+    return "less than a minute" if x < 1.0 else f"about {round(x)} minute{'s' if round(x) != 1 else ''}"
+
+
+def note_named(cost: float, objective: str) -> str:
+    """Said when the star is on a named street and an unnamed place nearby scores better."""
+    what = {"minimax": "a longest trip", "sum": "an average trip"}.get(objective, "a score")
+    return ("The star is on a named street so it is easy to find. A place nearby with no "
+            f"street name has {what} {_minutes_words(cost)} shorter.")
 
 
 def _quickest(stages: list[Evaluation], offered, kept: Evaluation,
@@ -445,6 +450,9 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
             plan.center, radius, plan.finest_max,
         )
         finest = await optional_stage("finest", finest_coords, finest_res)
+    elif fine is not None and not plan.finest_max and NOTE_FINE_SKIPPED not in notes:
+        # Admission left the third stage out to fit what is left of the allowance.
+        notes.append(NOTE_FINE_SKIPPED)
 
     # ── Keep the best stage ───────────────────────────────────────────
     named = [(name, ev) for name, ev in (("coarse", coarse), ("fine", fine), ("finest", finest))
@@ -470,18 +478,18 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
     # ── Compile results ───────────────────────────────────────────────
     scores = offered(kept)
     ranked = _ranked(kept, scores, req.objective)
-    # A best place with no street name gives way to a named one at most NAMED_SLACK_MIN
-    # worse, from any stage (#26): a star on an unnamed path is hard to find.
+    # A best place with no street name gives way to a named one in the same stage at most
+    # NAMED_SLACK_MIN worse (#26): a star on an unnamed path is hard to find. The answer says
+    # so, and the unnamed places stay in the alternatives.
     named_cost = 0.0
     if not kept.shown[int(ranked[0])].name:
         unnamed_best = float(scores[ranked[0]])
-        found = _named_near_best(named, offered, req.objective, unnamed_best + NAMED_SLACK_MIN)
-        if found is not None:
-            stage, kept, idx = found
-            scores = offered(kept)
-            ranked = _ranked(kept, scores, req.objective)
+        idx = _named_near_best(kept, scores, ranked, unnamed_best + NAMED_SLACK_MIN)
+        if idx is not None:
             ranked = np.concatenate(([idx], ranked[ranked != idx]))
             named_cost = float(scores[idx]) - unnamed_best
+            if named_cost > 0:
+                notes.append(note_named(named_cost, req.objective))
     picks = _distinct(kept, ranked, req.search.top_k)
     top = [_make_result(i, kept, scores, participants) for i in picks]
     best_score = float(scores[ranked[0]])

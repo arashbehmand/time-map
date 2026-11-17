@@ -614,8 +614,16 @@ def test_an_unnamed_best_place_gives_way_to_a_named_one_a_little_slower():
     cost = resp.diagnostics["named_over_best_min"]
     assert 0 < cost <= solver.NAMED_SLACK_MIN
     assert resp.best.score == pytest.approx(plain.best.score + cost, abs=0.01)
+    assert resp.top[0] == resp.best
     assert all(km_between((c.lon, c.lat), best_point(resp)) * 1000 >= solver.MIN_ALT_GAP_M
                for c in resp.top[1:])
+    # The answer says so, and keeps the stage it was chosen from.
+    named_notes = [n for n in resp.notes if n.startswith("The star is on a named street")]
+    assert len(named_notes) == 1 and "longest trip" in named_notes[0]
+    assert resp.diagnostics["stage"] == plain.diagnostics["stage"]
+    assert resp.diagnostics["answer_resolution"] == plain.diagnostics["answer_resolution"]
+    # The unnamed fairer place stays among the alternatives.
+    assert min(c.score for c in resp.top[1:]) < resp.best.score
 
 
 def test_a_named_place_too_much_slower_is_not_shown_instead():
@@ -624,6 +632,7 @@ def test_a_named_place_too_much_slower_is_not_shown_instead():
     assert resp.best.name is None
     assert resp.diagnostics["named_over_best_min"] == 0
     assert resp.best.score == plain.best.score
+    assert not any(n.startswith("The star is on a named street") for n in resp.notes)
 
 
 def test_a_named_best_place_is_kept():
@@ -632,3 +641,40 @@ def test_a_named_best_place_is_kept():
     assert resp.best.name == "High Street"
     assert resp.diagnostics["named_over_best_min"] == 0
     assert resp.best.score == plain.best.score
+
+
+
+class NamedInFirstStage(FixedRouter):
+    """Every place is on High Street in the coarse stage only."""
+
+    async def duration_matrix(self, mode, origins, destinations):
+        result = await super().duration_matrix(mode, origins, destinations)
+        if self.calls == 1:
+            result.snaps = [Snap(s.lon, s.lat, "High Street") for s in result.snaps]
+        return result
+
+
+def test_a_named_place_in_an_earlier_stage_does_not_replace_the_answer():
+    plain = run(CYCLISTS, FixedRouter(straight_line))
+    resp = run(CYCLISTS, NamedInFirstStage(straight_line))
+    assert resp.best.name is None
+    assert resp.diagnostics["stage"] == plain.diagnostics["stage"] == "finest"
+    assert resp.diagnostics["named_over_best_min"] == 0
+    assert resp.best.score == plain.best.score
+
+
+def test_a_named_star_sits_in_the_meeting_area_and_the_quickest_place_is_another():
+    from shapely.geometry import Point, shape
+
+    plain = run(LOPSIDED, FixedRouter(straight_line))
+    resp = run(LOPSIDED, FixedRouter(straight_line, snap_fn=_named_beyond(0.35)))
+    assert plain.best.name is None and resp.best.name == "High Street"
+    assert resp.diagnostics["named_over_best_min"] > 0
+    area = shape(resp.meeting_area_geojson["geometry"])
+    assert area.buffer(1e-9).contains(Point(resp.best.lon, resp.best.lat))
+    q = resp.quickest
+    assert q is not None
+    assert km_between((q.lon, q.lat), best_point(resp)) * 1000 >= solver.MIN_ALT_GAP_M
+    assert q.mean_time_min <= resp.best.mean_time_min - solver.QUICKEST_MIN_GAIN_MIN
+    assert all(km_between((c.lon, c.lat), (q.lon, q.lat)) * 1000 >= solver.MIN_ALT_GAP_M
+               for c in resp.top[1:])

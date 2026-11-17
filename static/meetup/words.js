@@ -25,6 +25,12 @@ export function meaning(objectiveValue) {
     : "Fairest: the longest trip is as short as it can be.";
 }
 
+// The star was moved to a named street a little worse than the best place found; a note
+// from the server says by how much, so meaning()'s "as short as it can be" isn't shown.
+export function namedOverBest(data) {
+  return Number(data && data.diagnostics && data.diagnostics.named_over_best_min) > 0;
+}
+
 export function altText(c, objectiveValue) {
   const time = objectiveValue === "sum"
     ? `average trip ${mins(c.mean_time_min)}`

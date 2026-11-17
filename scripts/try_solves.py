@@ -60,9 +60,10 @@ GROUPS = {
 
 DIAG_KEYS = ("path", "shortlist", "checked_by_road", "places", "lower_bound_proven", "stage",
              "coarse_resolution", "fine_resolution", "finest_resolution", "answer_resolution",
-             "coarse_candidates", "fine_candidates", "finest_candidates", "feasible_count", "dropped_no_route", "unchecked_for_budget",
-             "dropped_off_street", "retries", "bad_replies", "no_route_replies", "matrix_requests",
-             "matrix_elements", "estimated_matrix_elements", "named_over_best_min", "elapsed_ms")
+             "coarse_candidates", "fine_candidates", "finest_candidates", "feasible_count",
+             "dropped_no_route", "unchecked_for_budget", "dropped_off_street", "retries",
+             "bad_replies", "no_route_replies", "matrix_requests", "matrix_elements",
+             "estimated_matrix_elements", "named_over_best_min", "elapsed_ms")
 
 
 def solve_once(client: httpx.Client, name: str, objective: str) -> dict:

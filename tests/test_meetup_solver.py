@@ -608,11 +608,11 @@ CYCLISTS = [person("a", -1, 0, "cycling"), person("b", 1, 0, "cycling")]
 
 def test_an_unnamed_best_place_gives_way_to_a_named_one_a_little_slower():
     plain = run(CYCLISTS, FixedRouter(straight_line))
-    resp = run(CYCLISTS, FixedRouter(straight_line, snap_fn=_named_beyond(0.3)))
+    resp = run(CYCLISTS, FixedRouter(straight_line, snap_fn=_named_beyond(0.15)))
     assert plain.best.name is None
     assert resp.best.name == "High Street"
     cost = resp.diagnostics["named_over_best_min"]
-    assert 0 < cost <= solver.NAMED_SLACK_MIN
+    assert 0 < cost <= min(solver.NAMED_SLACK_MIN, solver.NAMED_SLACK_SHARE * plain.best.score) + 0.01
     assert resp.best.score == pytest.approx(plain.best.score + cost, abs=0.01)
     assert resp.top[0] == resp.best
     assert all(km_between((c.lon, c.lat), best_point(resp)) * 1000 >= solver.MIN_ALT_GAP_M
@@ -678,3 +678,15 @@ def test_a_named_star_sits_in_the_meeting_area_and_the_quickest_place_is_another
     assert q.mean_time_min <= resp.best.mean_time_min - solver.QUICKEST_MIN_GAIN_MIN
     assert all(km_between((c.lon, c.lat), (q.lon, q.lat)) * 1000 >= solver.MIN_ALT_GAP_M
                for c in resp.top[1:])
+
+
+
+def test_on_a_short_trip_the_name_allowance_is_a_share_of_it():
+    # About 4-minute trips: a named place 0.6 km off the middle costs well under 3 minutes
+    # but more than 12% of the trip, so it is not shown instead.
+    plain = run(CYCLISTS, FixedRouter(straight_line))
+    resp = run(CYCLISTS, FixedRouter(straight_line, snap_fn=_named_beyond(0.6)))
+    assert plain.best.score < 6
+    assert resp.best.name is None
+    assert resp.best.score == plain.best.score
+    assert resp.diagnostics["named_over_best_min"] == 0

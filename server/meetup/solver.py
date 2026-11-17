@@ -27,7 +27,8 @@ Algorithm
 6. Keep whichever stage has the best answer (refinement never makes it worse), and
    return the top-K distinct places, each at its snapped point with its street name.
 7. If the best place has no street name, show the best place in that stage that has one
-   instead, when it scores at most NAMED_SLACK_MIN worse, and say so in a note. This is
+   instead, when it scores at most NAMED_SLACK_MIN minutes and NAMED_SLACK_SHARE worse,
+   and say so in a note. This is
    the one step that can make the shown answer worse than the best found.
 
 The same group in any order gets the same answer: people are scored in id order, and
@@ -90,6 +91,8 @@ FEW_STREETS_SHARE = 0.5
 # When the best place has no street name, a place that has one is shown instead if it costs
 # at most this much more (minutes, in the objective's score), so people know where to go.
 NAMED_SLACK_MIN = 3.0
+# ...and at most this share of the best place's score, so short trips don't double.
+NAMED_SLACK_SHARE = 0.12
 # The shown point and name come from the first mode present: people meet on foot.
 MODE_ORDER = ("walking", "cycling", "driving", "driving-traffic")
 
@@ -479,12 +482,13 @@ async def solve(req: SolveRequest, router: Router, plan: SolvePlan) -> SolveResp
     scores = offered(kept)
     ranked = _ranked(kept, scores, req.objective)
     # A best place with no street name gives way to a named one in the same stage at most
-    # NAMED_SLACK_MIN worse (#26): a star on an unnamed path is hard to find. The answer says
+    # NAMED_SLACK_MIN minutes and NAMED_SLACK_SHARE worse (#26): a star on an unnamed path is hard to find. The answer says
     # so, and the unnamed places stay in the alternatives.
     named_cost = 0.0
     if not kept.shown[int(ranked[0])].name:
         unnamed_best = float(scores[ranked[0]])
-        idx = _named_near_best(kept, scores, ranked, unnamed_best + NAMED_SLACK_MIN)
+        slack = min(NAMED_SLACK_MIN, NAMED_SLACK_SHARE * unnamed_best)
+        idx = _named_near_best(kept, scores, ranked, unnamed_best + slack)
         if idx is not None:
             ranked = np.concatenate(([idx], ranked[ranked != idx]))
             named_cost = float(scores[idx]) - unnamed_best

@@ -59,6 +59,19 @@ class UpstreamTimeout(ApiError):
     message = "The map service took too long to answer. Please try again."
 
 
+class NotSent:
+    """Mixed into an upstream error when the request never reached the map service (the
+    connection could not be made): nothing was asked, so asking again is safe."""
+
+
+class UpstreamConnectTimeout(NotSent, UpstreamTimeout):
+    pass
+
+
+class UpstreamNotConnected(NotSent, UpstreamError):
+    pass
+
+
 class Busy(ApiError):
     status = 503
     code = "busy"

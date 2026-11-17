@@ -340,7 +340,8 @@ See [transit/README.md](transit/README.md#full-london-time-map-6-l-02).
 Each answer is shown where the Matrix API snapped it onto the street network, with the
 street's name when Mapbox gives one. Mapbox often gives no name, for example on a footpath.
 When the best place has none, the best place in the same stage that has one is shown instead
-if it costs at most three minutes more. This is the one case where the answer shown is worse
+if it costs at most three minutes more, and at most 12% of the best place's score (so a short
+trip can't nearly double). This is the one case where the answer shown is worse
 than the best place found: a note says by how much, the page leaves out its "as short as it
 can be" line, and the unnamed places stay among the alternatives
 (`diagnostics.named_over_best_min` says what it cost, 0 when nothing was passed over). Each travel mode's times are to that mode's own snapped
@@ -364,7 +365,9 @@ the others reach, which is then a confirmed "no route" for that person. Splittin
 where the solve's recovery allowance runs out; what is left is unchecked. Anything else
 that is missing or malformed (wrong row or column count, a value that isn't a number of
 seconds, a missing waypoint) is a provider error: it is asked for once more, then the solve
-answers `502 upstream_error`. It is never read as "unreachable".
+answers `502 upstream_error`. A request that never reached Mapbox (the connection timed out
+or was refused) is asked for once more in the same way; a request that timed out after
+reaching it is not, and the solve answers `504 upstream_timeout`. It is never read as "unreachable".
 
 People are named only from replies that answered for them. An unchecked pair says nothing
 about anyone's start: more than a quarter of a stage's places unchecked fails the search

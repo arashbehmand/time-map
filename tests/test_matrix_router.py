@@ -11,7 +11,7 @@ import pytest
 from conftest import FakeClock, assert_clean, matrix_reply
 
 import server.meetup.solver as solver
-from server.errors import UpstreamError
+from server.errors import UpstreamError, UpstreamTimeout
 from server.guard.budget import UsageStore
 from server.guard.guard import UpstreamGuard
 from server.meetup.candidates import haversine_km
@@ -227,6 +227,53 @@ def test_a_5xx_is_asked_for_again_once(tmp_path):
                   allowance)
     assert np.isfinite(result.minutes).all()
     assert allowance.retries == 1 and allowance.bad_replies == 0 and len(calls) == 2
+
+
+@pytest.mark.parametrize("failure", [httpx.ConnectTimeout, httpx.ConnectError])
+def test_a_connection_that_could_not_be_made_is_asked_for_again_once(tmp_path, failure):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            raise failure("could not connect", request=request)
+        return httpx.Response(200, json=matrix_reply(request))
+
+    router = _router(handler, tmp_path)
+    allowance = _roomy()
+    result = _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], [(0.01, 51.5), (0.02, 51.5)]),
+                  allowance)
+    assert np.isfinite(result.minutes).all()
+    assert allowance.retries == 1 and len(calls) == 2
+
+
+def test_a_connection_failing_twice_is_a_502_after_one_retry(tmp_path):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        raise httpx.ConnectTimeout("could not connect", request=request)
+
+    router = _router(handler, tmp_path)
+    allowance = _roomy()
+    with pytest.raises(UpstreamError):
+        _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], [(0.01, 51.5)]), allowance)
+    assert len(calls) == 2 and allowance.retries == 1
+
+
+def test_a_read_timeout_is_not_asked_for_again(tmp_path):
+    # The request reached the map service, which may have charged for it.
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        raise httpx.ReadTimeout("slow", request=request)
+
+    router = _router(handler, tmp_path)
+    allowance = _roomy()
+    with pytest.raises(UpstreamTimeout):
+        _run(router, lambda r: r.duration_matrix("walking", [(0.0, 51.5)], [(0.01, 51.5)]), allowance)
+    assert len(calls) == 1 and allowance.retries == 0
 
 
 def test_two_429s_then_a_bad_reply_is_a_502_without_another_wait(tmp_path):

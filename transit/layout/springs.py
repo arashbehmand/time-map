@@ -24,6 +24,11 @@ Numpy only.
   s·(overhead + drive time along the roads) apart, however many nodes the road passes. A road
   spring's weight follows the train rule (the real distance between its two nodes × the median
   mesh edge); an access spring's is the sum of its twin's road springs'.
+- Bus and walking springs (#23 part 2) are plain families like the train's: between nodes a bus
+  serves one after the other, and between neighbours in the mesh, each at s·(that mode's table
+  time) and weighted by the train rule. Their times already include walking and waiting, so they
+  need no road layer. Where two modes join the same pair their springs sit in parallel: the
+  faster one's shorter rest length pulls first.
 - Each twin is tied to its node by a weak two-sided spring, ρ·η·a_t·(d/r_t)²/2 (d its distance
   from the node, r_t and a_t its access spring's rest and weight, η = TETHER_ETA): it keeps the
   Hessian positive definite where every car spring is slack, is zero on the real map, and pulls
@@ -175,23 +180,35 @@ class CarSprings:
     access_rest_m: float      # s·overhead/2
 
 
-def model(mesh: Mesh, links: np.ndarray, rest_m: np.ndarray, kappa: float = KAPPA,
-          kappa_shape: float = KAPPA_SHAPE, car: CarSprings | None = None) -> Model:
-    """The energy on `mesh` with train springs (`links`, `rest_m`; may be empty) and, with `car`,
-    the car's road layer."""
+def _plain(mesh: Mesh, name: str, links, rest_m) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """A plain family's links, rest lengths (metres) and weights (real length × the median edge, m²),
+    refused unless every rest length is positive and finite."""
     links = np.asarray(links, dtype=np.int64).reshape(-1, 2)
     rest_m = np.asarray(rest_m, dtype=np.float64).reshape(-1)
     if len(links) != len(rest_m) or (rest_m <= 0).any() or not np.isfinite(rest_m).all():
-        raise ValueError("every train spring needs a positive, finite rest length")
-    L = mesh.median_edge
+        raise ValueError(f"every {name} spring needs a positive, finite rest length")
     real = np.hypot(*(mesh.P[links[:, 0]] - mesh.P[links[:, 1]]).T) if len(links) else np.zeros(0)
-    b = real * L
+    return links, rest_m, real * mesh.median_edge
+
+
+def model(mesh: Mesh, links: np.ndarray, rest_m: np.ndarray, kappa: float = KAPPA,
+          kappa_shape: float = KAPPA_SHAPE, car: CarSprings | None = None, extra=()) -> Model:
+    """The energy on `mesh` with train springs (`links`, `rest_m`; may be empty), the plain families
+    in `extra` ((name, links, rest_m) each: bus and walking, #23 part 2) and, with `car`, the car's
+    road layer."""
+    links, rest_m, b = _plain(mesh, "train", links, rest_m)
+    L = mesh.median_edge
     n_free = int((~mesh.fixed).sum())
     common = dict(edges=mesh.edges, l0=mesh.l0 / L, a=mesh.a_edge / L ** 2, links=links, rest=rest_m / L,
                   b=b / L ** 2, tri=mesh.tri, A0=mesh.A0 / L ** 2, kappa=kappa, kappa_shape=kappa_shape, scale=L,
                   norm=float(mesh.A0.sum()) / L ** 2 / max(n_free, 1))
+    fams = [Family("train", links, rest_m / L, b / L ** 2)] if len(links) else []
+    for name, lk, rm in extra:
+        lk, rm, bb = _plain(mesh, name, lk, rm)
+        if len(lk):
+            fams.append(Family(name, lk, rm / L, bb / L ** 2))
     if car is None:
-        return Model(P=mesh.P / L, fixed=mesh.fixed.copy(), **common)
+        return Model(P=mesh.P / L, fixed=mesh.fixed.copy(), families=fams, **common)
     twins = np.asarray(car.twins, dtype=np.int64).reshape(-1)
     hops = np.asarray(car.hops, dtype=np.int64).reshape(-1, 2)
     hop_rest = np.asarray(car.hop_rest_m, dtype=np.float64).reshape(-1)
@@ -209,7 +226,6 @@ def model(mesh: Mesh, links: np.ndarray, rest_m: np.ndarray, kappa: float = KAPP
     if len(twins) and not (acc_b > 0).all():
         raise ValueError("every twin needs a road spring")
     acc_rest = np.full(len(twins), car.access_rest_m / L)
-    fams = [Family("train", links, rest_m / L, b / L ** 2)] if len(links) else []
     fams += [Family("car", rows[hops], hop_rest / L, hop_b / L ** 2),
              Family("car_access", np.stack([twins, rows], axis=1), acc_rest, acc_b / L ** 2)]
     P = np.vstack([mesh.P, mesh.P[twins]]) / L

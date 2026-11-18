@@ -8,7 +8,7 @@ from server.errors import ApiError, NotFound
 from server.guard.guard import per_ip
 from server.local import is_local
 from server.transit.provider import WINDOWS
-from server.transit.whole_city import FILES, MODE_FILES, SVG_CSP
+from server.transit.whole_city import FILES, SVG_CSP, is_mode_file
 
 router = APIRouter(tags=["whole-city"])
 
@@ -40,8 +40,9 @@ async def whole_city_file(window: str, name: str, request: Request):
 
 @router.get("/whole-city/{window}/modes/{name}", dependencies=[per_ip("whole_city")])
 async def whole_city_mode_file(window: str, name: str, request: Request):
-    """The travel modes (#23, L-03): car alone and car with train and tube, under the map's own gate."""
-    if window not in WINDOWS or name not in MODE_FILES:
+    """The travel modes (#23): the combinations of modes the window's modes.json lists, under the map's
+    own gate."""
+    if window not in WINDOWS or not is_mode_file(name):
         raise NotFound()
     state = request.app.state
     blob = state.whole_city.mode_file(state.transit, window, name, local=is_local(request))

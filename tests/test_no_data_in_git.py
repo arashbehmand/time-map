@@ -61,6 +61,10 @@ def test_no_data_or_large_file_is_tracked():
                                   "transit/out/timemap/2026-11-12/wd13/modes/modes.json",
                                   "transit/out/car/2026-11-12/wd13/car_links.json",
                                   "static/whole-city/combo-car-train.json", "static/whole-city/roads.bin",
+                                  # bus and walking (#23 part 2): made from the transit tables
+                                  "transit/out/timemap/2026-11-17/wd13/modes/combo-bus.json",
+                                  "transit/out/timemap/2026-11-17/wd13/modes/combo-bus-car-train-walk.json",
+                                  "static/whole-city/combo-walk.json",
                                   "x/car_links.json", "x/LONDON_2022.zip", "x/london_wd13_speeds.parquet",
                                   "x/london_wd13_speeds.json"])
 def test_data_files_are_ignored_anywhere(path):

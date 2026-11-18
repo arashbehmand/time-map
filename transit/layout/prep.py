@@ -145,6 +145,50 @@ def load_build(build_dir: Path, window: str) -> BuildInput:
                       table_sha, points_sha)
 
 
+MODE_TABLE_KINDS = ("bus", "walk")
+
+
+def load_mode_table(b: BuildInput, kind: str) -> tuple[np.ndarray, str]:
+    """One of #23's per-mode tables (#30), tt_<window>_<kind>.npy beside b's table: (memory-mapped
+    table, sha256). Refused unless the manifest lists it complete (sha256, shape, kind), its
+    fingerprint is the one the manifest records, it was built from b's points at b's departure, and
+    every value is a time up to b's limit or 255 (no time)."""
+    if kind not in MODE_TABLE_KINDS:
+        raise ValueError(f"kind {kind!r} is not one of {MODE_TABLE_KINDS}")
+    name = f"tt_{b.window}_{kind}"
+    what = {"bus": "bus-only", "walk": "walking-only"}[kind]
+    entry = b.manifest.get("outputs", {}).get(name)
+    path, fp_path = b.dir / f"{name}.npy", b.dir / f"{name}.fingerprint.json"
+    if entry is None or not path.is_file() or not fp_path.is_file():
+        raise RefusedInput(f"build {b.manifest.get('build')} has no complete {what} table ({name}.npy): run the "
+                           "build's modetimes stage")
+    sha = sha256(path)
+    if entry.get("sha256") != sha:
+        raise RefusedInput(f"{name}.npy is not the table manifest.json describes (sha256 differs)")
+    if entry.get("kind", kind) != kind:
+        raise RefusedInput(f"{name}.npy is listed as kind {entry.get('kind')!r}, not {kind!r}")
+    fp = json.loads(fp_path.read_text(encoding="utf-8"))
+    if not fp.get("complete"):
+        raise RefusedInput(f"{name}.npy is incomplete")
+    inputs = fp.get("inputs")
+    if not isinstance(inputs, dict) or b.manifest.get("mode_tables_fingerprints", {}).get(kind) != inputs:
+        raise RefusedInput(f"{name}.fingerprint.json is not the fingerprint manifest.json records")
+    if inputs.get("points_sha256") != b.points_sha256:
+        raise RefusedInput(f"{name}.npy was built from other points than tt_{b.window}.npy")
+    if entry.get("departure") != b.departure:
+        raise RefusedInput(f"{name}.npy departs at {entry.get('departure')}, tt_{b.window}.npy at {b.departure}")
+    table = np.load(path, mmap_mode="r")
+    n = len(b.points)
+    if table.dtype != np.uint8 or table.shape != (n, n) or list(entry.get("shape", table.shape)) != [n, n]:
+        raise RefusedInput(f"{name}.npy must be uint8 of shape ({n}, {n}), not {table.dtype} {table.shape}")
+    counts = np.bincount(np.asarray(table).ravel(), minlength=256)
+    bad = int(counts[b.max_time + 1:UNREACHABLE].sum())
+    if bad:
+        raise RefusedInput(f"{name}.npy has {bad} values between {b.max_time + 1} and 254: a time must be "
+                           f"0-{b.max_time} or 255 (no time)")
+    return table, sha
+
+
 def clean_name(name: str) -> str:
     """A station's name for a label: 'WEMBLEY PARK UND' -> 'Wembley Park'; 'Nine Elms Underground
     Station (N/A), London' -> 'Nine Elms'."""

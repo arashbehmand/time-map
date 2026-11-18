@@ -1,4 +1,4 @@
-// Whole city's travel modes (#23, L-03): which combination a set of toggles means, how the map
+// Whole city's travel modes (#23): which combination a set of toggles means, how the map
 // moves from one to another, and the readout's words.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -46,7 +46,7 @@ test("the car's roads go to the renderer's road pass, in styles it has", () => {
   assert.ok(PASSES.some((p) => p.name === "road") && PASSES.some((p) => p.buffer === "road" && p.casing));
 });
 
-import { modeAvailability, runSteps, switchSteps } from "../../static/whole-city/carry.js";
+import { comboName, keepRecent, modeAvailability, runSteps, switchSteps } from "../../static/whole-city/carry.js";
 
 // Run a switch's steps against a fake map: each glide moves along the current combination, each
 // cross blends between two combinations at a solved position. Returns every blend drawn.
@@ -99,13 +99,63 @@ test("steps wait for each glide and blend to end before the next", () => {
   pending(); assert.deepEqual(log, ["glide", "cross", "enter", "done"]);
 });
 
-test("Walking and Bus are never live; Car only where the build has it", () => {
+test("a mode is live only where the build has it; Train and tube always", () => {
   const none = modeAvailability(null);
   assert.equal(none.walk.on, false); assert.equal(none.bus.on, false);
   assert.equal(none.train.on, true); assert.equal(none.car.on, false);
-  const built = modeAvailability({ modes: [{ id: "walk", available: false, why: "Later." },
+  assert.ok(none.walk.why && none.bus.why && none.car.why);
+  const carOnly = modeAvailability({ modes: [{ id: "walk", available: false, why: "No walking here." },
     { id: "bus", available: false, why: "Later." }, { id: "train", available: true }, { id: "car", available: true }] });
-  assert.equal(built.walk.on, false); assert.equal(built.walk.why, "Later."); assert.equal(built.car.on, true);
+  assert.equal(carOnly.walk.on, false); assert.equal(carOnly.walk.why, "No walking here."); assert.equal(carOnly.car.on, true);
+  const all = modeAvailability({ modes: ["walk", "bus", "train", "car"].map((id) => ({ id, available: true, why: "" })) });
+  for (const m of ["walk", "bus", "train", "car"]) { assert.equal(all[m].on, true); assert.equal(all[m].why, ""); }
+});
+
+test("every set of the four modes is one combination, its id the build's (sorted)", () => {
+  const modes = ["walk", "bus", "train", "car"];
+  const ids = new Set();
+  for (let mask = 0; mask < 16; mask++) {
+    const on = new Set(modes.filter((_, k) => mask & (1 << k)));
+    const id = comboOf(on);
+    ids.add(id);
+    assert.equal(id, on.size ? [...on].sort().join("-") : "none");
+  }
+  assert.equal(ids.size, 16);
+  assert.equal(comboOf(new Set(["walk", "car", "bus", "train"])), "bus-car-train-walk");
+  assert.equal(comboName("car-train"), "Car + train and tube");
+  assert.equal(comboName("bus-walk"), "Bus + walking");
+  assert.equal(comboName("none"), "No way of travelling");
+});
+
+test("walking and bus say why they move nothing, judged by their taut springs, and name where one acts", () => {
+  for (const p of [undefined, { n: 0, taut: 0, of: 2600, share: 0 }]) {
+    for (const i of [0, 12]) {
+      assert.equal(pullWords("walk", p, i, 0, 17.2), "Walking moves nothing here: at this map's scale (about 17 km/h " +
+        "door to door) walking is too slow to pull two places together.");
+      assert.equal(pullWords("bus", p, i, 0, 17.2), "Bus moves nothing here: door to door, with the walk to the stop " +
+        "and the wait, no bus between neighbouring places beats this map's scale (about 17 km/h).");
+    }
+  }
+  // A spring at its rest length acts on the map though it is under 1% past it: it is named.
+  assert.equal(pullWords("walk", { n: 0, taut: 1, of: 2611, share: 0, top: ["Bank – Bank"] }, 24, 0, 17.2),
+    "Walking: 1 of 2611 walking springs taut, 0 more than 1% past its time, hardest Bank – Bank. Elsewhere it is " +
+    "slower than the map.");
+  assert.equal(pullWords("bus", { n: 1, taut: 2, of: 1384, share: 0.001, top: ["TUBE"],
+    top_links: ["London Victoria – Marble Arch", "Pimlico – Victoria"] }, 20),
+    "Bus: 2 of 1384 bus springs taut, 1 more than 1% past their time, hardest London Victoria – Marble Arch " +
+    "(route TUBE). Elsewhere it is slower than the map.");
+  assert.match(pullWords("bus", { n: 40, taut: 41, of: 900, share: 0.044, top: ["25", "207"] }, 20), /\(routes 25, 207\)/);
+  // An older modes.json with no taut count: its pulling count stands in.
+  assert.match(pullWords("bus", { n: 3, of: 900, share: 0.003, top: ["N8"] }, 20), /^Bus: 3 of 900 bus springs taut/);
+});
+
+test("only the few most recently drawn combinations keep their placed land", () => {
+  const list = [];
+  assert.deepEqual(keepRecent(list, "a", 3), []);
+  keepRecent(list, "b", 3); keepRecent(list, "c", 3);
+  assert.deepEqual(keepRecent(list, "a", 3), []);            // a used again: now the most recent
+  assert.deepEqual(keepRecent(list, "d", 3), ["b"]);         // the least recently used goes
+  assert.deepEqual(list, ["c", "a", "d"]);
 });
 
 import { THIN_MARK, thinPositions } from "../../static/whole-city/carry.js";

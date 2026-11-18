@@ -1079,8 +1079,10 @@ def test_the_travel_modes_end_to_end(job_env):
     car = _car_dir(tmp_path, build_dir)
     code, out = _main(tmp_path, "modes", "--modes", "car", "--car-dir", str(car))
     assert code == 0
-    for name in timemap.MODES_FILES:
-        assert (out / name).is_file(), name
+    for name in ("modes.json", "combo-car.json", "combo-car-train.json", "roads.bin", "report.md", "report.json"):
+        assert (out / "modes" / name).is_file(), name
+    assert sorted(p.name for p in (out / "modes").iterdir() if p.name.startswith("combo-")) == \
+        ["combo-car-train.json", "combo-car.json"]
     # Train alone is the same time map with or without the modes.
     a, b = (json.loads((d / "timemap.json").read_text()) for d in (plain, out))
     assert a["frames"] == b["frames"] and a["motion"] == b["motion"]
@@ -1088,6 +1090,7 @@ def test_the_travel_modes_end_to_end(job_env):
     idx = json.loads((out / "modes/modes.json").read_text())
     assert [m["id"] for m in idx["modes"]] == ["walk", "bus", "train", "car"]
     assert [m["available"] for m in idx["modes"]] == [False, False, True, True]
+    assert idx["modes"][0]["why"] and "bus" not in idx and "walk" not in idx
     assert len(idx["train_pulls"]) == len(springs.RHOS) and idx["train_pulls"][-1]["train"]["n"] > 0
     assert set(idx["cross"]) == {"train|car-train", "car|car-train"} and idx["roads"]["file"] == "roads.bin"
     assert idx["nodes"] == len(b["nodes"]["kind"]) and idx["table_sha256"] == b["table_sha256"]
@@ -1103,7 +1106,7 @@ def test_the_travel_modes_end_to_end(job_env):
         assert ("train" in c["frames"][-1]["pulls"]) == (cid == "car-train")
     rep = json.loads((out / "modes/report.json").read_text())
     assert all(c["flipped_max"] == 0 for c in rep["combos"].values())
-    assert set(rep["restart"]) == {"car", "car-train"} and all(r["complete"] for r in rep["restart"].values())
+    assert set(rep["restart"]) == {"train", "car", "car-train"} and all(r["complete"] for r in rep["restart"].values())
     assert rep["spots"] and rep["spots"][0]["status"] == "pass"
     for k in rep["compare_at"]:
         row = rep["compare"][str(k)]
@@ -1193,3 +1196,300 @@ def test_the_spot_check_claims_nothing_for_a_pair_not_faster_by_car():
     assert by["Biggest gain by car"]["car_bound_km"] == pytest.approx(100.0 * 10.0 / 1000)
     assert by["slower"]["status"] == "not faster by car" and by["gone"]["status"] == "absent"
     assert by["slower"]["control"][1] == pytest.approx(0.8)
+
+
+# ── bus and walking (#23 part 2) ────────────────────────────────────
+def _plain_inputs(build_dir):
+    from transit.layout import modelinks
+    from transit.layout.prep import load_mode_table
+    b = load_build(build_dir, WINDOW)
+    pairs = station_pairs(b)
+    mesh, cells, pick = timemap.mesh_of(b, pairs)
+    members = modelinks.node_members(mesh, pairs, cells, pick, b.point_ok)
+    names = modelinks.node_names(mesh, pairs)
+    return b, pairs, mesh, members, names, load_mode_table(b, "bus")[0], load_mode_table(b, "walk")[0]
+
+
+def test_walking_springs_sit_on_the_mesh_edges_between_stations_and_cells(built):
+    from transit.layout import modelinks
+    b, pairs, mesh, members, names, bus, walk = _plain_inputs(built[0])
+    wl = modelinks.walk_links(mesh, members, walk, pairs.s, names)
+    edges = {tuple(e) for e in mesh.edges.tolist()}
+    assert len(wl.pairs) > 100 and all(tuple(p) in edges for p in wl.pairs.tolist())
+    assert not (mesh.kinds[wl.pairs] == meshmod.RING).any()
+    assert (mesh.kinds[wl.pairs] == meshmod.CELL).any()                  # cells get walking springs too
+    # Every walking spring is longer than its edge: walking is slower than the map, so none pulls.
+    assert wl.counts["rest_over_real"]["min"] > 1.5
+    assert sum(wl.counts["dropped"].values()) == wl.counts["left_out_count"] == wl.counts["edges"] - len(wl.pairs)
+    m = springs.model(mesh, [], [], extra=[("walk", wl.pairs, wl.rest_m)])
+    assert not springs.taut(m, m.P, m.family("walk")).any()
+
+
+def test_bus_links_join_consecutive_nodes_and_keep_only_pairs_faster_than_walking(built):
+    from timemap_network import BUS_CORRIDOR
+
+    from transit.layout import modelinks
+    b, pairs, mesh, members, names, bus, walk = _plain_inputs(built[0])
+    lk = modelinks.bus_links(built[1] / "work" / BUILD / "bods.gtfs.zip", date(2026, 1, 7), time(13, 0), mesh,
+                             members, bus, walk, pairs.s, names)
+    got = {tuple(sorted((pairs.labels[i], pairs.labels[j]))) for i, j in lk.pairs.tolist()}
+    want = {tuple(sorted((f"Syn {a.split(':')[1]}", f"Syn {c.split(':')[1]}")))
+            for a, c in zip(BUS_CORRIDOR, BUS_CORRIDOR[1:])}
+    assert got == want
+    assert all(r == ["25"] for r in lk.routes) and (lk.minutes == 5).all()
+    c = lk.counts
+    # G30-G31, G31-G32 and the gap trip's G04-G05 (its G03-G04 hop is the gap): bus no faster than walking
+    assert c["links_dropped"] == {"no time both ways": 1, "not faster than walking": 3}
+    assert c["dropped"]["same node"] == 1                                  # the stop 20 m from G10
+    assert c["dropped"]["outside the window"] == 5 and c["dropped"]["stop_sequence gap"] == 1
+    assert c["bus_trips_on_day"] == 5                                      # not the one on another day
+    assert {tuple(r[:2]) for r in c["left_out"]} >= {("Syn G40", "Syn G41")}
+
+
+def test_bus_links_refuse_stop_times_not_grouped_by_trip(tmp_path, built):
+    from timemap_network import bus_tables
+
+    from transit.layout import modelinks
+    b, pairs, mesh, members, names, bus, walk = _plain_inputs(built[0])
+    t = bus_tables()
+    head, rows = t["stop_times.txt"][0], t["stop_times.txt"][1:]
+    t["stop_times.txt"] = [head, *rows[1:], rows[0]]                       # b25's first stop comes back at the end
+    feed = write_gtfs(tmp_path / "ungrouped.zip", t)
+    with pytest.raises(linkmod.LinkError, match="not grouped by trip"):
+        modelinks.bus_links(feed, date(2026, 1, 7), time(13, 0), mesh, members, bus, walk, pairs.s, names)
+
+
+def test_a_mode_table_must_be_the_one_the_manifest_lists(built):
+    from transit.layout.prep import load_mode_table
+    build_dir = built[0]
+    b = load_build(build_dir, WINDOW)
+    t, sha = load_mode_table(b, "walk")
+    assert t.shape == b.table.shape and len(sha) == 64
+    b.manifest["outputs"][f"tt_{WINDOW}_bus"]["sha256"] = "0" * 64
+    with pytest.raises(RefusedInput, match="sha256 differs"):
+        load_mode_table(b, "bus")
+    b.manifest["mode_tables_fingerprints"]["walk"] = {"other": True}
+    with pytest.raises(RefusedInput, match="fingerprint"):
+        load_mode_table(b, "walk")
+    del b.manifest["outputs"][f"tt_{WINDOW}_walk"]
+    with pytest.raises(RefusedInput, match="no complete walking-only table"):
+        load_mode_table(b, "walk")
+
+
+def test_bus_and_walking_gradient_and_hessian_match_finite_differences():
+    mesh = grid_mesh(5, seed=2)
+    d = lambda a, b: float(np.hypot(*(mesh.P[a] - mesh.P[b])))           # noqa: E731
+    extra = [("bus", [(6, 8), (8, 18)], [0.4 * d(6, 8), 0.5 * d(8, 18)]), ("walk", [(6, 8), (11, 12)],
+                                                                            [3.0 * d(6, 8), 0.8 * d(11, 12)])]
+    m = springs.model(mesh, np.array([[0, 24]]), np.array([0.6 * d(0, 24)]), extra=extra)
+    assert [f.name for f in m.families] == ["train", "bus", "walk"]
+    rng = np.random.default_rng(1)
+    X = m.P.copy()
+    X[~m.fixed] += rng.uniform(-0.03, 0.03, X[~m.fixed].shape)
+    rho = 2.0
+    E, g, H = springs.grad_hess(m, X, rho)
+    h = 1e-6
+    gd, Hd = np.zeros_like(g), np.zeros_like(H)
+    for k in range(m.n_dof):
+        dk = np.zeros(m.n_dof)
+        dk[k] = h
+        Xp, Xm = springs.apply_step(m, X, dk), springs.apply_step(m, X, -dk)
+        gd[k] = (springs.energy(m, Xp, rho) - springs.energy(m, Xm, rho)) / (2 * h)
+        Hd[:, k] = (springs.grad_hess(m, Xp, rho, hessian=False)[1] - springs.grad_hess(m, Xm, rho, hessian=False)[1]) / (2 * h)
+    assert np.allclose(g, gd, rtol=1e-5, atol=1e-7)
+    assert np.allclose(H, Hd, rtol=1e-4, atol=1e-6)
+    p = springs.parts(m, X, rho)
+    assert p["bus"] > 0 and set(p) >= {"bus", "walk"}
+    assert not springs.taut(m, X, m.family("walk"))[0]                    # 3× its length: slack
+    assert springs.taut(m, X, m.family("bus")).all()
+
+
+def test_combinations_are_every_set_of_train_and_the_chosen_modes_but_train_alone():
+    assert timemap.combos_of(["car"]) == [("car",), ("car", "train")]
+    full = [timemap.combo_id(c) for c in timemap.combos_of(["bus", "car", "walk"])]
+    assert len(full) == 14 and len(set(full)) == 14 and "train" not in full
+    assert full[:3] == ["bus", "car", "walk"] and full[-1] == "bus-car-train-walk"
+    assert len([f for f in timemap.MODES_FILES if "/combo-" in f]) == 14
+    assert timemap.one_apart("car", "car-train") and not timemap.one_apart("train", "car")
+
+
+def test_all_four_travel_modes_end_to_end(job_env):
+    tmp_path, build_dir, _ = job_env
+    car = _car_dir(tmp_path, build_dir)
+    code, out = _main(tmp_path, "four", "--modes", "car", "bus", "walk", "--car-dir", str(car))
+    assert code == 0
+    idx = json.loads((out / "modes/modes.json").read_text())
+    assert [m["available"] for m in idx["modes"]] == [True, True, True, True]
+    assert all(not m["why"] for m in idx["modes"])
+    combos = [c for c in idx["combos"] if c != "train"]
+    assert len(combos) == 14 and len(idx["cross"]) == 28
+    assert idx["bus"]["links"] == 5 and idx["walk"]["links"] > 100 and idx["roads"]
+    for name in timemap.MODES_FILES:
+        assert (out / name).is_file(), name
+    plain = json.loads((out / "timemap.json").read_text())
+    tri = np.array(plain["triangles"]).reshape(-1, 3)
+    for cid in combos:
+        c = json.loads((out / f"modes/combo-{cid}.json").read_text())
+        assert c["id"] == cid and len(c["frames"]) == len(springs.RHOS)
+        for f in c["frames"]:
+            X = np.stack([f["x"], f["y"]], 1) / 10
+            assert (signed_areas(X, tri) > 0).all() and f["metrics"]["flipped"] == 0
+            assert ("walk" in f["pulls"]) == ("walk" in cid) and ("bus" in f["pulls"]) == ("bus" in cid)
+    walk = json.loads((out / "modes/combo-walk.json").read_text())
+    real = (walk["frames"][0]["x"], walk["frames"][0]["y"])
+    assert all((f["x"], f["y"]) == real for f in walk["frames"])          # walking alone moves nothing
+    assert all(f["pulls"]["walk"]["n"] == 0 for f in walk["frames"])
+    bus = json.loads((out / "modes/combo-bus.json").read_text())
+    assert bus["frames"][-1]["pulls"]["bus"]["n"] > 0 and bus["frames"][-1]["pulls"]["bus"]["top"] == ["25"]
+    rep = json.loads((out / "modes/report.json").read_text())
+    assert len(rep["combos"]) == 15 and all(c["flipped_max"] == 0 for c in rep["combos"].values())
+    assert set(rep["restart"]) == set(rep["combos"]) and all(r["complete"] for r in rep["restart"].values())
+    assert rep["spots"] and rep["spots"][0]["status"] == "pass"
+    for k in rep["compare_at"]:
+        assert len(rep["compare"][str(k)]) == 15
+    md = (out / "modes/report.md").read_text()
+    for words in ("15 combinations", "Bus and walking times", "**Walking:**", "not a failed mode", "**Bus:**",
+                  "Bus + car + train and tube + walking", "Thames crossings", "Spot check", "Restart check",
+                  "Switching Bus on moves the map by at most", "taut", "rail replacement"):
+        assert words in md, words
+    # The synthetic bus corridor beats the scale: the report says so, from the springs, not by rule.
+    assert "bus springs are shorter than their real length" in md and "Bus alone moves the map" in md
+    assert "so on the real map no bus spring is taut" not in md
+    assert "Walking alone is the real map at every position" in md
+    # Shifts in metres, so one under 5 m doesn't read as nothing.
+    assert re.search(r"\| Bus \| [0-9.,]+ m \| [0-9.,]+ m ", md) and "0.00 km" not in md
+    # Bus and walking: every spring the solve feels is counted (taut), and what switching each on does.
+    assert bus["frames"][-1]["pulls"]["bus"]["taut"] >= bus["frames"][-1]["pulls"]["bus"]["n"] > 0
+    assert rep["mode_effect"]["bus"]["max_m"] > 0 and rep["mode_effect"]["bus"]["combo"]
+    assert rep["mode_effect"]["walk"]["max_m"] == 0.0 or rep["pulls_max"]["walk"]["taut"] > 0
+    assert rep["combos"]["walk"]["real_map_throughout"] and not rep["combos"]["bus"]["real_map_throughout"]
+    assert rep["plain"]["bus"]["feed_sha256"] and rep["plain"]["walk"]["speed_kmh"] > 0
+    assert idx["walk"]["speed_kmh"] > 0 and idx["bus"]["feed_sha256"]
+    # A later run with the car only leaves no bus or walking file behind.
+    code, out2 = _main(tmp_path, "four", "--modes", "car", "--car-dir", str(car))
+    assert code == 0 and out2 == out
+    assert sorted(p.name for p in (out / "modes").iterdir() if p.name.startswith("combo-")) == \
+        ["combo-car-train.json", "combo-car.json"]
+
+
+def test_bus_and_walking_without_the_car(job_env):
+    tmp_path, build_dir, _ = job_env
+    code, out = _main(tmp_path, "nocar", "--modes", "bus", "walk")
+    assert code == 0
+    idx = json.loads((out / "modes/modes.json").read_text())
+    assert [m["available"] for m in idx["modes"]] == [True, True, True, False]
+    assert idx["roads"] is None and "overhead_min" not in idx
+    assert not (out / "modes/roads.bin").exists()
+    assert sorted(c for c in idx["combos"] if c != "train") == sorted(
+        ["bus", "walk", "bus-train", "bus-walk", "train-walk", "bus-train-walk"])
+    md = (out / "modes/report.md").read_text()
+    assert "Thames" not in md and "HERE Traffic4cast" not in md and "Bus and walking times" in md
+
+
+def test_bus_and_walking_refuse_other_windows_and_missing_tables(job_env, capsys):
+    tmp_path, build_dir, _ = job_env
+    code, out = _main(tmp_path, "sa", "--modes", "walk", "--window", "sa13")
+    assert code == 2 and "weekday 13:00-14:00 only" in capsys.readouterr().err and not out.exists()
+    m = json.loads((build_dir / "manifest.json").read_text())
+    del m["outputs"][f"tt_{WINDOW}_bus"]
+    (build_dir / "manifest.json").write_text(json.dumps(m))
+    code, out = _main(tmp_path, "nobus", "--modes", "bus")
+    assert code == 2 and "no complete bus-only table" in capsys.readouterr().err and not out.exists()
+
+
+def test_a_nudged_run_of_a_combination_that_never_moves_goes_on_from_the_rounding_floor(built, monkeypatch):
+    """Walking or bus alone is the real map at every position (nothing pulls). From a nudged start the
+    solver stops a fraction of a millimetre from it, at its floating-point floor. The run then goes on,
+    solving each later position from the last, and is scored on what those solves give, never on the
+    stopped one. A stop far from the real map, one that ran out of iterations, or one on a combination
+    that does move, leaves the check incomplete."""
+    from types import SimpleNamespace
+    b = load_build(built[0], WINDOW)
+    pairs = station_pairs(b)
+    mesh, _, _ = timemap.mesh_of(b, pairs)
+    m = springs.model(mesh, [], [])
+    rhos = (0.0, 1.0, 2.0)
+    real_dm = springs.quantise(m.P * m.scale)
+    frames = [{"rho": r, "dm": real_dm, "Xs": real_dm / 10.0, "metrics": {"ratios": {}}} for r in rhos]
+
+    def near(off):
+        X = m.P.copy()
+        X[~m.fixed] += off / m.scale
+        return X
+
+    def fake_sweep(model, lad, tol=None, max_iter=None, X0=None, smooth=True, log=None):
+        if X0 is None:                                        # the other ladders: straight to the real map
+            return [{"rho": r, "X": model.P.copy(), "converged": True, "gmax": 0.0} for r in lad]
+        return [{"rho": 0.0, "X": X0, "converged": True, "gmax": 0.0},
+                {"rho": lad[1], "X": near(0.0003), "converged": False, "gmax": 3e-5}]
+
+    solved = []
+
+    def fake_solve(model, X0, rho, tol=None, max_iter=None, off=0.0002, its=5):
+        solved.append(rho)
+        return SimpleNamespace(X=near(off), converged=False, iterations=its, gmax=2e-5)
+
+    monkeypatch.setattr(springs, "sweep", fake_sweep)
+    monkeypatch.setattr(springs, "solve", fake_solve)
+    out = timemap.restart_check(m, mesh, pairs, rhos, frames, [2], {}, 1e-6, 10, lambda *a: None)
+    assert out["complete"] and len(out["floor"]) == len(timemap.RESTART_SEEDS)
+    assert solved == [1.0, 2.0] * len(timemap.RESTART_SEEDS)              # every later position solved
+    assert out["floor"][0]["stopped_at_rho"] == 1.0 and out["floor"][0]["from_real_m"] < 0.001
+    assert out["at"][2]["shift_max_m"] == 0.0
+    for kw in ({"off": 0.5}, {"its": 10}):                                  # far away; out of iterations
+        monkeypatch.setattr(springs, "solve", lambda *a, kw=kw, **k: fake_solve(*a, **k, **kw))
+        assert not timemap.restart_check(m, mesh, pairs, rhos, frames, [2], {}, 1e-6, 10, lambda *a: None)["complete"]
+    monkeypatch.setattr(springs, "solve", fake_solve)
+    moved = [dict(f) for f in frames]
+    moved[2]["dm"] = real_dm + 1                               # a combination that does move
+    assert not timemap.restart_check(m, mesh, pairs, rhos, moved, [2], {}, 1e-6, 10, lambda *a: None)["complete"]
+
+
+def test_the_bus_feed_must_be_the_one_the_manifest_records(built):
+    build_dir, data = built
+    b = load_build(build_dir, WINDOW)
+    assert timemap.bus_feed_of(b, data).name == "bods.gtfs.zip"
+    b.manifest["inputs"]["prepared"]["bods"]["sha256"] = "0" * 64
+    with pytest.raises(RefusedInput, match="sha256 differs"):
+        timemap.bus_feed_of(b, data)
+    del b.manifest["inputs"]["prepared"]["bods"]
+    with pytest.raises(RefusedInput, match="records no sha256"):
+        timemap.bus_feed_of(b, data)
+    (data / "work" / BUILD / "bods.gtfs.zip").unlink()
+    with pytest.raises(RefusedInput, match="is missing"):
+        timemap.bus_feed_of(b, data)
+
+
+def test_a_mismatched_bus_feed_writes_nothing(job_env, capsys):
+    tmp_path, build_dir, data = job_env
+    feed = data / "work" / BUILD / "bods.gtfs.zip"
+    feed.write_bytes(feed.read_bytes() + b" ")
+    code, out = _main(tmp_path, "badfeed", "--modes", "bus", "walk")
+    assert code == 2 and "bods.gtfs.zip is not the file manifest.json describes" in capsys.readouterr().err
+    assert not out.exists()
+
+
+def test_stop_times_with_blank_lines_read_and_a_short_row_is_refused(tmp_path, built):
+    from timemap_network import bus_tables
+
+    from transit.layout import modelinks
+    b, pairs, mesh, members, names, bus, walk = _plain_inputs(built[0])
+    t = bus_tables()
+    st = t["stop_times.txt"]
+    t["stop_times.txt"] = [st[0], [], *st[1:], []]
+    blank = write_gtfs(tmp_path / "blank.zip", t)
+    lk = modelinks.bus_links(blank, date(2026, 1, 7), time(13, 0), mesh, members, bus, walk, pairs.s, names)
+    assert len(lk.pairs) == 5
+    assert lk.counts["stops_used"] > 0 and lk.counts["stop_to_node_m"]["max"] < 100      # stops on their stations
+    t["stop_times.txt"] = [st[0], *st[1:3], st[3][:2], *st[4:]]
+    short = write_gtfs(tmp_path / "short.zip", t)
+    with pytest.raises(linkmod.LinkError, match="fields"):
+        modelinks.bus_links(short, date(2026, 1, 7), time(13, 0), mesh, members, bus, walk, pairs.s, names)
+
+
+def test_the_report_holds_with_no_walking_spring():
+    from transit.layout import modes_report
+    rep = {"s_m_per_min": 286.0, "pulls_max": {}, "mode_effect": {"walk": {"max_m": 0.0}},
+           "plain": {"walk": {"links": 0, "left_out_count": 12, "rest_over_real": {"min": None, "median": None}}}}
+    (line,) = modes_report._plain_headlines(rep)
+    assert "0 springs" in line and "no walking springs to compare" in line and "moves no station or cell" in line

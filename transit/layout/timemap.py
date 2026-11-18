@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import heapq
+import itertools
 import math
 import sys
 import tempfile
@@ -53,6 +54,7 @@ from transit.layout.prep import (
     RefusedInput,
     RefusedSolve,
     load_build,
+    load_mode_table,
     sha256,
     station_pairs,
 )
@@ -72,15 +74,39 @@ RENDERER_FILES = ("renderer.js", "caps.js", "warp.js", "field.js", "frame.js", "
 DATA_FILES = ("timemap.json", "land.bin")
 REPORT_FILES = ("report.json", "report.md", "shepard.svg", "panels.svg")
 OUTPUT_FILES = (*DATA_FILES, *REPORT_FILES)
-# The travel modes (#23, L-03), with --modes car: served like the map, each combination fetched the
-# first time it is switched on.
+# The travel modes (#23), with --modes car bus walk (any of them): served like the map, each
+# combination fetched the first time it is switched on. Train and tube is always a mode; train alone
+# is the time map itself (timemap.json), every other combination of the modes a file of its own.
 MODES_DIR = "modes"
-MODES_FILES = tuple(f"{MODES_DIR}/{n}" for n in ("modes.json", "combo-car.json", "combo-car-train.json", "roads.bin",
-                                                 "report.md", "report.json"))
+MODE_IDS = ("bus", "car", "train", "walk")
+EXTRA_MODES = ("bus", "car", "walk")          # what --modes takes
+
+
+def combo_id(modes) -> str:
+    return "-".join(sorted(modes))
+
+
+def combos_of(chosen) -> list[tuple[str, ...]]:
+    """Every combination of train and the chosen modes but train alone, by size, then by name."""
+    base = sorted({"train", *chosen})
+    return [c for r in range(1, len(base) + 1) for c in itertools.combinations(base, r) if c != ("train",)]
+
+
+def combo_file(cid: str) -> str:
+    return f"combo-{cid}.json"
+
+
+MODES_FIXED = ("modes.json", "roads.bin", "report.md", "report.json")
+# Every file a run with any modes may write: what the output checks probe, and what a run removes
+# when it doesn't write it (a run without the car leaves no roads.bin behind, and so on).
+MODES_FILES = tuple(f"{MODES_DIR}/{n}" for n in (*MODES_FIXED, *(combo_file(combo_id(c))
+                                                                 for c in combos_of(EXTRA_MODES))))
 MAX_GZIP_BYTES = 2_000_000
 SEGMENT_STEP_M = 100.0
 RESTART_SEEDS = (1, 2)        # the restart check: the sweep again from the real map nudged by
 RESTART_JITTER_M = 0.5        # up to this much on every free node, once per seed
+RESTART_FLOOR_M = 0.01        # a nudged run of a combination that is the real map throughout, stopped
+                              # this close to the real map, has returned (restart_check)
 
 
 def default_out(build: str, window: str) -> Path:
@@ -149,6 +175,20 @@ def find_inputs(b: BuildInput, data: Path, land: bool) -> tuple[Path, Path | Non
             raise RefusedInput(f"{path.name} is not the file manifest.json describes (sha256 differs)")
         found[key] = got
     return feed, (work / "london.osm.pbf") if land else None, found
+
+
+def bus_feed_of(b: BuildInput, data: Path) -> Path:
+    """The prepared bus feed of build b (data/work/<build>/bods.gtfs.zip), checked against b's
+    manifest."""
+    path = Path(data) / "work" / b.dir.name / "bods.gtfs.zip"
+    want = (b.manifest.get("inputs", {}).get("prepared", {}).get("bods") or {}).get("sha256")
+    if not path.is_file():
+        raise RefusedInput(f"{path} is missing (TRANSIT_DATA points at {data})")
+    if not want:
+        raise RefusedInput(f"manifest.json records no sha256 for {path.name}")
+    if sha256(path) != want:
+        raise RefusedInput(f"{path.name} is not the file manifest.json describes (sha256 differs)")
+    return path
 
 
 def departure(b: BuildInput) -> datetime:
@@ -269,8 +309,15 @@ def restart_check(m, mesh, pairs, rhos, frames, picks, checks, tol, max_iter, lo
     wem = checks.get("wembley", {})
     free = ~m.fixed                      # the mesh's free nodes, and the car's twins when it has them
     inner = mesh.kinds != meshmod.RING
-    out = {"jitter_m": RESTART_JITTER_M, "seeds": list(RESTART_SEEDS), "ladders": [], "complete": True, "at": {}}
+    out = {"jitter_m": RESTART_JITTER_M, "seeds": list(RESTART_SEEDS), "ladders": [], "complete": True, "at": {},
+           "floor": []}
     rows = {k: [] for k in picks}
+    # A combination that is the real map at every shipped position (no spring pulls: walking or bus
+    # alone, #23) has one lowest-energy layout, the real map. From a nudged start the solver gets
+    # back to within a fraction of a millimetre of it and then stops: there the energy is at its
+    # floating-point floor (it even reads below zero), so no step can show a gain. Such a run goes on
+    # position by position from where it stopped (_floor_run) and is scored on what each solve gives.
+    quiet = all(np.array_equal(f["dm"], frames[0]["dm"]) for f in frames)
 
     def measure(k, X, kind, name):
         dm = springs.quantise(X[:m.n_mesh] * m.scale)
@@ -299,7 +346,16 @@ def restart_check(m, mesh, pairs, rhos, frames, picks, checks, tol, max_iter, lo
             jitter /= 2
         res = springs.sweep(m, rhos, tol=tol, max_iter=max_iter, X0=X0)
         if len(res) < len(frames) or not all(f["converged"] for f in res):
-            out["complete"] = False
+            floor = _floor_run(m, rhos, res, tol, max_iter) if quiet else None
+            if floor is None:
+                out["complete"] = False
+                continue
+            out["floor"].append({"seed": seed, "stopped_at_rho": res[-1]["rho"], "gmax_max": floor["gmax_max"],
+                                 "from_real_m": floor["from_real_m"]})
+            for k in picks:
+                measure(k, floor["X"][k], "nudged", f"seed {seed}, up to {jitter:g} m (each position solved from the "
+                        f"last; stopped at most {floor['from_real_m'] * 1000:.1f} mm from the real map, at the "
+                        "solver's rounding floor)")
             continue
         for k in picks:
             measure(k, res[k]["X"], "nudged", f"seed {seed}, up to {jitter:g} m")
@@ -331,6 +387,30 @@ def restart_check(m, mesh, pairs, rhos, frames, picks, checks, tol, max_iter, lo
     return out
 
 
+def _floor_run(m, rhos, res, tol, max_iter) -> dict | None:
+    """A nudged sweep of a combination that is the real map at every shipped position stopped short
+    (res: its frames up to the one that didn't converge). Carry on from where it stopped, solving at
+    each position of the ladder in turn from the last, and accept the run only if every position
+    either converges or stops within RESTART_FLOOR_M of the real map on every row (the car's twins
+    too) without running out of iterations: the solver's rounding floor, not another layout.
+    Returns {X: {position: layout}, from_real_m, gmax_max}, or None."""
+    X = res[-1]["X"] if res else None
+    if X is None:
+        return None
+    got, worst, gmax = {}, 0.0, 0.0
+    for k, r in enumerate(rhos):
+        if k < len(res) - 1 and res[k]["converged"]:
+            got[k] = res[k]["X"]
+            continue
+        s = springs.solve(m, X, r, tol=tol, max_iter=max_iter)
+        X = s.X
+        dev = float(np.abs(X - m.P).max()) * m.scale
+        if not math.isfinite(dev) or (not s.converged and (dev >= RESTART_FLOOR_M or s.iterations >= max_iter)):
+            return None
+        got[k], worst, gmax = X, max(worst, dev), max(gmax, s.gmax)
+    return {"X": got, "from_real_m": worst, "gmax_max": gmax}
+
+
 def _rho_short(r: float) -> str:
     return f"ρ = {r:.3g}"
 
@@ -339,12 +419,29 @@ def _rho_short(r: float) -> str:
 def run(b: BuildInput, feed: Path, clip: Path | None, checks: dict, out: Path, *, rhos=springs.RHOS,
         tol: float = springs.TOL, max_iter: int = springs.MAX_ITER, log=print, checks_sha256: str | None = None,
         input_sha: dict | None = None, land_work: Path | None = None, restarts: bool = True,
-        car: tuple | None = None) -> dict:
-    """The job. With `car` (car_links.json, roads.json and car_report.json, transit/layout/car.py),
-    the travel modes too (#23, L-03): car alone and car with train and tube, written to modes/."""
+        car: tuple | None = None, modes=(), bus_feed: Path | None = None, tables: dict | None = None) -> dict:
+    """The job. With travel modes (#23), every combination of train and `modes` too, written to
+    modes/: the car from `car` (car_links.json, roads.json and car_report.json, transit/layout/car.py),
+    bus from `bus_feed` (the prepared bus feed) and the bus and walking tables in `tables`
+    ({kind: (table, sha256)}, prep.load_mode_table), walking from the walking table."""
+    from transit.layout import modelinks
     from transit.layout import timemap_report as rep
 
     t0 = time.monotonic()
+    chosen = set(modes) | ({"car"} if car is not None else set())
+    if chosen - set(EXTRA_MODES):
+        raise RefusedInput(f"no travel mode {', '.join(sorted(chosen - set(EXTRA_MODES)))}")
+    if chosen & {"bus", "walk"}:
+        if b.window != settings.CAR_WINDOW:
+            raise RefusedInput(f"bus and walking times exist for weekday 13:00-14:00 only: build them for --window "
+                               f"{settings.CAR_WINDOW}, not {b.window}")
+        need = {"walk"} | ({"bus"} if "bus" in chosen else set())
+        if not tables or need - set(tables):
+            raise RefusedInput(f"{' and '.join(sorted(need))} need their tables (prep.load_mode_table)")
+        if "bus" in chosen and bus_feed is None:
+            raise RefusedInput("bus needs the build's prepared bus feed (bods.gtfs.zip)")
+    if "car" in chosen and car is None:
+        raise RefusedInput("car needs the car job's files (python -m transit.layout.car)")
     pairs = station_pairs(b)
     k = measures.TC_K
     if pairs.n <= 3 * k + 1:
@@ -358,6 +455,25 @@ def run(b: BuildInput, feed: Path, clip: Path | None, checks: dict, out: Path, *
         f"{len(mesh.edges)} grid springs")
 
     dep = departure(b)
+    names = modelinks.node_names(mesh, pairs)
+    plain = {}
+    if chosen & {"bus", "walk"}:
+        members = modelinks.node_members(mesh, pairs, cells, pick, b.point_ok)
+        if "walk" in chosen:
+            plain["walk"] = modelinks.walk_links(mesh, members, tables["walk"][0], pairs.s, names)
+            c = plain["walk"].counts
+            log(f"walking: {c['links']} springs on {c['edges']} mesh edges between stations and cells "
+                f"({c['left_out_count']} left out)")
+        if "bus" in chosen:
+            try:
+                plain["bus"] = modelinks.bus_links(bus_feed, dep.date(), dep.time(), mesh, members, tables["bus"][0],
+                                                   tables["walk"][0], pairs.s, names)
+            except (linkmod.LinkError, OSError, KeyError, IndexError) as e:
+                raise RefusedInput(f"the bus links can't be read from {Path(bus_feed).name}: {e}") from None
+            c = plain["bus"].counts
+            log(f"bus: {c['links']} springs from {c['candidates']} pairs of nodes consecutive on {c['trips_with_a_hop']} "
+                f"bus trips ({c['left_out_count']} left out: " + ", ".join(f"{v} {w}" for w, v in
+                                                                          c["links_dropped"].items()) + ")")
     try:
         lk = linkmod.train_links(feed, dep.date(), dep.time(), pairs, feed_id=feed_prefix(pairs))
     except (linkmod.LinkError, OSError, KeyError) as e:
@@ -383,10 +499,17 @@ def run(b: BuildInput, feed: Path, clip: Path | None, checks: dict, out: Path, *
               for r in runs for nodes in [[i for i in (pairs.index_of(s) for s in r["stations"]) if i is not None]]
               if len(nodes) >= 2]
 
-    modes = None
-    if car is not None:
-        modes = solve_modes(car, mesh, pairs, lk, m, frames, motion, wembley, checks, ctx, rhos, tol, max_iter,
-                            restarts, log)
+    modes_doc = None
+    if chosen:
+        sources = {k: {"table_sha256": v[1]} for k, v in (tables or {}).items()}
+        if "bus" in chosen:
+            sources["bus"]["feed_sha256"] = sha256(Path(bus_feed))
+        if "walk" in chosen:
+            r5 = (b.manifest.get("settings") or {}).get("r5") or {}
+            sources["walk"]["speed_kmh"] = float(r5.get("speed_walking_kmh", settings.R5["speed_walking_kmh"]))
+        modes_doc = solve_modes(chosen, mesh, pairs, lk, m, frames, motion, wembley, checks, ctx, rhos, tol, max_iter,
+                                restarts, log, car=car, plain=plain, names=names, train_restart=restart,
+                                tables=sources, departure=b.departure)
     land_doc = None
     if clip is not None:
         land_doc = carry_land(clip, mesh, land_work, log)
@@ -394,7 +517,7 @@ def run(b: BuildInput, feed: Path, clip: Path | None, checks: dict, out: Path, *
                        checks=checks, lines_at=lines_at, l01=l01, wembley=wembley, land=land_doc, routes=routes,
                        restart=restart, motion=motion, code=l01_job.code_version(), checks_sha256=checks_sha256,
                        input_sha=input_sha or {}, expired=l01_job.expired(b.manifest.get("valid_until")),
-                       started=t0, log=log, modes=modes)
+                       started=t0, log=log, modes=modes_doc)
     for line in result["summary"]:
         log(line)
     return result
@@ -488,11 +611,6 @@ def measure_frames(frames, m, mesh, pairs, lk, ctx) -> dict:
 
 # ── travel modes (#23, L-03) ────────────────────────────────────────
 PULL_PAST = 0.01             # a spring "pulls" when it is stretched more than this share past its rest
-COMBOS = (("car",), ("car", "train"))       # solved besides train alone (timemap.json), in this order
-
-
-def combo_id(modes) -> str:
-    return "-".join(sorted(modes))
 
 
 def car_springs(car_links: dict, s: float) -> tuple[springs.CarSprings, list[dict]]:
@@ -506,9 +624,13 @@ def car_springs(car_links: dict, s: float) -> tuple[springs.CarSprings, list[dic
     return springs.CarSprings(twins, hops, rest, s * float(car_links["overhead_min"]) / 2), links
 
 
-def pulls(m, X: np.ndarray, labels: list[str], car_links: list[dict] | None) -> dict:
+def pulls(m, X: np.ndarray, labels: list[str], car_links: list[dict] | None, plain: dict | None = None) -> dict:
     """Per travel mode: how many of its springs pull at X (normalised, every row) and which pull
-    hardest (train: the station pairs; car: the roads)."""
+    hardest (train and walking: the pairs of places, `labels` naming every mesh node; car: the
+    roads; bus: the routes, from `plain`'s bus links). `n` counts springs more than PULL_PAST past
+    their rest length; `taut` every spring at or past it, which is every spring the solve feels.
+    Bus and walking, which barely pull, name their taut springs; train and car their pulling ones."""
+    from transit.layout.modelinks import by_route_pulls
     out = {}
     for f in m.families:
         if not len(f.links):
@@ -516,11 +638,16 @@ def pulls(m, X: np.ndarray, labels: list[str], car_links: list[dict] | None) -> 
         d = X[f.links[:, 0]] - X[f.links[:, 1]]
         past = np.hypot(d[:, 0], d[:, 1]) / f.rest - 1
         on = past > PULL_PAST
-        order = [int(i) for i in np.argsort(-past) if past[i] > PULL_PAST]
-        rec = {"n": int(on.sum()), "of": int(len(past)), "share": float(on.mean()),
-               "past_p90": float(np.percentile(np.maximum(past, 0), 90))}
-        if f.name == "train":
+        taut = past >= 0
+        named = taut if f.name in ("bus", "walk") else on
+        order = [int(i) for i in np.argsort(-past) if named[i]]
+        rec = {"n": int(on.sum()), "of": int(len(past)), "share": float(on.mean()), "taut": int(taut.sum()),
+               "past_max": float(past.max()), "past_p90": float(np.percentile(np.maximum(past, 0), 90))}
+        if f.name in ("train", "walk"):
             rec["top"] = [f"{labels[int(f.links[i, 0])]} – {labels[int(f.links[i, 1])]}" for i in order[:3]]
+        elif f.name == "bus" and plain and plain.get("bus") is not None:
+            rec["top"] = by_route_pulls(plain["bus"], taut)
+            rec["top_links"] = [f"{labels[int(f.links[i, 0])]} – {labels[int(f.links[i, 1])]}" for i in order[:3]]
         elif f.name == "car" and car_links is not None:
             # Where the car pulls: the roads with the most length of pulling links, not the few
             # most-stretched hops (often short minor roads).
@@ -634,10 +761,12 @@ def spot_check(pairs, mesh, car_links: list[dict], overhead: float, combos: dict
     return out
 
 
-def combo_rows(mesh, pairs, combos: dict, k: int) -> dict:
+def combo_rows(mesh, pairs, combos: dict, k: int, names: list[str] | None = None) -> dict:
     """The issue's comparison at position k, per combination: node shift against the real map and
     against train only (every station and cell), σ₁ against the all-mode tables, Wembley Park, the
-    thinnest triangle."""
+    thinnest triangle. `names`: every mesh node's (modelinks.node_names)."""
+    from transit.layout.modelinks import node_names
+    names = names or node_names(mesh, pairs)
     inner = mesh.kinds != meshmod.RING
     real = combos["train"][0]["Xs"]
     train = combos["train"][k]["Xs"]
@@ -650,8 +779,7 @@ def combo_rows(mesh, pairs, combos: dict, k: int) -> dict:
         far = int(np.where(inner)[0][int(np.argmax(s_real))])
         out[cid] = {"rho": fr[k]["rho"], "shift_real_median_m": float(np.median(s_real)),
                     "shift_real_max_m": float(s_real.max()),
-                    "shift_real_max_at": pairs.labels[far] if far < pairs.n else
-                    f"a point near {pairs.labels[int(np.argmin(np.hypot(*(pairs.xy - mesh.P[far]).T)))]}",
+                    "shift_real_max_at": names[far],
                     "shift_train_median_m": float(np.median(s_train)), "shift_train_max_m": float(s_train.max()),
                     "sigma1": mt["sigma1"], "wembley": mt["ratios"].get("wembley_park", {}),
                     "stretch_max": mt["stretch_max"], "stretch_worst": mt["stretch_worst"],
@@ -659,33 +787,46 @@ def combo_rows(mesh, pairs, combos: dict, k: int) -> dict:
     return out
 
 
-def solve_modes(car, mesh, pairs, lk, m_train, frames, motion, wembley, checks, ctx, rhos, tol, max_iter,
-                restarts, log) -> dict:
-    """Car alone and car with train and tube, beside train alone: each solved over the same ρ
-    ladder, measured, its restart check run, and the straight blends between combinations that
-    differ by one mode checked at every solved position."""
-    car_links_doc, roads_doc, car_report = car
-    if abs(float(car_links_doc["s_m_per_min"]) - pairs.s) > 1e-6 * pairs.s:
-        raise RefusedInput("the car links were built at another scale than this layout's: run "
-                           "python -m transit.layout.car again")
-    cs, links = car_springs(car_links_doc, pairs.s)
-    log(f"car: {len(links)} road springs on {len(cs.twins)} twins, {car_links_doc['overhead_min']:g} min overhead "
-        "once a trip")
+def one_apart(a: str, b: str) -> bool:
+    """Whether two combinations differ by exactly one mode (a toggle switches one into the other)."""
+    return len(set(a.split("-")) ^ set(b.split("-"))) == 1
+
+
+def solve_modes(chosen, mesh, pairs, lk, m_train, frames, motion, wembley, checks, ctx, rhos, tol, max_iter,
+                restarts, log, *, car=None, plain=None, names=None, train_restart=None, tables=None,
+                departure=None) -> dict:
+    """Every combination of train and the chosen modes, beside train alone: each solved over the
+    same ρ ladder, measured, its restart check run, and the straight blends between combinations
+    that differ by one mode checked at every solved position. `plain`: the bus and walking links
+    (modelinks), by mode."""
+    plain = plain or {}
+    names = names or list(pairs.labels)
+    cs = links = car_links_doc = roads_doc = car_report = None
+    if "car" in chosen:
+        car_links_doc, roads_doc, car_report = car
+        if abs(float(car_links_doc["s_m_per_min"]) - pairs.s) > 1e-6 * pairs.s:
+            raise RefusedInput("the car links were built at another scale than this layout's: run "
+                               "python -m transit.layout.car again")
+        cs, links = car_springs(car_links_doc, pairs.s)
+        log(f"car: {len(links)} road springs on {len(cs.twins)} twins, {car_links_doc['overhead_min']:g} min overhead "
+            "once a trip")
     combos = {"train": frames}
     motions = {"train": motion}
     models = {"train": m_train}
-    restart = {}
+    restart = {"train": train_restart} if train_restart else {}
     lines = {}
-    for modes in COMBOS:
+    for modes in combos_of(chosen):
         cid = combo_id(modes)
-        mc = springs.model(mesh, lk.pairs if "train" in modes else [], lk.rest_m if "train" in modes else [], car=cs)
+        extra = [(k, plain[k].pairs, plain[k].rest_m) for k in ("bus", "walk") if k in modes]
+        mc = springs.model(mesh, lk.pairs if "train" in modes else [], lk.rest_m if "train" in modes else [],
+                           car=cs if "car" in modes else None, extra=extra)
         log(f"── {cid} ──")
         fr, mo = solve_combo(mc, mesh, pairs, rhos, tol, max_iter, log, name=cid)
         lines[cid] = measure_frames(fr, mc, mesh, pairs, lk if "train" in modes else None, ctx)
         combos[cid], motions[cid], models[cid] = fr, mo, mc
     for cid, fr in combos.items():
         for f in fr:
-            f["pulls"] = pulls(models[cid], f["X"], pairs.labels, links)
+            f["pulls"] = pulls(models[cid], f["X"], names, links, plain)
     picks = {}
     for cid, fr in combos.items():
         got = _wembley_pick(fr)
@@ -693,18 +834,21 @@ def solve_modes(car, mesh, pairs, lk, m_train, frames, motion, wembley, checks, 
         if cid != "train" and restarts:
             log(f"restart check, {cid}:")
             restart[cid] = restart_check(models[cid], mesh, pairs, rhos, fr, picks[cid], checks, tol, max_iter, log)
-    cross = {"train|car-train": cross_flags(mesh, combos["train"], combos["car-train"]),
-             "car|car-train": cross_flags(mesh, combos["car"], combos["car-train"])}
+    cross = {f"{a}|{b}": cross_flags(mesh, combos[a], combos[b])
+             for a, b in itertools.combinations(list(combos), 2) if one_apart(a, b)}
     for key, flags in cross.items():
         bad = [f["rho"] for f in flags if f and not f["ok"]]
         log(f"switch {key}: straight at {sum(1 for f in flags if f and f['ok'])} of {len(flags) - 1} positions"
             + (f"; through the real map at ρ = {', '.join(f'{r:.3g}' for r in bad)}" if bad else ""))
     wpick = wembley.get("pick")
     cmp_at = sorted({p for p in (wpick, len(frames) - 1) if p is not None})
-    spots = spot_check(pairs, mesh, links, float(car_links_doc["overhead_min"]), combos, cmp_at, checks)
-    return {"combos": combos, "motions": motions, "models": models, "restart": restart, "cross": cross,
-            "picks": picks, "compare": {k: combo_rows(mesh, pairs, combos, k) for k in cmp_at}, "compare_at": cmp_at,
-            "spots": spots, "car_links": car_links_doc, "roads": roads_doc, "car_report": car_report, "lines": lines}
+    spots = spot_check(pairs, mesh, links, float(car_links_doc["overhead_min"]), combos, cmp_at, checks) \
+        if "car" in chosen else []
+    return {"chosen": sorted(chosen), "combos": combos, "motions": motions, "models": models, "restart": restart,
+            "cross": cross, "picks": picks, "compare": {k: combo_rows(mesh, pairs, combos, k, names) for k in cmp_at},
+            "compare_at": cmp_at, "spots": spots, "car_links": car_links_doc, "roads": roads_doc,
+            "car_report": car_report, "lines": lines, "plain": plain, "tables": tables or {}, "departure": departure,
+            "names": names}
 
 
 
@@ -926,9 +1070,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out-dir", type=Path, help="default: transit/out/timemap/<build>/<window>/ in this repo")
     ap.add_argument("--checks", type=Path, default=l01_job.CHECKS, help="hand-typed station ids (checks.toml)")
     ap.add_argument("--no-land", action="store_true", help="skip the OSM land (no osmium needed)")
-    ap.add_argument("--modes", choices=["car"], help="the travel modes too (#23, L-03): car alone and car with "
-                    "train and tube, from python -m transit.layout.car; written to modes/ (weekday 13:00 only, "
-                    f"--window {settings.CAR_WINDOW})")
+    ap.add_argument("--modes", nargs="+", choices=list(EXTRA_MODES),
+                    help="the travel modes too (#23): every combination of train and tube with these (car from "
+                    "python -m transit.layout.car, bus and walking from the build's bus-only and walking-only "
+                    f"tables), written to modes/ (weekday 13:00 only, --window {settings.CAR_WINDOW})")
     ap.add_argument("--car-dir", type=Path, help="the car job's output (default: transit/out/car/<build>/<window>/)")
     args = ap.parse_args(argv)
     try:
@@ -937,16 +1082,29 @@ def main(argv: list[str] | None = None) -> int:
         ap.error(f"--build must be a date (YYYY-MM-DD), not {args.build!r}")
     out = args.out_dir or default_out(args.build, args.window)
     try:
+        chosen = set(args.modes or ())
+        # Every travel mode is weekday 13:00-14:00 only: refused before anything is read.
+        if "car" in chosen:
+            from transit.layout import car as carmod
+            carmod.check_window(args.window)
+        if chosen & {"bus", "walk"} and args.window != settings.CAR_WINDOW:
+            raise RefusedInput(f"bus and walking times exist for weekday 13:00-14:00 only: build them for "
+                               f"--window {settings.CAR_WINDOW}, not {args.window}")
         check_out_dir(out, modes=bool(args.modes))
         checks, checks_sha = load_checks(args.checks)
         b = load_build(settings.OUT / args.build, args.window)
         feed, clip, shas = find_inputs(b, settings.DATA, land=not args.no_land)
-        car = None
-        if args.modes:
-            from transit.layout import car as carmod
+        car = bus_feed = None
+        tables = {}
+        if "car" in chosen:
             car = args.car_dir or carmod.default_out(args.build, args.window)
-            carmod.check_window(args.window)
-        run(b, feed, clip, checks, out, checks_sha256=checks_sha, input_sha=shas, car=car)
+        if chosen & {"bus", "walk"}:
+            for kind in ("bus", "walk") if "bus" in chosen else ("walk",):
+                tables[kind] = load_mode_table(b, kind)
+            if "bus" in chosen:
+                bus_feed = bus_feed_of(b, settings.DATA)
+        run(b, feed, clip, checks, out, checks_sha256=checks_sha, input_sha=shas, car=car, modes=chosen,
+            bus_feed=bus_feed, tables=tables)
     except Refused as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2

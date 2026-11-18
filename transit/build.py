@@ -718,7 +718,7 @@ def stage_modetimes(b: Build, args):
     #23's per-mode times (#30): a bus table (buses with walking to and from them, or walking
     straight there if that is faster, as in the tables: R5 keeps the walk-only option) and a
     walking-only one (up to MAX_MINUTES), for CAR_WINDOW, on the same points, mask and encoding
-    as the tables. The app doesn't read them; Whole city's Walking and Bus will (#23 part 2).
+    as the tables. The app doesn't read them; the time map's Walking and Bus springs do (#23 part 2).
     """
     from transit.r5 import fingerprint_path, table_window
 

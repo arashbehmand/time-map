@@ -519,8 +519,10 @@ export function loadSegment(scene, placedA, placedB) {
 // mode on the map is the real map, which is also every combination's slider position 0.
 
 // The combination a set of modes on means: "train", "car", "car-train" or "none".
+export const MODES = ["bus", "car", "train", "walk"];   // sorted: a combination's id is the build's
+
 export function comboOf(on) {
-  const ids = ["car", "train"].filter((m) => on.has(m));
+  const ids = MODES.filter((m) => on.has(m));
   return ids.length ? ids.join("-") : "none";
 }
 
@@ -539,20 +541,55 @@ export function switchPlan(cross, from, to, i) {
   return f && f.ok ? "straight" : "via-real";
 }
 
-const MODE_NAMES = { train: "Train and tube", car: "Car" };
+const MODE_NAMES = { walk: "Walking", bus: "Bus", train: "Train and tube", car: "Car" };
+const SPRINGS = { car: "road springs", bus: "bus springs", walk: "walking springs" };
+
+// A combination's name ("Car + train and tube"), or "No way of travelling" for none (the real map).
+export function comboName(id) {
+  if (id === "none") return "No way of travelling";
+  const words = id.split("-").map((m) => MODE_NAMES[m] || m);
+  return [words[0], ...words.slice(1).map((w) => w.toLowerCase())].join(" + ");
+}
+
+// Put `item` last in `list` (most recently used) and return the items past `limit`, oldest first,
+// taken out of the list: the page keeps a few combinations' placed land, not all fifteen.
+export function keepRecent(list, item, limit) {
+  const at = list.indexOf(item);
+  if (at >= 0) list.splice(at, 1);
+  list.push(item);
+  return list.length > limit ? list.splice(0, list.length - limit) : [];
+}
 
 // One mode's line in the readout, from its pulls at a solved position (modes.json, combo frames):
-// how many of its springs pull and where. p: {n, of, share, top}; i: the position (0 is the real map).
-export function pullWords(mode, p, i, overheadMin = 0) {
+// how many of its springs pull and where. p: {n, of, share, top}; i: the position (0 is the real map);
+// kmh: the map's scale (s) as a speed, door to door.
+export function pullWords(mode, p, i, overheadMin = 0, kmh = 0) {
   const name = MODE_NAMES[mode] || mode;
-  const springs = mode === "car" ? "road springs" : "springs";
+  const springs = SPRINGS[mode] || "springs";
+  const scale = kmh ? `about ${Math.round(kmh)} km/h` : "its speed";
+  if (mode === "walk" || mode === "bus") {
+    // Bus and walking barely act at this map's scale: judged by their taut springs (at or past their
+    // time, so acting on the map), not only those more than 1% past it.
+    const taut = p ? (p.taut ?? p.n) : 0;
+    if (!taut) {
+      return mode === "walk"
+        ? `Walking moves nothing here: at this map's scale (${scale} door to door) walking is too slow to pull ` +
+          "two places together."
+        : `Bus moves nothing here: door to door, with the walk to the stop and the wait, no bus between ` +
+          `neighbouring places beats this map's scale (${scale}).`;
+    }
+    const where = (p.top_links && p.top_links[0]) || (mode === "walk" && p.top && p.top[0]);
+    const route = mode === "bus" && p.top && p.top.length ? ` (route${p.top.length > 1 ? "s" : ""} ${p.top.join(", ")})` : "";
+    return `${name}: ${taut} of ${p.of} ${springs} taut, ${p.n} more than 1% past ${taut === 1 ? "its" : "their"} ` +
+      `time${where ? `, hardest ${where}` : ""}${route}. Elsewhere it is slower than the map.`;
+  }
   if (!p) return `${name}: on.`;
   if (i === 0) return `${name}: on; on the real map no spring pulls yet.`;
   if (!p.n) {
     return `${name} moves nothing at this strength: none of its ${p.of} ${springs} is stretched past its time.`;
   }
   const pct = Math.max(1, Math.round(100 * p.share));
-  const top = p.top && p.top.length ? (mode === "car" ? `, mostly ${p.top.join(", ")}` : `, hardest ${p.top[0]}`) : "";
+  const top = !p.top || !p.top.length ? "" : mode === "car" ? `, mostly ${p.top.join(", ")}` : `, hardest ${p.top[0]}`;
   return `${name}: ${p.n} of ${p.of} ${springs} pulling (${pct}%)${top}.` +
     (mode === "car" && overheadMin ? ` Car times include ${overheadMin} minutes once a trip for parking and getting to the car.` : "");
 }
@@ -588,16 +625,18 @@ export function runSteps(steps, ops) {
   next();
 }
 
-// Which mode buttons can be pressed: Train and tube always; Car only where the build has the car
-// (modes.json says so); Walking and Bus never yet. `index` is modes.json or null.
+// Which mode buttons can be pressed: Train and tube always; the others only where the build made
+// them (modes.json lists them available), with modes.json's reason when not. `index` is modes.json or null.
+const NOT_HERE = { walk: "This map has no walking times.", bus: "This map has no bus times.", car: "This map has no car." };
+
 export function modeAvailability(index) {
   const listed = Object.fromEntries(((index && index.modes) || []).map((m) => [m.id, m]));
-  return {
-    walk: { on: false, why: (listed.walk && listed.walk.why) || "Coming next." },
-    bus: { on: false, why: (listed.bus && listed.bus.why) || "Coming next." },
-    train: { on: true, why: "" },
-    car: { on: Boolean(listed.car && listed.car.available), why: listed.car ? "" : "This map has no car." },
-  };
+  const out = { train: { on: true, why: "" } };
+  for (const m of ["walk", "bus", "car"]) {
+    const l = listed[m];
+    out[m] = l && l.available ? { on: true, why: "" } : { on: false, why: (l && l.why) || NOT_HERE[m] };
+  }
+  return out;
 }
 
 // Solved positions where some triangle gets very thin: its larger stretch over its smaller past

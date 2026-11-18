@@ -47,7 +47,7 @@ def is_station_type(route_type: int) -> bool:
         lo <= route_type <= hi for lo, hi in settings.STATION_ROUTE_TYPE_RANGES)
 
 
-def _rows(z: zipfile.ZipFile, name: str):
+def gtfs_rows(z: zipfile.ZipFile, name: str):
     names = {Path(n).name: n for n in z.namelist()}
     if name not in names:
         return None
@@ -56,7 +56,7 @@ def _rows(z: zipfile.ZipFile, name: str):
             yield {(k or "").strip(): (v or "").strip() for k, v in row.items()}
 
 
-def _seconds(hms: str) -> int | None:
+def gtfs_seconds(hms: str) -> int | None:
     parts = hms.split(":")
     if len(parts) != 3:
         return None
@@ -72,10 +72,10 @@ def active_services(z: zipfile.ZipFile, day: date) -> set[str]:
     ymd = day.strftime("%Y%m%d")
     col = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")[day.weekday()]
     on: set[str] = set()
-    for r in _rows(z, "calendar.txt") or ():
+    for r in gtfs_rows(z, "calendar.txt") or ():
         if r.get(col) == "1" and r.get("start_date", "") <= ymd <= r.get("end_date", ""):
             on.add(r["service_id"])
-    for r in _rows(z, "calendar_dates.txt") or ():
+    for r in gtfs_rows(z, "calendar_dates.txt") or ():
         if r.get("date") != ymd:
             continue
         if r.get("exception_type") == "1":
@@ -114,7 +114,7 @@ def train_links(feed_zip: Path, weekday: date, start: time, pairs, feed_id: str 
         if "frequencies.txt" in names:
             raise LinkError(f"{Path(feed_zip).name} has frequencies.txt: frequency-based trips are not read")
         route_type = {}
-        for r in _rows(z, "routes.txt"):
+        for r in gtfs_rows(z, "routes.txt"):
             try:
                 route_type[r["route_id"]] = int(r.get("route_type", ""))
             except ValueError:
@@ -122,17 +122,17 @@ def train_links(feed_zip: Path, weekday: date, start: time, pairs, feed_id: str 
         running = active_services(z, weekday)
         trip_route = {}
         trips_on_day = 0
-        for r in _rows(z, "trips.txt"):
+        for r in gtfs_rows(z, "trips.txt"):
             rt = route_type.get(r.get("route_id"))
             if rt is None or not is_station_type(rt) or r.get("service_id") not in running:
                 continue
             trip_route[r["trip_id"]] = r["route_id"]
             trips_on_day += 1
         station_of = {}
-        for r in _rows(z, "stops.txt"):
+        for r in gtfs_rows(z, "stops.txt"):
             station_of[r["stop_id"]] = r.get("parent_station") or r["stop_id"]
         stops_by_trip = defaultdict(list)
-        for r in _rows(z, "stop_times.txt"):
+        for r in gtfs_rows(z, "stop_times.txt"):
             tid = r.get("trip_id")
             if tid not in trip_route:
                 continue
@@ -140,7 +140,7 @@ def train_links(feed_zip: Path, weekday: date, start: time, pairs, feed_id: str 
                 seq = int(r.get("stop_sequence", ""))
             except ValueError:
                 raise LinkError(f"trip {tid} has a stop_sequence that is not a whole number") from None
-            dep = _seconds(r.get("departure_time") or r.get("arrival_time") or "")
+            dep = gtfs_seconds(r.get("departure_time") or r.get("arrival_time") or "")
             stops_by_trip[tid].append((seq, dep, r.get("stop_id")))
 
     per_pair: dict[tuple[int, int], dict] = {}

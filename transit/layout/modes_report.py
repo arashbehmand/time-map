@@ -446,25 +446,44 @@ def _effect_words(rep: dict, mode: str, name: str) -> str:
     return out
 
 
+def _scale_words(rep: dict, mode: str, what: str, slower: str) -> str:
+    """Whether the mode's springs can act on the real map, from their rest lengths, and whether the
+    mode alone moves the map, from its shipped layouts."""
+    rr = rep["plain"][mode]["rest_over_real"]
+    alone = (rep.get("combos", {}).get(mode) or {}).get("real_map_throughout")
+    name = MODE_NAMES[mode]
+    fast = rr.get("faster") or 0
+    if fast:
+        out = (f"{fast} {what} springs are shorter than their real length: that {what.split()[0]} beats this map's "
+               f"scale (about {_kmh(rep['s_m_per_min'])} door to door), so they pull from the real map on. ")
+    else:
+        out = (f"{slower} this map's scale (about {_kmh(rep['s_m_per_min'])} door to door), so on the real map no "
+               f"{what} spring is taut. ")
+    if alone is not None:
+        out += (f"{name} alone is the real map at every position" + (": the shared scale at work, not a failed mode. "
+                                                                     if not fast else ". ")
+                if alone else f"{name} alone moves the map. ")
+    return out
+
+
 def _plain_headlines(rep: dict) -> list[str]:
     L = []
-    kmh = _kmh(rep["s_m_per_min"])
     w = rep["plain"].get("walk")
     if w:
         L.append(f"- **Walking:** {w['links']} springs on the mesh's edges between stations and cells "
                  f"({w['left_out_count']} left out). " + _ratio_words(w["rest_over_real"], "walking")
-                 + f"Walking is slower than this map's scale (about {kmh} door to door), so on the real map no walking "
-                 "spring is taut and Walking alone is the real map at every position: the shared scale at work, not a "
-                 "failed mode. A walking spring can only act where another mode has stretched two neighbours past "
-                 "their walk. " + _effect_words(rep, "walk", "walking"))
+                 + _scale_words(rep, "walk", "walking", "Walking is slower than")
+                 + "A walking spring otherwise acts only where another mode has stretched two neighbours past their "
+                 "walk. " + _effect_words(rep, "walk", "walking"))
     bu = rep["plain"].get("bus")
     if bu:
         dropped = ", ".join(f"{v} {k}" for k, v in bu["links_dropped"].items()) or "none"
         L.append(f"- **Bus:** {bu['links']} springs between nodes a bus serves one after the other, from "
                  f"{bu['candidates']} pairs on {bu['trips_with_a_hop']} bus trips leaving a stop between "
                  f"{bu['window'][0]} and {bu['window'][1]} (left out: {dropped}). " + _ratio_words(bu["rest_over_real"], "bus")
-                 + f"Door to door, with the walk to the stop and the wait, no bus between neighbouring places beats "
-                 f"about {kmh}, so on the real map no bus spring is taut. " + _effect_words(rep, "bus", "bus")
+                 + _scale_words(rep, "bus", "bus", "Door to door, with the walk to the stop and the wait, no bus "
+                                "between neighbouring places beats")
+                 + _effect_words(rep, "bus", "bus")
                  + " The bus feed's route types don't tell a rail replacement bus from any other, so a replacement "
                  "service is counted as a bus: a route named for a line, not a number, is likely one.")
     return L

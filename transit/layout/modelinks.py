@@ -102,7 +102,11 @@ def pair_minutes(table: np.ndarray, members: list[list[int]], ij: np.ndarray) ->
 def _ratio(mesh, ij, rest_m) -> dict:
     real = np.hypot(*(mesh.P[ij[:, 0]] - mesh.P[ij[:, 1]]).T) if len(ij) else np.zeros(0)
     r = rest_m / np.maximum(real, 1e-9)
-    return {"min": float(r.min()), "median": float(np.median(r))} if len(r) else {"min": None, "median": None}
+    if not len(r):
+        return {"min": None, "median": None, "faster": 0}
+    # "faster": springs shorter than their real length, so faster than the map's scale: they pull
+    # from the real map on.
+    return {"min": float(r.min()), "median": float(np.median(r)), "faster": int((r < 1).sum())}
 
 
 def walk_links(mesh: Mesh, members: list[list[int]], walk: np.ndarray, s: float,

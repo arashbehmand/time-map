@@ -1352,6 +1352,10 @@ def test_all_four_travel_modes_end_to_end(job_env):
                   "Bus + car + train and tube + walking", "Thames crossings", "Spot check", "Restart check",
                   "Switching Bus on moves the map by at most", "taut", "rail replacement"):
         assert words in md, words
+    # The synthetic bus corridor beats the scale: the report says so, from the springs, not by rule.
+    assert "bus springs are shorter than their real length" in md and "Bus alone moves the map" in md
+    assert "so on the real map no bus spring is taut" not in md
+    assert "Walking alone is the real map at every position" in md
     # Shifts in metres, so one under 5 m doesn't read as nothing.
     assert re.search(r"\| Bus \| [0-9.,]+ m \| [0-9.,]+ m ", md) and "0.00 km" not in md
     # Bus and walking: every spring the solve feels is counted (taut), and what switching each on does.
